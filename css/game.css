@@ -732,3 +732,37 @@ html { scrollbar-gutter: stable; }
 .stage.narrow .lower { grid-template-columns: minmax(0, 1fr) 260px; }
 .stage.narrow .skillbar { gap: 8px; padding: 12px; }
 .stage.narrow .btn.rebirth { font-size: 12.5px; padding: 11px 8px; }
+
+/* ---------- ачивки во вкладке «Путь» ---------- */
+.achsum { margin: 8px 0 2px; padding: 12px 14px; border-radius: var(--r-3); background: linear-gradient(180deg, rgba(255,197,61,.16), rgba(255,197,61,.05)); box-shadow: inset 0 0 0 2px rgba(255,197,61,.3); }
+.achhead { display: flex; align-items: baseline; gap: 10px; }
+.achhead > b { font: 900 18px/1 var(--display); color: var(--text); }
+.achhead span { font: 800 13px/1 var(--ui); color: var(--text-dim); }
+.achhead span b { font: 900 18px/1 var(--display); color: var(--farm); }
+.achhead em { margin-left: auto; font: 900 13px/1 var(--ui); font-style: normal; color: var(--farm); white-space: nowrap; }
+.achsum p { margin-top: 8px; font-size: 12px; line-height: 1.35; color: var(--text-dim); }
+.achbar { height: 8px; margin-top: 10px; border-radius: 999px; background: rgba(10,10,30,.6); overflow: hidden; }
+.achbar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f39a10, var(--farm)); }
+.achbar.sm { height: 5px; margin-top: 6px; }
+.achbar.sm i { background: var(--brass); }
+.achg { display: flex; align-items: baseline; justify-content: space-between; margin: 12px 2px 0; font: 900 12px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--brass-hi); }
+.achg span { font: 800 11px/1 var(--ui); letter-spacing: 0; color: var(--text-mute); }
+.ach { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 10px; border-radius: var(--r-3); background: rgba(10,10,30,.35); box-shadow: inset 0 0 0 1px var(--line); }
+.ach .am { width: 34px; height: 34px; object-fit: contain; }
+.ach.zero .am { filter: grayscale(1) brightness(.55); }
+.ach .at { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ach .at b { font: 800 13.5px/1.15 var(--ui); color: var(--text); }
+.ach .at span { flex: none; font: 900 11px/1 var(--ui); color: var(--text-mute); white-space: nowrap; }
+.apips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.apips i { width: 9px; height: 9px; border-radius: 50%; background: var(--surface-3); }
+.apips i.on { background: var(--farm); box-shadow: 0 0 6px rgba(255,197,61,.55); }
+.apips i.now { background: transparent; box-shadow: inset 0 0 0 2px var(--brass-hi); }
+.ach .an { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; line-height: 1.3; color: var(--text-dim); }
+.ach .an em { flex: none; font-style: normal; font-weight: 800; color: var(--text-mute); white-space: nowrap; }
+.ach.done { box-shadow: inset 0 0 0 1px rgba(255,197,61,.4); }
+.ach.done .at span, .ach.done .an { color: var(--farm); }
+.ach.one .an { margin-top: 3px; }
+/* уведомление об ачивке в плашке «Дальше» */
+.events.flash { box-shadow: 0 12px 30px rgba(5,6,20,.45), inset 0 0 0 2px var(--farm); }
+.events.flash .eyebrow { color: var(--farm); }
+.events.flash .nextline { color: #ffe9a8; }

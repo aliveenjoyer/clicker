@@ -1,6 +1,6 @@
 // Интерфейс: полоса волны, счётчик душ, отряд, предметы и коллекция, реликвии, путь, чат, умения, бафы, окна.
 // Правило экрана: всё, что можно открыть, видно с первой секунды — закрытое показано с условием.
-import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0 } from "./data.js";
+import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
 import { sfx, setSound } from "./audio.js";
@@ -19,6 +19,8 @@ let S = null, api = null;
 let buyMode = 1, tab = "squad", rows = [], shownLg = NEG, lastSfx = null, lastK = -1, bankText = null, bankSfx = null;
 let slowT = 0, pipsKey = "", skillEls = {}, relicEls = {}, holdT = 0, holding = false, bulkShown = null;
 let draftKey = "", itemsKey = "", rosterKey = "", roadKey = "", collSel = null, relicsBuilt = false, chatBuilt = false;
+let badge = 0, achNew = [], achDrawAt = 0, achSfxAt = 0;    // ачивки: значок на вкладке, очередь уведомлений, когда рисовали и звучали
+let achMsg = "", achUntil = 0;                              // уведомление об ачивке: показывается в плашке «Дальше», пока не истечёт
 // Выбор предмета появляется прямо под курсором, а игрок в этот момент часто кликает без остановки. Поэтому карточки
 // включаются не сразу: секунду после появления и ещё треть секунды после последнего клика они не нажимаются.
 const DRAFT_LOCK = 1000, DRAFT_QUIET = 350;
@@ -62,7 +64,8 @@ export function mount(state, hooks) {
 }
 export function setState(state) {
   S = state; rows = []; $("mercList").textContent = ""; shownLg = NEG; lastK = -1; slowT = 0;
-  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
+  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0;
+  TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
 
 function drawSound() {
@@ -78,8 +81,14 @@ function drawBuySeg() {
   $("buySeg").innerHTML = modes.map(([m, l]) => '<span data-m="' + m + '" class="' + (m === buyMode ? "on" : "") + (!S.un.bulk && m !== 1 ? " lockd" : "") + '"' +
     (!S.un.bulk && m !== 1 ? ' title="Откроется на 5-й волне"' : "") + ">" + l + "</span>").join("");
 }
+function tabStrip() {                                        // на «Пути» — число ачивок, которых игрок ещё не видел
+  if (tab === "road") S.achSeen = C.achCount(S);
+  badge = Math.max(0, C.achCount(S) - (S.achSeen || 0));
+  $("tabs").innerHTML = TABS.map(([t, l]) => '<span class="tab' + (t === tab ? " on" : "") + '" data-t="' + t + '">' + l +
+    (t === "road" && badge ? '<span class="n">' + badge + "</span>" : "") + "</span>").join("");
+}
 function drawTabs() {
-  $("tabs").innerHTML = TABS.map(([t, l]) => '<span class="tab' + (t === tab ? " on" : "") + '" data-t="' + t + '">' + l + "</span>").join("");
+  tabStrip();
   for (const [t] of TABS) $("pane" + t[0].toUpperCase() + t.slice(1)).hidden = tab !== t;
   if (tab === "relics") buildRelics();
   if (tab === "items") { itemsKey = ""; drawItems(); }
@@ -238,14 +247,79 @@ function statueNote() {                                     // что дали �
 
 // ---------- путь: что открыто и что впереди ----------
 function condText(u) { return u.kind === "wave" ? "волна " + u.at : u.kind === "rb" ? "после " + u.at + "-го возрождения" : "с первых душ"; }
+// Ачивки: сводка, потом группы. В группе — лестницы (кружки — пороги, под ними ближайшая цель и сколько до неё) и одиночные.
+const medal = (done, all) => art(done >= all ? "medal-gold" : done * 3 >= all ? "medal-silver" : "medal-bronze");
+function achHtml() {
+  const n = C.achCount(S), h = [];
+  h.push('<div class="achsum"><div class="achhead"><b>Ачивки</b><span><b>' + n + "</b> из " + C.ACH_TOTAL + "</span><em>+" + n + ' % урона</em></div><div class="achbar"><i style="width:' +
+    (n / C.ACH_TOTAL * 100).toFixed(1) + '%"></i></div><p>Каждая ачивка навсегда прибавляет 1 % урона. Возрождение их не сбрасывает.</p></div>');
+  for (const [g, title] of ACH_GROUPS) {
+    const rows = [];
+    let got = 0, all = 0;
+    for (const l of ACH_LADDERS) {
+      if (l.g !== g) continue;
+      const v = C.achValue(S, l.id), m = l.at.length;
+      let d = 0;
+      while (d < m && S.ach[l.id + ":" + d]) d += 1;
+      got += d; all += m;
+      let pips = "";
+      for (let i = 0; i < m; i++) pips += '<i class="' + (i < d ? "on" : i === d ? "now" : "") + '"></i>';
+      let body = '<div class="an">Все цели взяты</div>';
+      if (d < m) {
+        const lo = d ? l.at[d - 1] : 0, p = Math.max(0, Math.min(1, (v - lo) / (l.at[d] - lo)));
+        body = '<div class="an">' + C.achGoal(l, d) + "<em>сейчас " + C.achNow(l, v) + '</em></div><div class="achbar sm"><i style="width:' + (p * 100).toFixed(0) + '%"></i></div>';
+      }
+      rows.push('<div class="ach' + (d >= m ? " done" : d ? "" : " zero") + '"><img class="am" alt="" src="' + medal(d, m) + '"><div class="ab"><div class="at"><b>' + l.name +
+        "</b><span>" + d + " / " + m + '</span></div><div class="apips">' + pips + "</div>" + body + "</div></div>");
+    }
+    for (const a of ACH_SINGLE) {
+      if (a.g !== g) continue;
+      const done = !!S.ach[a.id];
+      all += 1; if (done) got += 1;
+      rows.push('<div class="ach one' + (done ? " done" : " zero") + '"><img class="am" alt="" src="' + art(done ? "medal-gold" : "medal-bronze") + '"><div class="ab"><div class="at"><b>' + a.name +
+        "</b><span>" + (done ? "есть" : "") + '</span></div><div class="an">' + a.text + "</div></div></div>");
+    }
+    h.push('<h4 class="achg">' + title + "<span>" + got + " / " + all + "</span></h4>" + rows.join(""));
+  }
+  return h.join("");
+}
+function achKey() {                                          // меняется, когда меняется что-то из показанного
+  let k = C.achCount(S) + "";
+  for (const l of ACH_LADDERS) k += "|" + C.achNow(l, C.achValue(S, l.id));
+  return k;
+}
+// Уведомления об ачивках идут в плашку «Дальше» под линией: в начале игры ачивки сыплются часто, а всплывающая
+// подсказка внизу страницы закрывала бы умения. Сколько бы ачивок ни пришло разом — одна строка.
+function flushAch() {
+  if (!achNew.length) return;
+  const n = achNew.length, last = achNew[n - 1], now = performance.now();
+  achMsg = n === 1 ? "«" + last.name + "»: " + last.text.charAt(0).toLowerCase() + last.text.slice(1) + ". +1 % урона"
+    : "Новых ачивок: " + n + ", +" + n + " % урона. Последняя — «" + last.name + "»";
+  achUntil = now + 3800;
+  if (now - achSfxAt > 8000) { achSfxAt = now; sfx.ms(); }
+  achNew = []; roadKey = "";
+}
+export function achBoot(n) {                                 // при загрузке: сколько ачивок засчитано задним числом
+  if (n > 0) { achMsg = "Засчитано ачивок: " + n + ", +" + n + " % урона. Список — во вкладке «Путь»"; achUntil = performance.now() + 12000; }
+}
+function stepAch() {                                         // зовётся несколько раз в секунду: то, что знает только интерфейс
+  if (ACCT.logged()) C.achMark(S, "login");
+  const r = TOP.myRank();
+  if (r > 0) { if (r <= 10) C.achMark(S, "top10"); if (r <= 3) C.achMark(S, "top3"); if (r === 1) C.achMark(S, "top1"); }
+  flushAch();
+  const b = tab === "road" ? 0 : Math.max(0, C.achCount(S) - (S.achSeen || 0));
+  if (b !== badge || (tab === "road" && S.achSeen !== C.achCount(S))) tabStrip();
+}
 function drawRoad() {
   if (tab !== "road") return;
-  const key = Object.keys(S.un).length + ":" + Object.keys(S.feat).length;
-  if (key === roadKey) return;
-  roadKey = key;
+  const now = performance.now(), ak = achKey();
+  const key = Object.keys(S.un).length + ":" + Object.keys(S.feat).length + ":" + ak;
+  if (key === roadKey || (roadKey && now - achDrawAt < 1000 && roadKey.split(":")[2].split("|")[0] === ak.split("|")[0])) return;   // цифры прогресса — не чаще раза в секунду
+  roadKey = key; achDrawAt = now;
   const ord = (u) => (u.kind === "rb" ? 1000 + u.at : u.kind === "souls" ? 0 : u.at);
   const list = UNLOCKS.slice().sort((a, b) => ord(a) - ord(b));
-  let next = false, h = '<p class="note pad">Всё, что есть в игре. Открытое отмечено, остальное ждёт.</p>';
+  const open = list.filter((u) => S.un[u.key]).length;
+  let next = false, h = achHtml() + '<h4 class="achg">Что открывается<span>' + open + " / " + list.length + '</span></h4><p class="note pad">Всё, что есть в игре. Открытое отмечено, остальное ждёт.</p>';
   for (const u of list) {
     const done = !!S.un[u.key], cur = !done && !next; if (cur) next = true;
     h += '<div class="rd' + (done ? " done" : cur ? " cur" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + u.title + "</b><span>" + condText(u) + "</span><p>" + u.say + "</p></div></div>";
@@ -390,11 +464,13 @@ function drawSlow() {
   TW.draw();
   TOP.tick(tab === "top");
   SWAP.tick();
+  stepAch();
   $("chipAsh").hidden = S.ashAll === NEG;
   if (S.ashAll !== NEG) $("ashNum").textContent = txt(S.ash);
-  const nx = C.nextUp(S), nl = $("nextLine");
-  const hint = nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
+  const nx = C.nextUp(S), nl = $("nextLine"), flash = performance.now() < achUntil;
+  const hint = flash ? achMsg : nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
   if (nl.textContent !== hint) { nl.textContent = hint; nl.title = hint; }   // строка обрезается на двух строках — целиком видна по наведению
+  if ($("nextBox").classList.contains("flash") !== flash) { $("nextBox").classList.toggle("flash", flash); $("nextCap").textContent = flash ? "Ачивка" : "Дальше"; }
   const rb = $("btnRebirth"), g = C.ashGain(S);
   rb.hidden = false;
   rb.classList.toggle("weak", g === NEG || !S.un.rebirth);
@@ -412,6 +488,7 @@ function stepDraft() {                                       // карточки
 }
 
 export function frame(dt) {
+  if (TW.watching()) C.achNote(S, "tw", dt);                // ачивка «Кино и клики»: время игры со стримом на фоне
   drawBank(dt);
   stepHold(dt);
   stepDraft();
@@ -431,6 +508,7 @@ export function onEvent(e) {
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
   else if (e.t === "rebirth") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") { slowT = 0; itemsKey = ""; }
+  else if (e.t === "ach") achNew.push(e);
 }
 
 // ---------- окна ----------
@@ -482,6 +560,7 @@ export function showIntro(i) {
     '<button class="btn gold big" data-next>' + (last ? "Играть" : "Дальше") + "</button></div>",
   (e) => {
     const b = e.target.closest("button"); if (!b) return;
+    if (last) C.achMark(S, "intro");
     if (b.dataset.skip !== undefined || last) closeModal(); else showIntro(i + 1);
   });
 }

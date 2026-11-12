@@ -91,6 +91,7 @@ export function mount(state, hooks) {
   A.onChange(() => { if (!A.logged()) { rank = 0; best = 0; got = 0; sentKey = ""; } else lastSend = 0; shownKey = ""; draw(false); });
 }
 export function setState(state) { S = state; sentKey = ""; shownKey = ""; }
+export const myRank = () => (A.logged() ? rank : 0);         // место в таблице, как его знает сервер; 0 — не в таблице
 export function open() { shownKey = ""; if (!lastLoad || Date.now() - lastLoad > 15000) load(); else draw(true); }
 export function tick(visible) {                             // зовётся из UI несколько раз в секунду
   const now = Date.now();

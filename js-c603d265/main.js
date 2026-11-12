@@ -89,6 +89,7 @@ async function boot() {
   document.getElementById("hint").hidden = S.stats.clicks > 0;
   if (gone > 5) away(gone);
   C.checkUnlocks(S);
+  UI.achBoot(C.checkAch(S, true));                          // ачивки, заработанные до их появления, засчитываются сразу и молча
 
   const field = FX.fieldEl();
   const strike = (e) => {                                   // удар: по линии или по труперу, вынесенному со страницы

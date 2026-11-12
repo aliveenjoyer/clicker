@@ -93,6 +93,7 @@ async function swap(n) {
   if (d.wave !== undefined) view = d;                       // сервер отдаёт свежую картину и при отказе
   if (d.ok && d.got > 0) {
     C.swapPay(S, took, d.got);
+    if (view && view.allow > 0 && view.left <= 0) C.achMark(S, "swapcap");   // дневная норма выбрана до конца
     if (H.changed) H.changed();
     sfx.ms();
     if (H.toast) H.toast("Обменяно душ RPG: " + d.got + ". Придут, когда запущено колесо хаоса");

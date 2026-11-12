@@ -251,6 +251,7 @@ export function mount(state, h) {
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }
 export const isLive = () => live;
+export const watching = () => shown && playing;              // стрим сейчас идёт фоном линии
 export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
   const on = player && player !== "loading";
   let q = null, list = [];

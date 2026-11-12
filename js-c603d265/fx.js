@@ -186,6 +186,7 @@ function detach(x, y) {
   el.float.appendChild(el.plate); el.float.appendChild(el.enemy); el.float.appendChild(el.bossRing);
   el.foeHome.hidden = false;
   el.foeGrip.title = "Перетащи трупера куда удобно";
+  C.achMark(S, "away");
   setAway(true);
   placeFoe(x, y);
 }

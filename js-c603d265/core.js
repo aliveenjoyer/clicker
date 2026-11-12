@@ -1,8 +1,8 @@
 // Правила игры без единой строчки интерфейса: состояние, удар, наёмники, волны, боссы, умения, огонёк, возрождение.
 // Этот модель потом переедет на сервер (PLAN.md § 19): клиент шлёт намерения, сервер считает то же самое.
 // Все большие числа — lg (см. num.js). События для картинки и звука складываются в S.ev, их забирает main.js.
-import { NEG, L10, lsum, lsub, lg } from "./num.js";
-import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE } from "./data.js";
+import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
+import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE } from "./data.js";
 
 const N = HEROES.length;
 const L2 = L10(2), L4 = L10(4);
@@ -24,6 +24,7 @@ export function newState() {
     statueIn: 20, statueOn: 0, statues: { dmg: 0, souls: 0, crit: 0, timer: 0 },
     urnIn: 15, urnOn: 0, urnHits: 0, album: { crates: 0, altars: 0, statues: 0, urns: 0, elites: 0 },
     un: {}, stats: { clicks: 0, kills: 0, bosses: 0, crits: 0, played: 0, swapped: 0 },
+    ach: {}, achSeen: 0, sess: 0, achT: 0,                  // ачивки: полученные; сколько игрок уже видел; этот заход, с; до следующей проверки
     set: { sound: true, calm: false, sci: false, autoBoss: true },
   };
   for (const r of RELICS) S.rel[r.id] = 0;
@@ -35,7 +36,7 @@ export function newState() {
 
 export function save(S) {
   const o = {};
-  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live") o[k] = S[k];
+  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "sess" && k !== "achT") o[k] = S[k];
   o.at = Date.now();
   return JSON.stringify(o, (k, v) => (v === -Infinity ? null : v));
 }
@@ -51,6 +52,8 @@ export function load(text) {
   for (const k of LG_KEYS) if (S[k] === null || S[k] === undefined) S[k] = NEG;
   S.ash = ashInt(S.ash); S.ashAll = ashInt(S.ashAll);       // пепел — целый: дробные остатки прежних версий срезаются
   if (S.lv.length < N + 1) S.lv = S.lv.concat(new Array(N + 1 - S.lv.length).fill(0));
+  if (!S.ach || typeof S.ach !== "object") S.ach = {};
+  S.sess = 0; S.achT = 0;
   S.ev = [];
   derive(S);
   return S;
@@ -103,6 +106,7 @@ export function derive(S) {
   const it = (id) => raw(id) * (1 + 0.1 * Math.max(0, starsOf(S, id) - 1));   // сила: ранг и звёзды
   let g = S.rel.blade * L10(1.2) + it("item-w-monster") * L10(1.08) + L10(1 + 0.5 * it("item-l-frenzy")) + L10(1 + 0.02 * S.statues.dmg);
   if (S.ashAll > NEG) g += S.ashAll > 12 ? S.ashAll + L10(CFG.ashDmg) : L10(1 + CFG.ashDmg * Math.pow(10, S.ashAll));
+  g += L10(1 + CFG.achDmg * achCount(S));                    // ачивки: +1 % урона за каждую
   D.gmul = g;
   D.hero = [NEG];
   let d = NEG, top = 0;
@@ -227,6 +231,9 @@ function kill(S, src) {
 function bossWin(S) {
   const l = lootBase(S.z) + L10(CFG.bossLoot) + soulsLg(S);
   gain(S, l);
+  if (S.d.bossTime - S.bossT <= 3) achMark(S, "fastboss");
+  if (S.bossT <= 1) achMark(S, "clutch");
+  if (S.failRow > 0) achMark(S, "revenge");
   S.stats.bosses += 1; S.failRow = 0;
   if (S.stats.bosses >= 25) feat(S, "cheat");
   ev(S, { t: "boss_win", z: S.z, loot: l, boss: bossOf(S.z) });
@@ -237,8 +244,10 @@ function bossWin(S) {
 function bossFail(S) {
   if (S.forgiven < S.d.barrier) {                           // Divine Barrier: ещё одна попытка
     S.forgiven += 1; S.bossT = S.d.bossTime; ev(S, { t: "barrier" });
+    achMark(S, "barrier");
     return;
   }
+  S.stats.fails = (S.stats.fails || 0) + 1;
   ev(S, { t: "boss_fail", z: S.z, boss: bossOf(S.z) });
   S.failRow += 1; if (S.failRow >= 3) feat(S, "curse");
   S.z -= 1; S.mode = "farm"; S.wall = true; S.hp = 1; S.kills = 0;
@@ -288,6 +297,7 @@ export function hit(S, src, weak) {                         // src: click | hold
   const wk = !!weak && !!S.un.weak && isBoss(S.z);
   const dmg = clickLg(S) + (crit ? L10(critMult(S)) : 0) + (wk ? L10(LANE.weak.mult) : 0);
   if (crit) S.stats.crits += 1;
+  if (wk) S.stats.weak = (S.stats.weak || 0) + 1;
   ev(S, { t: "hit", dmg, crit, src, weak: wk });
   damage(S, dmg, src);
   if (S.d.tesla && Math.random() < S.d.tesla) damage(S, dmg, "tesla");   // Tesla Bullets: удар повторяется
@@ -297,6 +307,11 @@ export function hit(S, src, weak) {                         // src: click | hold
 // ---------- ход времени ----------
 export function tick(S, dt, live) {                         // live=false — офлайн: без умений, комбо и огоньков
   S.stats.played += live ? dt : 0;
+  if (live) {
+    S.sess += dt;
+    if (S.live) S.stats.live = (S.stats.live || 0) + dt;      // идёт стрим aliveenjoyer
+    S.achT += dt; if (S.achT >= 0.25) { S.achT = 0; checkAch(S); }
+  }
   S.bucket = Math.min(40, S.bucket + CFG.clickCap * dt);
   if (live) {
     S.idleT += dt;
@@ -412,6 +427,8 @@ export function useSkill(S, id) {
       S.hp = 1;
     }
   }
+  S.stats.skills = (S.stats.skills || 0) + 1;
+  if (id === "ult") S.stats.ults = (S.stats.ults || 0) + 1;
   ev(S, { t: "skill", id, name: s.name });
   return true;
 }
@@ -438,7 +455,7 @@ export function takeWisp(S) {
   ev(S, { t: "wisp_take", id: w.id, title: w.title, text: w.text, loot });
   return w;
 }
-export function orbBonus(S, loot) { gain(S, loot + L10(CFG.orbBonus)); }   // подобрал сферу: +50 % душ этого трупера
+export function orbBonus(S, loot) { gain(S, loot + L10(CFG.orbBonus)); S.stats.orbs = (S.stats.orbs || 0) + 1; }   // подобрал сферу: +50 % душ этого трупера
 
 // ---------- обменник: души кликера → души RPG стрима ----------
 // Здесь только цена в душах кликера. Сколько душ RPG можно взять за день, решает сервер (js/swap.js).
@@ -558,6 +575,10 @@ export function rebirth(S) {
   const g = ashGain(S);
   if (g === NEG || !S.un.rebirth) return false;
   S.ash = ashInt(lsum(S.ash, g)); S.ashAll = ashInt(lsum(S.ashAll, g)); S.rb += 1;
+  const st = S.stats;
+  st.ashOnce = Math.max(st.ashOnce || 0, g);
+  if (st.rbAt !== undefined && st.played - st.rbAt <= 180) achMark(S, "speedrun");
+  st.rbAt = st.played;
   S.lv.fill(0); S.lvRun = 0; S.souls = NEG; S.run = NEG;
   S.z = 1 + 10 * S.rel.start; if (isBoss(S.z)) S.z += 1;
   S.zrec = S.z; S.kills = 0; S.hp = 1; S.mode = "push"; S.wall = false;
@@ -601,4 +622,77 @@ export function nextUp(S) {
   if (S.crate) return { k: "crate", text: "На линии ящик — разбей его, внутри души" };
   if (S.wall) return { k: "wall", text: "Босс пока не по зубам: качай отряд или возрождайся" };
   return null;
+}
+
+// ---------- ачивки ----------
+// S.ach — полученные: ключ «лестница:номер порога» или id одиночной. Определения — data.js (ACH_LADDERS, ACH_SINGLE).
+// Каждая навсегда даёт +1 % урона (derive). Проверка идёт четыре раза в секунду игрового времени (tick) и при загрузке.
+export const achCount = (S) => (S.ach ? Object.keys(S.ach).length : 0);
+export const ACH_TOTAL = ACH_LADDERS.reduce((n, l) => n + l.at.length, 0) + ACH_SINGLE.length;
+export function achValue(S, id) {                            // то, по чему считается лестница id
+  const st = S.stats;
+  switch (id) {
+    case "best": return S.best;
+    case "life": return S.life === NEG ? -1 : S.life;         // lg
+    case "ashAll": return S.ashAll === NEG ? -1 : S.ashAll;   // lg
+    case "rb": return S.rb;
+    case "elites": case "crates": case "altars": case "statues": case "urns": return S.album[id] || 0;
+    case "wisps": return S.wisps || 0;
+    case "relics": { let n = 0; for (const k in S.rel) n += S.rel[k] || 0; return n; }
+    case "coll": { let n = 0; for (const k in S.col) if (S.col[k] > 0) n += 1; return n; }
+    case "itemsGot": { let n = 0; for (const k in S.col) n += S.col[k] || 0; return n; }
+    case "stars": { let n = 0; for (const x of ITEMS) n += starsOf(S, x.id); return n; }
+    default: return st[id] || 0;                              // счётчики и «лучшее за всё время» из S.stats
+  }
+}
+const achNum = (l, v) => (l.fmt === "lg" ? (v > 0 ? txt(v) : "0") : l.fmt === "t" ? (v < 3600 ? Math.floor(v / 60) + " мин" : Math.floor(v / 3600) + " ч")
+  : v >= 100000 ? txt(L10(v)) : group(v));
+export const achGoal = (l, i) => l.how.replace("#", achNum(l, l.at[i]));        // «Дойти до волны 100»
+export const achNow = (l, v) => achNum(l, l.fmt === "lg" || l.fmt === "t" ? v : Math.floor(v));   // текущее значение тем же видом
+function achGive(S, key, name, text, quiet) {
+  if (S.ach[key]) return 0;
+  S.ach[key] = 1;
+  if (!quiet) ev(S, { t: "ach", key, name, text });
+  return 1;
+}
+export function achMark(S, id, quiet) {                      // одиночная ачивка по событию: из ядра или из интерфейса (вход, место в таблице…)
+  const a = ACH_SINGLE.find((x) => x.id === id);
+  if (!a || !S.ach || S.ach[id]) return false;
+  achGive(S, id, a.name, a.text, quiet);
+  derive(S);
+  return true;
+}
+export function achNote(S, key, n) { S.stats[key] = (S.stats[key] || 0) + n; }   // счётчик, который знает только интерфейс: время со стримом на фоне
+export function checkAch(S, quiet) {                         // выдать всё, что заработано; возвращает, сколько выдано
+  const st = S.stats;
+  // лучшее за всё время: считается из того, что есть сейчас
+  st.comboMax = Math.max(st.comboMax || 0, Math.floor(S.combo));
+  let hired = 0, lvMax = 0;
+  for (let i = 1; i <= N; i++) if (S.lv[i] > 0) { hired += 1; if (S.lv[i] > lvMax) lvMax = S.lv[i]; }
+  st.hired = Math.max(st.hired || 0, hired); st.lvMax = Math.max(st.lvMax || 0, lvMax); st.whipMax = Math.max(st.whipMax || 0, S.lv[0]);
+  st.hitMax = Math.max(st.hitMax || 0, clickLg(S));
+  if (S.d.dps !== NEG) st.dpsMax = Math.max(st.dpsMax || 0, dpsLg(S));
+  if (S.souls !== NEG) st.bankMax = Math.max(st.bankMax || 0, S.souls);
+  const now = new Date(), day = now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
+  if (st.day !== day) { st.day = day; st.days = (st.days || 0) + 1; }
+
+  let got = 0;
+  for (const l of ACH_LADDERS) {
+    const v = achValue(S, l.id);
+    for (let i = 0; i < l.at.length && v >= l.at[i]; i++) if (!S.ach[l.id + ":" + i]) got += achGive(S, l.id + ":" + i, l.name, achGoal(l, i), quiet);
+  }
+  const one = (id, ok) => { if (ok && !S.ach[id]) { const a = ACH_SINGLE.find((x) => x.id === id); if (a) got += achGive(S, id, a.name, a.text, quiet); } };
+  let on = 0, items = 0, top = 0, leg = 0, sec = 0;
+  for (const s of SKILLS) if (S.act[s.id] > 0) on += 1;
+  for (const k in S.items) if (S.items[k] > 0) { items += 1; if (S.items[k] > top) top = S.items[k]; }
+  for (const x of ITEMS) if (x.feat && S.feat[x.feat]) { if (x.rar === "l") leg += 1; else if (x.rar === "x") sec += 1; }
+  one("allskills", on >= 5);
+  one("fullslots", items > 0 && items >= S.d.slots);
+  one("rank4", top >= ITEM_MAX);
+  one("legend1", leg >= 1); one("legend3", leg >= 3); one("secret1", sec >= 1); one("secret3", sec >= 3);
+  one("x2", (st.live || 0) >= 1);
+  one("night", (now.getHours() === 3 || now.getHours() === 4) && S.idleT < 60 && st.clicks > 0);
+  one("marathon", S.sess >= 7200);
+  if (got) derive(S);
+  return got;
 }
