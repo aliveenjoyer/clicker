@@ -8,6 +8,8 @@ import { art, heroArt, applyArt } from "./art.js";
 import * as FX from "./fx.js";
 import * as TW from "./stream.js";
 import * as TOP from "./top.js";
+import * as SWAP from "./swap.js";
+import * as ACCT from "./acct.js";
 
 const $ = (id) => document.getElementById(id);
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -43,11 +45,13 @@ export function mount(state, hooks) {
   bindHold($("btnRebirth"));
   TW.mount(S, { changed: () => { slowT = 0; api.settings(); } });
   TOP.mount(S, { toast });
+  SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
+  $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();
   drawSound(); drawBuySeg(); buildSkills(); drawTabs();
 }
 export function setState(state) {
   S = state; rows = []; $("mercList").textContent = ""; shownLg = NEG; lastK = -1; slowT = 0;
-  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; TW.setState(S); TOP.setState(S); drawTabs();
+  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
 
 function drawSound() {
@@ -370,6 +374,7 @@ function drawSlow() {
   drawSkills();
   TW.draw();
   TOP.tick(tab === "top");
+  SWAP.tick();
   $("chipAsh").hidden = S.ashAll === NEG;
   if (S.ashAll !== NEG) $("ashNum").textContent = txt(S.ash);
   const nx = C.nextUp(S);
@@ -418,6 +423,21 @@ export function showOffline(o) {
     '<div class="acts"><button class="btn gold big" data-x>Забрать</button></div>');
   m2.querySelector("[data-x]").addEventListener("click", closeModal);
 }
+// ---------- вход через Twitch: плашка наверху ----------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function drawWho() {
+  const b = $("btnWho"), inn = ACCT.logged(), busy = ACCT.state.phase === "code" || ACCT.state.phase === "start";
+  b.classList.toggle("in", inn);
+  b.querySelector(".t").textContent = inn ? ACCT.who() : busy ? "Вход…" : "Войти";
+  b.title = inn ? "Ты вошёл через Twitch как " + ACCT.who() : "Вход через Twitch: для таблицы рекордов и обмена на души RPG";
+}
+function whoClick() {
+  if (!ACCT.logged()) { tab = "top"; drawTabs(); ACCT.login(); slowT = 0; return; }   // вкладка «Топ» покажет код входа
+  openModal("<h2>" + esc(ACCT.who()) + "</h2><p>Ты вошёл через Twitch. Вход нужен для таблицы рекордов и обмена на души RPG. Прогресс игры хранится в этом браузере и к аккаунту не привязан.</p>" +
+    '<div class="acts split"><button class="btn ghost sm" data-out>Выйти</button><button class="btn" data-x>Готово</button></div>',
+  (e) => { const t = e.target.closest("button"); if (!t) return; if (t.dataset.out !== undefined) ACCT.logout(); closeModal(); });
+}
+
 // ---------- микрообучение: три шага при первом запуске ----------
 const INTRO = [
   ["cur-farm", "Бей труперов — собирай души", "Кликай по врагу или держи кнопку мыши. Души — главная валюта: на них нанимают отряд."],

@@ -23,7 +23,7 @@ export function newState() {
     seenT: 0, crate: false, crateIn: 0, altar: 0, altarIn: 0, altarPaid: NEG,
     statueIn: 20, statueOn: 0, statues: { dmg: 0, souls: 0, crit: 0, timer: 0 },
     urnIn: 15, urnOn: 0, urnHits: 0, album: { crates: 0, altars: 0, statues: 0, urns: 0, elites: 0 },
-    un: {}, stats: { clicks: 0, kills: 0, bosses: 0, crits: 0, played: 0 },
+    un: {}, stats: { clicks: 0, kills: 0, bosses: 0, crits: 0, played: 0, swapped: 0 },
     set: { sound: true, calm: false, sci: false, autoBoss: true },
   };
   for (const r of RELICS) S.rel[r.id] = 0;
@@ -438,6 +438,25 @@ export function takeWisp(S) {
   return w;
 }
 export function orbBonus(S, loot) { gain(S, loot + L10(CFG.orbBonus)); }   // подобрал сферу: +50 % душ этого трупера
+
+// ---------- обменник: души кликера → души RPG стрима ----------
+// Здесь только цена в душах кликера. Сколько душ RPG можно взять за день, решает сервер (js/swap.js).
+export const swapPriceLg = (n) => CFG.swapBase * Math.pow(10, (n - 1) / CFG.swapStep);   // lg цены n-й души RPG за день
+export function swapMax(S, took, left) {                    // на сколько душ RPG хватает банка сейчас, не больше left
+  let c = NEG, m = 0;
+  while (m < left && m < 250) {
+    c = lsum(c, swapPriceLg(took + m + 1));
+    if (S.souls === NEG || c > S.souls) break;
+    m++;
+  }
+  return m;
+}
+export function swapPay(S, took, m) {                       // списать цену m душ RPG, купленных после took
+  let c = NEG;
+  for (let k = 1; k <= m; k++) c = lsum(c, swapPriceLg(took + k));
+  S.souls = S.souls === NEG || c >= S.souls ? NEG : lsub(S.souls, c);
+  S.stats.swapped = (S.stats.swapped || 0) + m;
+}
 
 // ---------- события на линии ----------
 const span = (a) => a[0] + Math.random() * (a[1] - a[0]);

@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=4b0d19ea">
-<link rel="stylesheet" href="css/ui.css?v=4b0d19ea">
-<link rel="stylesheet" href="css/game.css?v=4b0d19ea">
+<link rel="stylesheet" href="css/tokens.css?v=d7fd79fa">
+<link rel="stylesheet" href="css/ui.css?v=d7fd79fa">
+<link rel="stylesheet" href="css/game.css?v=d7fd79fa">
 </head>
 <body>
 
@@ -32,10 +32,12 @@
     <div class="live" id="live" hidden><span class="dot"></span>Стрим идёт — фарм <b>×2</b></div>
   </div>
   <div class="right">
+    <button class="chip stream" id="btnSwap" type="button" title="Обменник: души кликера на души RPG стрима"><img class="ico-stream" data-art="cur-stream" alt=""><span class="stack"><span class="v" id="swapV">Обмен</span><span class="l">души RPG</span></span></button>
     <div class="chip ash" id="chipAsh" hidden title="Пепел: за него покупают реликвии">
       <img class="ico-farm" style="filter:none" data-art="cur-ash" alt="">
       <div class="stack"><span class="v" id="ashNum">0</span><span class="l">пепел</span></div>
     </div>
+    <button class="btn twitch sm who" id="btnWho" type="button"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 3 2.5 6.8V19h4.6v2.5h2.6L12.2 19h3.7l5-5V3H4zm15 10.2-2.9 2.9h-4.6l-2.5 2.5v-2.5H5.4V4.8H19v8.4zM16 7.6v5h-1.7v-5H16zm-4.6 0v5H9.7v-5h1.7z"/></svg><span class="t">Войти</span></button>
     <button class="ibtn" id="btnSound" title="Звук" aria-label="Звук"></button>
     <button class="ibtn" id="btnMenu" title="Настройки" aria-label="Настройки">
       <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.3 2.5h4l.3-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4zM13 15.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z" transform="translate(-1 0)"/></svg>
@@ -167,7 +169,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-a8e67969/main.js"></script>
+<script type="module" src="js-2b08cf60/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

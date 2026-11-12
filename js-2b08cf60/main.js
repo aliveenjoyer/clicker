@@ -19,7 +19,7 @@ let S = null, last = 0, acc = 0, saveT = 0, down = false, downT = 0, holdAcc = 0
 // любая такая дверь стала бы способом накрутить рекорд.
 function store() { try { localStorage.setItem(KEY, C.save(S)); } catch (e) { /* хранилище недоступно — играем без сохранения */ } }
 function restore() {
-  try { localStorage.removeItem("hlystopad.backups.v1"); localStorage.removeItem(KEY + ".rescue"); } catch (e) { /* следы прежней версии с копиями */ }
+  try { localStorage.removeItem("hlystopad.backups.v1"); localStorage.removeItem(KEY + ".rescue"); localStorage.removeItem("hlystopad.id"); localStorage.removeItem("hlystopad.name"); } catch (e) { /* следы прежней версии с копиями */ }
   if (LOCAL && Q.has("reset")) { try { localStorage.removeItem(KEY); } catch (e) {} }
   let t = null;
   try { t = localStorage.getItem(KEY); } catch (e) {}
