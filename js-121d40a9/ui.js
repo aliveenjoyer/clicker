@@ -53,7 +53,7 @@ export function mount(state, hooks) {
   $("btnMenu").addEventListener("click", openSettings);
   $("veil").addEventListener("click", closeModal);
   bindHold($("btnRebirth"));
-  TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); } });
+  TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); }, stage: (on) => FX.setDock(on) });
   TOP.mount(S, { toast });
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
   $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();

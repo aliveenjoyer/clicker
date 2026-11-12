@@ -1,4 +1,6 @@
 // Стрим Twitch фоном линии. Плеер лежит под игрой и не ловит клики: все удары идут труперам.
+// Пока стрим на фоне, его должно быть удобно смотреть: поле становится картинкой 16:9 без затемнения, а счёт душ,
+// комбо, цифры урона, Душка и звук стрима уезжают в полосу под картинкой (hooks.stage → js/fx.js, setDock).
 // Показываем свой канал, а когда он не в эфире — первый живой из списка друзей, по порядку. Как только свой стрим
 // начинается, фон возвращается на него. Бонус «эфир ×2» даёт только свой канал.
 // Идёт ли стрим — узнаём по картинке-превью Twitch: когда канал не в эфире, её адрес переадресует на заглушку.
@@ -39,7 +41,7 @@ function loadScript() {
   return scriptP;
 }
 function fits() { const f = $("field").getBoundingClientRect(); return f.width >= 400 && f.height >= 300; }   // меньше Twitch не разрешает
-function fit() {                                             // плеер 16:9 закрывает всё поле, лишнее обрезается
+function fit() {                                             // плеер 16:9 закрывает всё поле; поле само 16:9, так что картинка видна целиком
   const f = $("field").getBoundingClientRect(), w = Math.max(f.width, f.height * 16 / 9);
   const p = $("twplayer"); p.style.width = Math.ceil(w) + "px"; p.style.height = Math.ceil(w * 9 / 16) + "px";
 }
@@ -67,7 +69,8 @@ function setChannel(ch) {
   C.setLive(S, own);
   drawLive();
   if (changed) {
-    if (shown) { shown = false; stop(); $("twbg").hidden = true; $("twdim").hidden = true; $("field").classList.remove("tw"); }
+    if (shown && !(S.set.stream && cur && fits())) show(false);   // стрим кончился — убрать картинку; сменился на другой — только плеер
+    else if (shown) stop();
     if (hooks && hooks.channel) hooks.channel(CHANNEL);     // чат во вкладке идёт за показанным каналом
   }
   sync();
@@ -108,14 +111,17 @@ function stop() {
   player = null; playing = false; front(false);
   $("twplayer").textContent = "";
 }
+function show(on) {                                          // картинка стрима на поле: поставить или убрать
+  shown = on;
+  $("twbg").hidden = !on;
+  $("field").classList.toggle("tw", on);
+  if (hooks && hooks.stage) hooks.stage(on);                 // счёт душ, цифры и Душка — в полосу под картинкой и обратно
+  if (on) start(); else stop();
+}
 export function sync() {                                     // показать или убрать плеер по настройке и по эфиру
   const want = !!S.set.stream && !!cur && fits();
-  if (want !== shown) {
-    shown = want;
-    $("twbg").hidden = !want; $("twdim").hidden = !want;
-    $("field").classList.toggle("tw", want);
-    if (want) start(); else stop();
-  }
+  if (want !== shown) show(want);
+  else if (want && !player) start();                         // канал сменился: картинка осталась, плеер новый
   draw();
 }
 export function draw() {
@@ -127,7 +133,7 @@ export function draw() {
     : "Сейчас никто не в эфире. Когда стрим начнётся, он появится фоном линии";
   // Twitch не запускает показ сам, пока плеер чем-то закрыт: тогда нужен один клик по его кнопке ▶
   $("twplay").hidden = !(shown && !playing && player && player !== "loading" && performance.now() > askT) || $("field").classList.contains("twfront");
-  // звук стрима: значок и ползунок прямо на поле, пока стрим на фоне
+  // звук стрима: значок и ползунок в полосе под картинкой, пока стрим на фоне
   $("twctl").hidden = !shown;
   if (shown) {
     const on = sound(), sb = $("btnStreamSound"), sl = $("twVol");
@@ -169,6 +175,7 @@ export function mount(state, h) {
   });
   sl.addEventListener("change", () => hooks.changed());
   window.addEventListener("resize", () => { if (shown) fit(); sync(); });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (shown) fit(); }).observe($("field"));   // поле меняет высоту без смены окна
   check();
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }

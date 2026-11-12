@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=741c564c">
-<link rel="stylesheet" href="css/ui.css?v=741c564c">
-<link rel="stylesheet" href="css/game.css?v=741c564c">
+<link rel="stylesheet" href="css/tokens.css?v=78d4ff53">
+<link rel="stylesheet" href="css/ui.css?v=78d4ff53">
+<link rel="stylesheet" href="css/game.css?v=78d4ff53">
 </head>
 <body>
 
@@ -68,14 +68,8 @@
 
     <div class="field" id="field">
       <div class="twbg" id="twbg" hidden><div id="twplayer"></div></div>
-      <div class="twdim" id="twdim" hidden></div>
       <button class="btn twplay" id="twplay" hidden>▶ Включить стрим</button>
       <button class="btn ghost twback" id="twback" hidden>К игре</button>
-      <div class="twctl" id="twctl" hidden>
-        <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
-        <input class="twvol" id="twVol" type="range" min="0" max="100" step="1" value="0" aria-label="Громкость стрима">
-        <span class="twwho" id="twWho"></span>
-      </div>
       <div class="skyline" id="rushLines"></div>
       <canvas id="fxc"></canvas>
 
@@ -135,6 +129,15 @@
       <img class="cursor" id="cursor" data-art="whip-cursor" alt="">
     </div>
 
+    <!-- Стрим фоном: счёт душ, комбо, цифры и Душка переезжают с картинки сюда (js/fx.js, setDock) -->
+    <div class="dock" id="dock" hidden>
+      <div class="twctl" id="twctl" hidden>
+        <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
+        <input class="twvol" id="twVol" type="range" min="0" max="100" step="1" value="0" aria-label="Громкость стрима">
+        <span class="twwho" id="twWho"></span>
+      </div>
+    </div>
+
     <div class="lower">
       <div class="skillbar plate" id="skillbar"></div>
       <div class="events plate" id="nextBox">
@@ -178,7 +181,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-f83f88b4/main.js"></script>
+<script type="module" src="js-121d40a9/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

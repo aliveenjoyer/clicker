@@ -1,0 +1,100 @@
+// Таблица лидеров. Строка принадлежит аккаунту Twitch (вход — js/acct.js). Место — по душам, заработанным за всё время:
+// возрождения их не сбрасывают, траты не уменьшают. Игра считается в браузере, проверить число сервер не может, поэтому
+// он только ограничивает его: рекорд волны растёт не быстрее 150 волн сразу и 360 в час, а души принимаются не больше,
+// чем мог заработать игрок принятой волны.
+import { art } from "./art.js";
+import { NEG, group, txt } from "./num.js";
+import * as A from "./acct.js";
+
+const MEDAL = ["medal-gold", "medal-silver", "medal-bronze"];
+const $ = (id) => document.getElementById(id);
+let S = null, rows = null, total = 0, rank = 0, best = 0, got = 0, err = "", busy = false, sentKey = "", lastSend = 0, lastLoad = 0, shownKey = "", toast = null;
+let mineEl = null;
+
+const soulsNow = () => (S.life === NEG || !(S.life > 0) ? 0 : S.life);       // lg душ, заработанных за всё время
+const soulsTxt = (lg) => (lg > 0 ? txt(lg) : "0");
+const stateKey = () => S.best + ":" + S.rb + ":" + Math.floor(soulsNow() * 50);   // души растут всё время: новый ключ — каждые ~5 % прироста
+
+async function send() {                                     // отправить души и рекорд; сервер отвечает местом и таблицей
+  if (busy || !A.logged()) return false;
+  busy = true;
+  const key = stateKey(), mine = soulsNow();
+  const d = await A.api("/score", { sid: A.sid(), wave: S.best, rb: S.rb, played: Math.round(S.stats.played), souls: +mine.toFixed(3) });
+  busy = false; lastSend = Date.now();
+  if (d.ok) {
+    const first = !rank;
+    err = ""; rows = d.top; total = d.total; rank = d.rank; best = d.best; got = d.souls || 0; lastLoad = Date.now();
+    sentKey = d.best >= S.best && got + 0.02 >= mine ? key : "";   // сервер ещё догоняет — пришлём снова через минуту
+    if (first && toast) toast("Ты в таблице: место " + rank + " из " + total);
+  } else if (d.error !== "login") err = d.error === "rate" ? "" : "Таблица сейчас недоступна. Попробуй позже";
+  draw(true);
+  return !!d.ok;
+}
+export async function pushNow() {                           // перед обменом: сервер должен знать свежий рекорд
+  if (A.logged() && !busy && Date.now() - lastSend > 5000 && stateKey() !== sentKey) await send();
+}
+async function load() {
+  lastLoad = Date.now();
+  const d = await A.top();
+  if (d.ok) { rows = d.top; total = d.total; err = ""; }
+  else if (!rows) err = "Таблица сейчас недоступна. Попробуй позже";
+  draw(true);
+}
+
+function draw(force) {
+  const box = $("topBox");
+  if (!box || (box.offsetParent === null && !force)) return;
+  const name = A.logged() ? A.who() : "";
+  if (mineEl) mineEl.textContent = soulsTxt(soulsNow());    // своё число живое, остальная таблица перерисовывается по изменению
+  const behind = !!name && ((best > 0 && best < S.best) || (rank > 0 && got + 0.05 < soulsNow()));
+  const key = JSON.stringify([rows, total, rank, best, behind ? got : 0, err, name, A.state.phase, A.state.code, A.state.err]);
+  if (key === shownKey) return;
+  shownKey = key; mineEl = null;
+  box.textContent = "";
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  if (!name) A.card(box, "Войди — и попадёшь в таблицу под своим ником с Twitch: место даётся за души, заработанные за всё время. Прогресс при этом остаётся в этом браузере.");
+  if (err) box.appendChild(el("p", "note err pad", err));
+  if (!rows) { if (!err) box.appendChild(el("p", "note pad", "Загружаю таблицу…")); return; }
+  if (!rows.length) box.appendChild(el("p", "note pad", "Таблица пока пустая. Стань первым."));
+  let mine = false;
+  for (const r of rows) {
+    const me = !!name && r.n === name;
+    if (me) { mine = true; rank = r.r; }
+    const row = el("div", "trow" + (me ? " me" : "")), pos = el("i");
+    if (r.r <= 3) { const m = new Image(); m.src = art(MEDAL[r.r - 1]); m.alt = r.r; pos.appendChild(m); } else pos.textContent = r.r;
+    const who = el("b", "", r.n);
+    who.appendChild(el("small", "", "волна " + group(r.w) + (r.rb ? ", возрождений: " + group(r.rb) : "")));
+    const val = el("span"), ico = new Image();
+    ico.src = art("cur-farm"); ico.alt = "";
+    val.appendChild(ico); val.appendChild(document.createTextNode(soulsTxt(r.s)));
+    val.title = "Душ заработано за всё время";
+    row.appendChild(pos); row.appendChild(who); row.appendChild(val);
+    box.appendChild(row);
+  }
+  const foot = el("div", "topfoot");
+  if (name) {
+    const line = el("span", "", name + " · " + (mine || rank ? "место " + rank + " из " + total : "игроков в таблице: " + total) + " · душ за всё время: ");
+    mineEl = el("b", "", soulsTxt(soulsNow())); line.appendChild(mineEl);
+    foot.appendChild(line);
+    const out = el("button", "linkbtn", "выйти"); out.dataset.logout = ""; foot.appendChild(out);
+  } else foot.appendChild(el("span", "", "Игроков в таблице: " + total));
+  box.appendChild(foot);
+  if (behind) box.appendChild(el("p", "note", "В таблице пока учтено " + soulsTxt(got) + " душ и волна " + group(best) + ". Сервер принимает рост не быстрее 360 волн в час и скоро догонит."));
+  box.appendChild(el("p", "note", "Место — по душам, заработанным за всё время. Возрождения их не сбрасывают, покупки не уменьшают. В таблицу попадают те, кто вошёл через Twitch."));
+}
+
+export function mount(state, hooks) {
+  S = state; toast = hooks && hooks.toast;
+  const box = $("topBox");
+  A.bind(box);
+  box.addEventListener("click", (e) => { if (e.target.closest("[data-logout]")) A.logout(); });
+  A.onChange(() => { if (!A.logged()) { rank = 0; best = 0; got = 0; sentKey = ""; } else lastSend = 0; shownKey = ""; draw(false); });
+}
+export function setState(state) { S = state; sentKey = ""; shownKey = ""; }
+export function open() { shownKey = ""; if (!lastLoad || Date.now() - lastLoad > 15000) load(); else draw(true); }
+export function tick(visible) {                             // зовётся из UI несколько раз в секунду
+  const now = Date.now();
+  if (A.logged() && !busy && now - lastSend > 60000 && stateKey() !== sentKey) send();   // новое число — не чаще раза в минуту
+  if (visible && !busy && now - lastLoad > 60000) load();
+  if (visible) draw(false);
+}

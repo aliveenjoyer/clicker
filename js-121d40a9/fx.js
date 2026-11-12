@@ -10,6 +10,7 @@ import { bossOf } from "./data.js";
 const $ = (id) => document.getElementById(id);
 let S = null, el = {}, W = 1, H = 1, FW = 1, FH = 1, ctx = null, dpr = 1;   // W×H — холст эффектов, FW×FH — само поле
 let away = false, strike = null;                            // трупер вынесен с линии: эффекты рисуются поверх всей страницы
+let docked = false, wantDock = false;                       // стрим фоном: счёт душ, комбо, цифры и Душка стоят в полосе под картинкой
 const pv = { x: -999, y: -999 };                            // указатель в координатах окна
 let parts = [], rings = [], orbs = [], flies = 0;
 const ptr = { x: -999, y: -999, inside: false };
@@ -21,13 +22,14 @@ export function mount(state) {
   S = state;
   for (const id of ["field", "fxc", "enemy", "q1", "q2", "plate", "hp", "hpText", "enemyName", "enemyCount", "facDot", "crown", "lash", "lashGlow",
     "lashLine", "bossRing", "bossArc", "bossT", "combo", "comboN", "comboName", "wisp", "banner", "hint", "pops", "dushka", "say", "cursor",
-    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome"]) el[id] = $(id);
+    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome", "stats", "dock", "twctl"]) el[id] = $(id);
   ctx = el.fxc.getContext("2d");
   el.weak.style.backgroundImage = "url(" + art("fx-weak") + ")";
   for (const u of [el.q1, el.q2]) u.querySelector("img").src = trooper();
   el.facDot.className = "fac " + (S.set.faction === "sapphire" ? "fac-amber" : "fac-sapphire");
   resize();
   window.addEventListener("resize", resize);
+  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(el.field);   // поле меняет размер и без смены окна: стрим фоном делает его 16:9
   el.field.addEventListener("pointermove", onPtr);
   el.field.addEventListener("pointerdown", onPtr);
   el.field.addEventListener("pointerleave", () => { ptr.inside = false; });
@@ -37,6 +39,7 @@ export function mount(state) {
   el.enemy.querySelector("img").addEventListener("load", () => { if (away) syncFoe(); });   // босс выше трупера: не даём ему вылезти за край окна
   setEnemy();
   syncFoe();
+  setDock(wantDock);
 }
 export function setState(state) { S = state; setEnemy(); syncFoe(); }
 export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", calm); }
@@ -44,6 +47,8 @@ export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", 
 function resize() {
   const r = el.field.getBoundingClientRect();
   FW = Math.max(1, r.width); FH = Math.max(1, r.height);
+  el.field.style.setProperty("--fh", Math.round(FH) + "px");  // от высоты поля считается рост трупера, когда стрим на фоне
+  el.dock.classList.toggle("wide", FW >= 1150); el.dock.classList.toggle("slim", FW < 800); el.dock.classList.toggle("tiny", FW < 600);   // полоса под картинкой подстраивается под ширину поля
   W = away ? Math.max(1, window.innerWidth) : FW; H = away ? Math.max(1, window.innerHeight) : FH;
   dpr = Math.min(2, window.devicePixelRatio || 1);
   el.fxc.width = Math.round(W * dpr); el.fxc.height = Math.round(H * dpr);
@@ -88,6 +93,28 @@ function setAway(on) {
   orbs = []; el.pops.textContent = ""; el.fxl.textContent = ""; el.fxo.textContent = ""; flies = 0;
   for (const n of [el.fxc, el.lash, el.fxl, el.fxo, el.pops]) { n.classList.toggle("fxfix", on); (on ? document.body : el.field).appendChild(n); }
   resize();
+}
+
+// ---------- стрим фоном: всё, что закрывало картинку постоянно, переезжает в полосу под ней ----------
+// Счёт душ, комбо, цифры урона и Душка в обычном виде стоят на поле. Когда фоном идёт стрим, на картинке остаётся только
+// сам бой: трупер с полоской здоровья и то, что нужно бить. Зовёт js/stream.js через UI при каждом появлении и уходе картинки.
+export function setDock(on) {
+  wantDock = !!on;
+  if (!el.field || wantDock === docked) return;
+  docked = wantDock;
+  for (const n of [el.dushka, el.bankBox, el.combo, el.stats]) {
+    if (docked) el.dock.insertBefore(n, el.twctl); else el.field.insertBefore(n, el.cursor);
+  }
+  el.dock.hidden = !docked;
+  document.body.classList.toggle("twon", docked);
+  resize();
+}
+function bankSpot() {                                        // куда летят души: банк на поле или в полосе под картинкой
+  const b = el.bankBox.getBoundingClientRect(), f = org();
+  if (!docked) return { x: b.left - f.left + 34, y: b.top - f.top + 40, px: b.right - f.left + 10, py: b.top - f.top + 30 };
+  const x = b.left - f.left + 18, y = b.top - f.top + b.height / 2;
+  // полоса лежит под полем: с вынесенным трупером эффекты видны и там, а на линии души уходят за нижний край картинки
+  return away ? { x, y, px: b.right - f.left + 10, py: b.top - f.top - 6 } : { x, y: Math.min(y, H + 34), px: Math.min(Math.max(12, b.left - f.left), W - 170), py: H - 46 };
 }
 function placeFoe(x, y) {                                    // поставить вынесенного трупера: левый верхний угол, в пределах окна
   const r = el.float.getBoundingClientRect();
@@ -203,8 +230,7 @@ function lash(x, y) {
 }
 function bumpBank() { restart(el.bankBox, "bump"); }
 function flyToBank(x, y, n) {
-  const b = el.bankBox.getBoundingClientRect(), f = org();
-  const tx = b.left - f.left + 34, ty = b.top - f.top + 40;
+  const spot = bankSpot(), tx = spot.x, ty = spot.y;
   for (let i = 0; i < n && flies < 24; i++) {
     const s = new Image(); s.src = art("cur-farm"); s.className = "fly";
     s.style.left = (x - 10) + "px"; s.style.top = (y - 10) + "px";
@@ -380,8 +406,8 @@ export function onEvent(e) {
       break;
     }
     case "gift": {
-      const b = el.bankBox.getBoundingClientRect(), f = org();
-      pop("+" + txt(e.loot), b.right - f.left + 10, b.top - f.top + 30, "soul big"); bumpBank(); sfx.wisp();
+      const spot = bankSpot();
+      pop("+" + txt(e.loot), spot.px, spot.py, "soul big"); bumpBank(); sfx.wisp();
       break;
     }
     case "skill": {

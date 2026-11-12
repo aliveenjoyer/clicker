@@ -399,13 +399,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .chatbox { flex: 1; min-height: 420px; margin: 8px; border-radius: var(--r-3); overflow: hidden; background: #0e0e10; }
 .chatbox iframe { width: 100%; height: 100%; min-height: 420px; border: 0; display: block; }
 
-/* стрим Twitch фоном линии: плеер под игрой, клики идут в игру */
+/* стрим Twitch фоном линии: плеер под игрой, клики идут в игру. Как выглядит поле со стримом — в конце файла */
 .twbg { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: #000; pointer-events: none; }
 .twbg #twplayer { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .twbg iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; }
-.twdim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, rgba(10,10,30,.5), rgba(10,10,30,.08) 42%, rgba(10,10,30,.2)), linear-gradient(0deg, rgba(10,10,30,.65), rgba(10,10,30,0) 34%); }
-.field.tw { background-image: none !important; background-color: #000; }
-.field.tw::after { display: none; }
 .ibtn.tw.on { color: #fff; background: #9146ff; box-shadow: 0 3px 0 #5a23b3, 0 0 14px rgba(145,70,255,.6); }
 .ibtn.tw.off { opacity: .5; }
 
@@ -491,8 +488,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .trow i { font: 900 13px/1 var(--ui); font-style: normal; color: var(--text-mute); text-align: center; }
 .trow i img { width: 26px; height: 26px; display: block; margin: 0 auto; object-fit: contain; }
 .trow b { min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trow b small { margin-left: 6px; font-weight: 700; font-size: 11px; color: var(--text-mute); }
-.trow span { font: 900 13px/1 var(--ui); color: var(--farm); white-space: nowrap; }
+.trow b small { display: block; margin-top: 3px; font-weight: 700; font-size: 11px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; }
+.trow span { display: inline-flex; align-items: center; gap: 5px; font: 900 14px/1 var(--ui); color: var(--farm); white-space: nowrap; }
+.trow span img { width: 18px; height: 18px; object-fit: contain; }
+.topfoot b { color: var(--farm); font-weight: 900; }
 .trow.me { box-shadow: inset 0 0 0 2px var(--farm), 0 0 14px rgba(255,197,61,.2); }
 .topfoot { margin: 4px 2px 2px; font-size: 12.5px; color: var(--text-dim); display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
 .topfoot .linkbtn { margin-top: 0; }
@@ -548,12 +547,9 @@ button.chip.stream:hover { filter: brightness(1.12); }
   .swprice b { font-size: 22px; }
 }
 
-/* ---------- звук стрима: значок и ползунок на поле ---------- */
-.twctl { position: absolute; top: 12px; right: 12px; z-index: 9; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 5px; border-radius: 999px;
-  background: rgba(12,12,34,.78); backdrop-filter: blur(6px); box-shadow: inset 0 0 0 2px rgba(145,70,255,.6), 0 6px 16px rgba(5,6,20,.5); cursor: default; }
-.twctl, .twctl * { pointer-events: auto; }
-.twctl:hover ~ .cursor { opacity: 0; }
-.twsnd { width: 34px; height: 34px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; cursor: pointer;
+/* ---------- звук стрима: значок и ползунок в полосе под картинкой ---------- */
+.twctl { display: flex; align-items: center; gap: 8px; flex: none; height: 40px; padding: 0 12px 0 4px; border-radius: 999px; background: rgba(145,70,255,.14); box-shadow: inset 0 0 0 2px rgba(145,70,255,.5); }
+.twsnd { width: 32px; height: 32px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; cursor: pointer;
   color: #e6d9ff; background: rgba(145,70,255,.28); box-shadow: inset 0 0 0 2px rgba(145,70,255,.6); }
 .twsnd:hover { background: rgba(145,70,255,.5); color: #fff; }
 .twsnd.on { color: #fff; background: #9146ff; box-shadow: 0 2px 0 #5a23b3; }
@@ -563,9 +559,7 @@ button.chip.stream:hover { filter: brightness(1.12); }
 .twvol::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 0 0 3px rgba(145,70,255,.55); }
 .twvol::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 0 0 3px rgba(145,70,255,.55); }
 .twvol:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 6px; }
-.twwho { font: 800 12px/1 var(--ui); color: #d9c8ff; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
-.field.twfront .twctl { display: none; }
-@media (max-width: 720px) { .twctl { top: 8px; right: 8px; height: 40px; } .twvol { width: 84px; } .twwho { display: none; } }
+.twwho { font: 800 12px/1 var(--ui); color: #d9c8ff; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- трупер вне линии ---------- */
 #fxo { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
@@ -590,3 +584,87 @@ canvas.fxfix { z-index: 26; }
 svg.fxfix { z-index: 27; }
 #fxl.fxfix, #fxo.fxfix { z-index: 28; }
 #pops.fxfix { z-index: 29; }
+
+/* ---------- стрим фоном: его должно быть удобно смотреть ----------
+   Поле становится картинкой 16:9 без затемнения и виньеток. Всё, что закрывало её постоянно (счёт душ, комбо, цифры
+   урона, Душка, звук стрима), стоит в полосе под картинкой: туда их переносит js/fx.js (setDock). На картинке остаётся
+   только бой: трупер на своей табличке в правом нижнем углу и то, что нужно бить. Страница при этом раздвигается так,
+   чтобы картинка была как можно больше, но помещалась на экран вместе с полосой и умениями. */
+body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh - 384px, 1080px) * 16 / 9 + 504px)); }
+.field.tw { height: auto; aspect-ratio: 16 / 9; min-height: 300px; max-height: calc(100vh - 110px); background-image: none !important; background-color: #000; border-radius: var(--r-5) var(--r-5) 0 0;
+  --ew: clamp(150px, calc(var(--fh, 500px) * .34), 270px); --pw: calc(var(--ew) + 44px); }
+.field.tw::after, .field.tw.dark::before { display: none; }
+.field.tw.shake { animation: none; }
+.field.tw .skyline, .field.tw .q1, .field.tw .q2 { display: none; }
+.field.tw .enemy { right: calc(3% + 22px); bottom: 66px; width: var(--ew); }
+.field.tw .enemy.boss { right: calc(3% + 22px - var(--ew) * .15); bottom: 62px; width: calc(var(--ew) * 1.3); }
+.field.tw .enemy.elite, .field.tw .enemy.altar { right: calc(3% + 22px - var(--ew) * .08); width: calc(var(--ew) * 1.16); }
+.field.tw .plate-enemy { right: 3%; top: auto; bottom: 10px; width: var(--pw); padding: 8px 10px; background: rgba(12,12,34,.8); backdrop-filter: none; box-shadow: 0 6px 16px rgba(5,6,20,.45); }
+.field.tw .plate-enemy.boss { box-shadow: 0 6px 16px rgba(5,6,20,.45), inset 0 0 0 2px rgba(255,90,110,.55); }
+.field.tw .plate-enemy.gold { box-shadow: 0 6px 16px rgba(5,6,20,.45), inset 0 0 0 2px rgba(255,197,61,.6); }
+.field.tw .plate-enemy .nameplate { margin-bottom: 6px; }
+.field.tw .bossring { right: calc(3% + var(--pw) + 2px); top: auto; bottom: 0; transform: scale(.8); transform-origin: 100% 100%; }
+.field.tw .hint { right: calc(3% + var(--pw) + 16px); top: auto; bottom: 30%; font-size: 34px; }
+.field.tw .banner { top: 16px; }
+.field.tw .banner b { font-size: 24px; text-shadow: 0 3px 0 var(--outline), 2px 0 0 var(--outline), -2px 0 0 var(--outline), 0 -2px 0 var(--outline), 0 0 20px rgba(169,155,255,.7); }
+.field.tw .banner.boss b { text-shadow: 0 3px 0 #4a0714, 2px 0 0 #4a0714, -2px 0 0 #4a0714, 0 -2px 0 #4a0714, 0 0 22px rgba(255,90,110,.9); }
+.field.tw .banner.gold b { text-shadow: 0 3px 0 #6a3500, 2px 0 0 #6a3500, -2px 0 0 #6a3500, 0 -2px 0 #6a3500, 0 0 22px rgba(255,197,61,.9); }
+.field.tw .banner small { margin-top: 5px; font-size: 11px; }
+.field.tw .banner.wave b { font-size: 16px; }
+.field.tw .draft { background: rgba(8,8,26,.4); backdrop-filter: none; }
+
+/* Полоса под картинкой. Её высота не должна меняться во время игры, иначе всё под ней прыгает: под комбо место
+   держится всегда, а цифры урона показывают столько, сколько помещается в строку. Узкое поле (классы slim и tiny ставит
+   js/fx.js по ширине поля) — цифры урона уходят на вторую строку. */
+.dock { position: relative; z-index: 2; margin-top: -12px; display: flex; align-items: center; gap: 8px 14px; min-height: 66px; padding: 8px 14px 8px 12px;
+  border: 1px solid rgba(169,155,255,.16); border-top: 0; border-radius: 0 0 var(--r-4) var(--r-4); background: linear-gradient(180deg, #23264f, #1b1e42); box-shadow: 0 12px 30px rgba(5,6,20,.45); }
+.dock .dushka { position: relative; left: auto; bottom: auto; z-index: auto; display: block; flex: none; }
+.dock .dushka img { display: block; width: 34px; }
+.dock .say { position: absolute; left: 0; bottom: calc(100% + 20px); margin: 0; width: max-content; max-width: min(340px, 62vw); }
+.dock .bankwrap { position: relative; z-index: 0; flex: none; min-width: 200px; transform-origin: 0 50%; pointer-events: none; }
+.dock .bankwrap.rays::before { inset: -22px -14px; }
+.dock .bank { display: grid; grid-template-columns: auto auto; grid-template-areas: "ico num" "ico rate"; justify-content: start; align-items: center; gap: 4px 10px; text-align: left; }
+.dock .bank .cap { grid-area: ico; margin: 0; }
+.dock .bank .cap img { display: block; width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 0 8px var(--farm-glow)); }
+.dock .bank .cap .l { display: none; }
+.dock .bank .num { grid-area: num; font-size: 28px; filter: drop-shadow(0 2px 0 #6a3500); }
+.dock .bank .rate { grid-area: rate; margin: 0; font-size: 12px; line-height: 1; white-space: nowrap; }
+.dock .bank .rate b { font-size: 13px; }
+.dock .combo { position: static; flex: none; flex-direction: row; align-items: center; gap: 8px; min-width: 132px; }
+.dock .combo[hidden] { display: flex !important; visibility: hidden; }
+.dock .combo:not(.t4) b { text-shadow: 0 3px 0 var(--outline), 2px 0 0 var(--outline), -2px 0 0 var(--outline), 0 -2px 0 var(--outline); }
+.dock .combo b { font-size: 28px; }
+.dock .combo span { margin: 0; }
+.dock .stats { flex: 1 1 auto; min-width: 0; height: 20px; overflow: hidden; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 0 14px; font-size: 12px; line-height: 20px; color: var(--text-dim); white-space: nowrap; }
+.dock .stats b { font: 900 15px/20px var(--ui); color: var(--text); margin-left: 5px; }
+.dock .twctl { flex: none; }
+.dock .twvol { flex: none; width: 92px; }
+.dock .twwho { display: none; }                              /* имя канала — только на широком поле (класс wide) */
+.dock.wide .twwho { display: block; }
+
+.dock.slim { flex-wrap: wrap; }
+.dock.slim .twctl { margin-left: auto; }
+.dock.slim .stats { order: 5; flex: 1 1 100%; justify-content: flex-start; }
+.dock.slim .combo { min-width: 64px; }
+.dock.slim .combo span { display: none; }
+@media (max-height: 760px) { .dock.slim .stats { display: none; } }   /* низкий экран: цифры урона есть в списке отряда, строку не держим */
+.dock.tiny { gap: 6px 12px; padding: 8px 10px; }
+.dock.tiny .bankwrap { min-width: 170px; }
+.dock.tiny .bank .num { font-size: 24px; }
+.dock.tiny .bank .cap img { width: 30px; height: 30px; }
+.dock.tiny .combo { min-width: 58px; }
+.dock.tiny .combo b { font-size: 22px; }
+.dock.tiny .twvol { width: 84px; }
+.dock.tiny .stats { gap: 0 14px; font-size: 11px; }
+.dock.tiny .stats b { font-size: 13px; }
+
+@media (max-width: 1180px) {
+  body.twon .main, body.twon .top { max-width: max(600px, calc(clamp(56vh, 100vh - 250px, 1080px) * 16 / 9 + 24px)); }
+}
+@media (max-width: 720px) {
+  .field.tw { border-radius: var(--r-4) var(--r-4) 0 0; }
+}
+@media (max-width: 500px) {
+  .dock .twvol { display: none; }
+  .dock .twctl { min-width: 0; padding: 0 4px; }
+}
