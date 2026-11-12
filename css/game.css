@@ -566,3 +566,27 @@ button.chip.stream:hover { filter: brightness(1.12); }
 .twwho { font: 800 12px/1 var(--ui); color: #d9c8ff; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .field.twfront .twctl { display: none; }
 @media (max-width: 720px) { .twctl { top: 8px; right: 8px; height: 40px; } .twvol { width: 84px; } .twwho { display: none; } }
+
+/* ---------- трупер вне линии ---------- */
+#fxo { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
+.foe-tools { position: absolute; right: -8px; top: -24px; display: flex; gap: 6px; z-index: 2; }
+.foe-tools button { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; color: #fff; background: #5f50c9;
+  box-shadow: 0 2px 0 #3a2f8f, 0 4px 10px rgba(5,6,20,.5); pointer-events: auto; cursor: grab; touch-action: none; }
+.foe-tools button:hover { background: #7868e6; }
+.foe-tools #foeHome { cursor: pointer; background: #2f3370; box-shadow: 0 2px 0 #1a1c44, 0 4px 10px rgba(5,6,20,.5); }
+.foe-tools #foeHome:hover { background: #454a9c; }
+.field.nocur .cursor { opacity: 0 !important; }
+body.foedrag, body.foedrag * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+.foe-float { position: fixed; left: 40px; top: 40px; z-index: 25; width: min(250px, 62vw); cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.foe-float:has(.enemy.boss) { width: min(310px, 76vw); }
+.foe-float .plate-enemy { position: relative; margin: 0 0 6px; padding: 10px 12px; border-radius: 16px; background: rgba(12,12,34,.88); backdrop-filter: blur(4px);
+  box-shadow: 0 8px 20px rgba(5,6,20,.5), inset 0 0 0 1px rgba(169,155,255,.28); }
+.foe-float .plate-enemy.boss { box-shadow: 0 8px 20px rgba(5,6,20,.5), inset 0 0 0 2px rgba(255,90,110,.55); }
+.foe-float .plate-enemy.gold { box-shadow: 0 8px 20px rgba(5,6,20,.5), inset 0 0 0 2px rgba(255,197,61,.6); }
+.foe-float .unit.enemy, .foe-float .unit.enemy.boss { position: relative; right: auto; bottom: auto; width: 100%; transform-origin: 50% 100%; }
+.foe-float .bossring { position: absolute; right: auto; left: -46px; top: -18px; transform: scale(.85); z-index: 2; }
+.fxfix { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; pointer-events: none !important; }
+canvas.fxfix { z-index: 26; }
+svg.fxfix { z-index: 27; }
+#fxl.fxfix, #fxo.fxfix { z-index: 28; }
+#pops.fxfix { z-index: 29; }

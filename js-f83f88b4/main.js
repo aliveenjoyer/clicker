@@ -91,17 +91,19 @@ async function boot() {
   C.checkUnlocks(S);
 
   const field = FX.fieldEl();
-  field.addEventListener("pointerdown", (e) => {
+  const strike = (e) => {                                   // удар: по линии или по труперу, вынесенному со страницы
     audioUnlock(); TW.nudge();
     if (e.target.closest("#draft")) return;                 // идёт выбор предмета — удары не считаются
-    if (TW.isFront() || e.target.closest("#twplay, #twback, #twctl")) return;   // плеер стрима выведен вперёд
+    if (TW.isFront() || e.target.closest("#twplay, #twback, #twctl, .foe-tools")) return;   // плеер стрима выведен вперёд
     if (e.target.closest("#wisp")) { C.takeWisp(S); return; }
     if (e.target.closest("#crate")) { C.breakCrate(S); return; }
     if (e.target.closest("#statue")) { C.breakStatue(S); return; }
     if (e.target.closest("#urn")) { C.hitUrn(S); return; }
     down = true; downT = 0; holdAcc = 0;
     C.hit(S, "click", FX.weakAt(e.clientX, e.clientY));
-  });
+  };
+  field.addEventListener("pointerdown", strike);
+  FX.onFoeStrike(strike);
   window.addEventListener("pointerdown", () => C.touch(S), true);   // игрок на месте: жертвенник приходит только к тем, кто играет
   window.addEventListener("keydown", () => C.touch(S), true);
   window.addEventListener("pointerup", () => { down = false; });

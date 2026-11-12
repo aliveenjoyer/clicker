@@ -8,7 +8,9 @@ import { art, has, districtArt } from "./art.js";
 import { bossOf } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
-let S = null, el = {}, W = 1, H = 1, ctx = null, dpr = 1;
+let S = null, el = {}, W = 1, H = 1, FW = 1, FH = 1, ctx = null, dpr = 1;   // W×H — холст эффектов, FW×FH — само поле
+let away = false, strike = null;                            // трупер вынесен с линии: эффекты рисуются поверх всей страницы
+const pv = { x: -999, y: -999 };                            // указатель в координатах окна
 let parts = [], rings = [], orbs = [], flies = 0;
 const ptr = { x: -999, y: -999, inside: false };
 let lastMove = 0;
@@ -19,7 +21,7 @@ export function mount(state) {
   S = state;
   for (const id of ["field", "fxc", "enemy", "q1", "q2", "plate", "hp", "hpText", "enemyName", "enemyCount", "facDot", "crown", "lash", "lashGlow",
     "lashLine", "bossRing", "bossArc", "bossT", "combo", "comboN", "comboName", "wisp", "banner", "hint", "pops", "dushka", "say", "cursor",
-    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl"]) el[id] = $(id);
+    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome"]) el[id] = $(id);
   ctx = el.fxc.getContext("2d");
   el.weak.style.backgroundImage = "url(" + art("fx-weak") + ")";
   for (const u of [el.q1, el.q2]) u.querySelector("img").src = trooper();
@@ -29,19 +31,24 @@ export function mount(state) {
   el.field.addEventListener("pointermove", onPtr);
   el.field.addEventListener("pointerdown", onPtr);
   el.field.addEventListener("pointerleave", () => { ptr.inside = false; });
+  window.addEventListener("pointermove", (e) => { pv.x = e.clientX; pv.y = e.clientY; if (away) lastMove = performance.now(); });
   el.pops.addEventListener("animationend", (e) => { if (e.target.classList.contains("pop")) e.target.remove(); });
+  bindFoe();
+  el.enemy.querySelector("img").addEventListener("load", () => { if (away) syncFoe(); });   // босс выше трупера: не даём ему вылезти за край окна
   setEnemy();
+  syncFoe();
 }
-export function setState(state) { S = state; setEnemy(); }
+export function setState(state) { S = state; setEnemy(); syncFoe(); }
 export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", calm); }
 
 function resize() {
   const r = el.field.getBoundingClientRect();
-  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  FW = Math.max(1, r.width); FH = Math.max(1, r.height);
+  W = away ? Math.max(1, window.innerWidth) : FW; H = away ? Math.max(1, window.innerHeight) : FH;
   dpr = Math.min(2, window.devicePixelRatio || 1);
   el.fxc.width = Math.round(W * dpr); el.fxc.height = Math.round(H * dpr);
-  small = W < 560;
-  const t = W / H < 1.16;                                    // поле почти квадратное или выше — вертикальный фон
+  small = FW < 560;
+  const t = FW / FH < 1.16;                                  // поле почти квадратное или выше — вертикальный фон
   if (t !== tall) { tall = t; el.field.classList.toggle("tallbg", tall); if (bgNow) setEnemy(); }
 }
 function onPtr(e) {
@@ -49,8 +56,13 @@ function onPtr(e) {
   ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top; ptr.inside = true; lastMove = performance.now();
   el.cursor.style.transform = "translate(" + (ptr.x - 6) + "px," + (ptr.y - 6) + "px)";
 }
+function org() {                                             // начало координат эффектов: угол поля, а с вынесенным трупером — угол окна
+  if (away) return { left: 0, top: 0 };
+  const f = el.field.getBoundingClientRect();
+  return { left: f.left, top: f.top };
+}
 function enemyBox() {
-  const r = el.enemy.getBoundingClientRect(), f = el.field.getBoundingClientRect();
+  const r = el.enemy.getBoundingClientRect(), f = org();
   return { x: r.left - f.left + r.width / 2, y: r.top - f.top + r.height * 0.45, w: r.width, h: r.height };
 }
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -65,6 +77,92 @@ function mood(m, ms) {                                      // Душка: idle 
   if (m !== moodNow) { moodNow = m; el.pet.src = art("pet-" + m); }
   moodUntil = ms ? performance.now() + ms : 0;
 }
+
+// ---------- трупер вне линии: за ручку на табличке его можно утащить в любое место страницы и бить там ----------
+// Пока он снаружи, слои эффектов (искры, числа, хлыст, сферы) переезжают из поля в <body> и рисуются поверх всей страницы.
+function setAway(on) {
+  if (on === away) return;
+  away = on;
+  parts = []; rings = [];
+  for (const o of orbs) o.el.remove();
+  orbs = []; el.pops.textContent = ""; el.fxl.textContent = ""; el.fxo.textContent = ""; flies = 0;
+  for (const n of [el.fxc, el.lash, el.fxl, el.fxo, el.pops]) { n.classList.toggle("fxfix", on); (on ? document.body : el.field).appendChild(n); }
+  resize();
+}
+function placeFoe(x, y) {                                    // поставить вынесенного трупера: левый верхний угол, в пределах окна
+  const r = el.float.getBoundingClientRect();
+  x = Math.max(6, Math.min(window.innerWidth - r.width - 6, x));
+  y = Math.max(6, Math.min(window.innerHeight - r.height - 6, y));
+  el.float.style.left = Math.round(x) + "px"; el.float.style.top = Math.round(y) + "px";
+}
+function detach(x, y) {
+  if (!el.float) {
+    el.float = document.createElement("div"); el.float.className = "foe-float"; el.float.id = "foeFloat";
+    document.body.appendChild(el.float);
+    el.float.addEventListener("pointerdown", (e) => { if (strike) strike(e); });
+    el.float.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  el.float.hidden = false;
+  el.float.appendChild(el.plate); el.float.appendChild(el.enemy); el.float.appendChild(el.bossRing);
+  el.foeHome.hidden = false;
+  el.foeGrip.title = "Перетащи трупера куда удобно";
+  setAway(true);
+  placeFoe(x, y);
+}
+function attach() {                                          // вернуть на линию
+  if (!away) return;
+  el.field.appendChild(el.enemy); el.field.appendChild(el.plate); el.field.appendChild(el.bossRing);
+  el.float.hidden = true;
+  el.foeHome.hidden = true;
+  el.foeGrip.title = "Утащи трупера в любое место страницы — и бей его там";
+  setAway(false);
+}
+function savePos() {                                         // место запоминается долями окна — вместе с настройками
+  if (!away) { delete S.set.foe; return; }
+  const r = el.float.getBoundingClientRect();
+  S.set.foe = { x: +(r.left / window.innerWidth).toFixed(4), y: +(r.top / window.innerHeight).toFixed(4) };
+}
+function syncFoe() {                                         // при запуске, смене игры и размера окна
+  const p = S.set.foe;
+  if (p && typeof p.x === "number" && typeof p.y === "number") { if (!away) detach(0, 0); placeFoe(p.x * window.innerWidth, p.y * window.innerHeight); }
+  else if (away) attach();
+}
+function bindFoe() {
+  let drag = null;
+  const move = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved) {
+      if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+      drag.moved = true;
+      if (!away) detach(e.clientX - drag.dx, e.clientY - drag.dy);
+      document.body.classList.add("foedrag");
+    }
+    placeFoe(e.clientX - drag.dx, e.clientY - drag.dy);
+  };
+  const end = (e) => {
+    if (!drag || (e && e.pointerId !== drag.id)) return;
+    const moved = drag.moved;
+    drag = null;
+    window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
+    document.body.classList.remove("foedrag");
+    if (moved) savePos();
+  };
+  el.foeGrip.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = (away ? el.float : el.plate).getBoundingClientRect();
+    drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+  });
+  el.foeHome.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
+  el.foeHome.addEventListener("click", (e) => { e.stopPropagation(); attach(); savePos(); });
+  for (const b of [el.foeGrip, el.foeHome]) {
+    b.addEventListener("pointerenter", () => el.field.classList.add("nocur"));
+    b.addEventListener("pointerleave", () => el.field.classList.remove("nocur"));
+  }
+  window.addEventListener("resize", () => { if (away) syncFoe(); });
+}
+export function onFoeStrike(fn) { strike = fn; }             // main.js: что делать по клику в вынесенного трупера
 
 // ---------- мелкие эффекты ----------
 function spark(x, y, n, color, speed, size) {
@@ -98,19 +196,19 @@ export function banner(title, sub, cls, dur) {
   restart(el.banner, "show");
 }
 function lash(x, y) {
-  const ox = Math.max(0, x - W * 0.34), oy = Math.min(H, y + H * 0.34), cx = x - W * 0.2, cy = y - H * 0.42;
+  const ox = Math.max(0, x - FW * 0.34), oy = Math.min(H, y + FH * 0.34), cx = x - FW * 0.2, cy = y - FH * 0.42;
   const d = "M" + (ox / W * 100).toFixed(1) + " " + (oy / H * 100).toFixed(1) + " Q" + (cx / W * 100).toFixed(1) + " " + (cy / H * 100).toFixed(1) + " " + (x / W * 100).toFixed(1) + " " + (y / H * 100).toFixed(1);
   el.lashGlow.setAttribute("d", d); el.lashLine.setAttribute("d", d);
   restart(el.lash, "go");
 }
 function bumpBank() { restart(el.bankBox, "bump"); }
 function flyToBank(x, y, n) {
-  const b = el.bankBox.getBoundingClientRect(), f = el.field.getBoundingClientRect();
+  const b = el.bankBox.getBoundingClientRect(), f = org();
   const tx = b.left - f.left + 34, ty = b.top - f.top + 40;
   for (let i = 0; i < n && flies < 24; i++) {
     const s = new Image(); s.src = art("cur-farm"); s.className = "fly";
     s.style.left = (x - 10) + "px"; s.style.top = (y - 10) + "px";
-    el.field.appendChild(s); flies++;
+    el.fxo.appendChild(s); flies++;
     const dx = tx - x, dy = ty - y, last = i === n - 1;
     const a = s.animate([
       { transform: "translate(0,0) scale(.6)", opacity: 0 },
@@ -140,6 +238,7 @@ function setEnemy() {
   el.q1.hidden = el.q2.hidden = boss || altar;
   const enemyFac = S.set.faction === "sapphire" ? "Янтаря" : "Сапфира";
   el.enemyName.textContent = altar ? "Жертвенник грешника" : boss ? bossOf(S.z).name : elite ? "Элитный трупер" : "Трупер " + enemyFac;
+  if (away) syncFoe();
 }
 
 // ---------- сферы душ ----------
@@ -149,14 +248,14 @@ function addOrb(x, y, loot) {
   const o = { x: x + rnd(-40, 40), y: y + rnd(-20, 20), life: CFG.orbLife, loot, el: n };
   if (S.d.pet && Math.random() < S.d.pet) o.pet = 0.35;      // эту сферу подберёт Душка
   n.style.left = o.x + "px"; n.style.top = o.y + "px";
-  el.field.appendChild(n); orbs.push(o);
+  el.fxo.appendChild(n); orbs.push(o);
 }
 function stepOrbs(dt) {
   for (let i = orbs.length - 1; i >= 0; i--) {
     const o = orbs[i];
     o.life -= dt; o.y -= 18 * dt; o.el.style.top = o.y + "px";
     if (o.pet !== undefined) o.pet -= dt;
-    const near = (ptr.inside && Math.hypot(ptr.x - o.x, ptr.y - o.y) < 56) || o.pet <= 0;
+    const near = (away ? Math.hypot(pv.x - o.x, pv.y - o.y) < 56 : ptr.inside && Math.hypot(ptr.x - o.x, ptr.y - o.y) < 56) || o.pet <= 0;
     if (near) {
       C.orbBonus(S, o.loot);
       pop("+" + txt(o.loot + L10(CFG.orbBonus)), o.x, o.y - 26, "soul");
@@ -179,8 +278,8 @@ function fximg(name, x, y, size, cls) {
   el.fxl.appendChild(n);
 }
 function center(node, fx, fy) {                              // середина элемента в координатах поля; спрятан — запасная точка
-  const r = node.getBoundingClientRect(), f = el.field.getBoundingClientRect();
-  return r.width ? { x: r.left - f.left + r.width / 2, y: r.top - f.top + r.height / 2 } : { x: W * fx, y: H * fy };
+  const r = node.getBoundingClientRect(), f = org(), q = el.field.getBoundingClientRect();
+  return r.width ? { x: r.left - f.left + r.width / 2, y: r.top - f.top + r.height / 2 } : { x: q.left - f.left + FW * fx, y: q.top - f.top + FH * fy };
 }
 // ---------- слабое место босса ----------
 const weak = { next: 0, on: false };                        // мишень сидит на самом боссе и двигается вместе с ним
@@ -256,7 +355,7 @@ export function onEvent(e) {
     }
     case "boss_win": {
       const b = enemyBox();
-      spark(b.x, b.y, 60, "#ffe58f", 520, 8); ring(b.x, b.y, Math.max(W, H) * 0.6, "rgba(255,229,143,.9)", 0.45);
+      spark(b.x, b.y, 60, "#ffe58f", 520, 8); ring(b.x, b.y, Math.max(FW, FH) * 0.6, "rgba(255,229,143,.9)", 0.45);
       flyToBank(b.x, b.y, 10); shake(8, 300);
       if (!calm) restart(el.field, "flash");
       banner("Повержен!", "+" + txt(e.loot) + " душ", "gold", 1500);
@@ -267,14 +366,13 @@ export function onEvent(e) {
     case "boss_fail": banner("Отступаем", "подкачаемся и вернёмся", "", 1400); sfx.bossFail(); setEnemy(); break;
     case "tier": {
       const b = enemyBox();
-      ring(b.x, b.y + b.h * 0.4, W * 0.5, "rgba(255,255,255,.85)", 0.25); shake(4, 150); fximg("fx-shock", b.x, b.y + b.h * 0.44, small ? 220 : 320, "shock");
+      ring(b.x, b.y + b.h * 0.4, FW * 0.5, "rgba(255,255,255,.85)", 0.25); shake(4, 150); fximg("fx-shock", b.x, b.y + b.h * 0.44, small ? 220 : 320, "shock");
       el.comboName.textContent = e.name; restart(el.combo, "stamp"); sfx.tier(e.i);
       break;
     }
     case "wisp": sfx.wisp(); break;
     case "wisp_take": {
-      const r = el.wisp.getBoundingClientRect(), f = el.field.getBoundingClientRect();
-      const x = r.width ? r.left - f.left + r.width / 2 : W * 0.4, y = r.width ? r.top - f.top + r.height / 2 : H * 0.4;
+      const wc = center(el.wisp, 0.4, 0.4), x = wc.x, y = wc.y;
       el.wisp.hidden = true;
       spark(x, y, 30, "#ffe58f", 420, 7); ring(x, y, 220, "rgba(255,229,143,.9)", 0.35);
       banner(e.title, e.text, "gold", 1700); sfx.wisp();
@@ -282,12 +380,12 @@ export function onEvent(e) {
       break;
     }
     case "gift": {
-      const b = el.bankBox.getBoundingClientRect(), f = el.field.getBoundingClientRect();
+      const b = el.bankBox.getBoundingClientRect(), f = org();
       pop("+" + txt(e.loot), b.right - f.left + 10, b.top - f.top + 30, "soul big"); bumpBank(); sfx.wisp();
       break;
     }
     case "skill": {
-      if (e.id === "ult") { banner("Ульта Лэша", "вся волна — оземь", "gold", 1200); shake(9, 320); const b = enemyBox(); ring(b.x, b.y + b.h * 0.4, W * 0.7, "rgba(255,197,61,.9)", 0.4); fximg("fx-shock", b.x, b.y + b.h * 0.44, small ? 300 : 460, "shock"); }
+      if (e.id === "ult") { banner("Ульта Лэша", "вся волна — оземь", "gold", 1200); shake(9, 320); const b = enemyBox(); ring(b.x, b.y + b.h * 0.4, FW * 0.7, "rgba(255,197,61,.9)", 0.4); fximg("fx-shock", b.x, b.y + b.h * 0.44, small ? 300 : 460, "shock"); }
       sfx.skill();
       break;
     }
@@ -348,7 +446,7 @@ function stepSay(now) {
   el.say.innerHTML = "<b></b>"; el.say.firstChild.textContent = "Открыто: " + e.title;
   el.say.appendChild(document.createTextNode(e.say));
   el.say.hidden = false; restart(el.say, "say");
-  el.field.style.setProperty("--sayh", Math.round(Math.min(el.say.offsetHeight + 40, H * 0.4)) + "px"); el.field.classList.add("saying");   // ящик и статуя встают над репликой
+  el.field.style.setProperty("--sayh", Math.round(Math.min(el.say.offsetHeight + 40, FH * 0.4)) + "px"); el.field.classList.add("saying");   // ящик и статуя встают над репликой
   el.dushka.classList.remove("cheer"); void el.dushka.offsetWidth; el.dushka.classList.add("cheer");
   sayUntil = now + 6500; sfx.unlock(); mood("happy", 2500);
 }

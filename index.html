@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=60179629">
-<link rel="stylesheet" href="css/ui.css?v=60179629">
-<link rel="stylesheet" href="css/game.css?v=60179629">
+<link rel="stylesheet" href="css/tokens.css?v=741c564c">
+<link rel="stylesheet" href="css/ui.css?v=741c564c">
+<link rel="stylesheet" href="css/game.css?v=741c564c">
 </head>
 <body>
 
@@ -92,6 +92,10 @@
       <div class="plate-enemy" id="plate">
         <div class="nameplate"><span class="who2"><i class="fac" id="facDot"></i><span id="enemyName">Трупер</span></span><span id="enemyCount"></span></div>
         <div class="hp" id="hp" style="--p:100%; --g:100%"><em></em><i></i><span id="hpText"></span></div>
+        <div class="foe-tools">
+          <button id="foeGrip" type="button" title="Утащи трупера в любое место страницы — и бей его там" aria-label="Перетащить трупера"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2 8.5 5.5h2.4v4.4H6.5V7.5L3 11l3.5 3.5v-2.4h4.4v4.4H8.5L12 20l3.5-3.5h-2.4v-4.4h4.4v2.4L21 11l-3.5-3.5v2.4h-4.4V5.5h2.4z" transform="translate(0 1)"/></svg></button>
+          <button id="foeHome" type="button" title="Вернуть трупера на линию" aria-label="Вернуть трупера на линию" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12.5 5V2L7 6.5l5.5 4.5V8a5 5 0 1 1-5 5H5a7.5 7.5 0 1 0 7.5-8z"/></svg></button>
+        </div>
       </div>
       <div class="unit enemy" id="enemy"><span class="shadow"></span><img alt=""><span class="crown" id="crown" hidden></span><span class="weak" id="weak" hidden></span></div>
 
@@ -112,6 +116,7 @@
       <img class="lnobj statue" id="statue" data-art="statue" alt="Золотая статуя" draggable="false" hidden>
       <img class="lnobj urn" id="urn" data-art="ev-urn" alt="Урна душ" draggable="false" hidden>
       <div id="fxl"></div>
+      <div id="fxo"></div>
       <div class="banner" id="banner"></div>
       <div class="draft" id="draft" hidden></div>
       <div class="hint" id="hint">БЕЙ!</div>
@@ -173,7 +178,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-ac147b87/main.js"></script>
+<script type="module" src="js-f83f88b4/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>
