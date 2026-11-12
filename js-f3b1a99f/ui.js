@@ -53,7 +53,7 @@ export function mount(state, hooks) {
   $("btnMenu").addEventListener("click", openSettings);
   $("veil").addEventListener("click", closeModal);
   bindHold($("btnRebirth"));
-  TW.mount(S, { changed: () => { slowT = 0; api.settings(); } });
+  TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); } });
   TOP.mount(S, { toast });
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
   $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();
@@ -254,13 +254,16 @@ function drawRoad() {
 }
 
 // ---------- чат Twitch ----------
-function buildChat() {
-  if (chatBuilt) return;
-  chatBuilt = true;
+let chatFor = "";
+function buildChat() {                                      // чат того канала, чей стрим сейчас фоном; никто не в эфире — свой
+  if (chatBuilt && chatFor === TW.CHANNEL) return;
+  chatBuilt = true; chatFor = TW.CHANNEL;
+  const box = $("chatBox");
+  box.textContent = "";
   const f = document.createElement("iframe");
   f.src = "https://www.twitch.tv/embed/" + TW.CHANNEL + "/chat?parent=" + encodeURIComponent(location.hostname) + "&darkpopout";
-  f.title = "Чат Twitch";
-  $("chatBox").appendChild(f);
+  f.title = "Чат Twitch: " + TW.CHANNEL;
+  box.appendChild(f);
 }
 
 // ---------- умения и бафы ----------
