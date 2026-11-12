@@ -2,11 +2,11 @@
 // Этот модель потом переедет на сервер (PLAN.md § 19): клиент шлёт намерения, сервер считает то же самое.
 // Все большие числа — lg (см. num.js). События для картинки и звука складываются в S.ev, их забирает main.js.
 import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
-import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE } from "./data.js";
+import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS } from "./data.js";
 
 const N = HEROES.length;
 const L2 = L10(2), L4 = L10(4);
-const LG_KEYS = ["souls", "life", "run", "ash", "ashAll", "altarPaid"];       // поля-логарифмы: в сохранении NEG пишется как null
+const LG_KEYS = ["souls", "life", "run", "ash", "ashAll", "altarPaid", "ashLife"];   // поля-логарифмы: в сохранении NEG пишется как null
 
 export function newState() {
   const S = {
@@ -25,9 +25,13 @@ export function newState() {
     urnIn: 15, urnOn: 0, urnHits: 0, album: { crates: 0, altars: 0, statues: 0, urns: 0, elites: 0 },
     un: {}, stats: { clicks: 0, kills: 0, bosses: 0, crits: 0, played: 0, swapped: 0 },
     ach: {}, achSeen: 0, sess: 0, achT: 0,                  // ачивки: полученные; сколько игрок уже видел; этот заход, с; до следующей проверки
+    // второй слой. Цикл — от Затмения до Затмения: ashAll и реликвии живут в цикле, осколки и покровители — навсегда
+    ecl: 0, shards: 0, pat: {}, cycBest: 1, cycRb: 0, ashLife: NEG, eclAt: 0,   // eclAt — когда было прошлое Затмение, мс
+    chaos: 0,                                               // третий слой: шаги «Скупщика теней», 0…16
     set: { sound: true, calm: false, sci: false, autoBoss: true },
   };
   for (const r of RELICS) S.rel[r.id] = 0;
+  for (const p of PATRONS) S.pat[p.id] = 0;
   for (const s of SKILLS) { S.cd[s.id] = 0; S.act[s.id] = 0; }
   S.ev = [];
   derive(S);
@@ -54,6 +58,16 @@ export function load(text) {
   if (S.lv.length < N + 1) S.lv = S.lv.concat(new Array(N + 1 - S.lv.length).fill(0));
   if (!S.ach || typeof S.ach !== "object") S.ach = {};
   S.sess = 0; S.achT = 0;
+  // второй и третий слой: уровни покровителей — целые, не выше потолка и не дороже имеющихся осколков (иначе — сброс уровней,
+  // осколки остаются и тратятся заново); шаги Скупщика — 0…chaosMax
+  S.shards = Math.max(0, Math.floor(Number(S.shards) || 0)); S.ecl = Math.max(0, Math.floor(Number(S.ecl) || 0));
+  S.chaos = Math.max(0, Math.min(CFG.chaosMax, Math.floor(Number(S.chaos) || 0)));
+  S.eclAt = Math.max(0, Number(S.eclAt) || 0);
+  S.pat = {};
+  for (const p of PATRONS) S.pat[p.id] = Math.max(0, Math.min(p.cap || 100000, Math.floor(Number(o.pat && typeof o.pat === "object" ? o.pat[p.id] : 0) || 0)));
+  if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
+  if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
+  if (o.ashLife === undefined) S.ashLife = S.ashAll;
   S.ev = [];
   derive(S);
   return S;
@@ -88,15 +102,20 @@ export function nextMs(lv) {
   return lv < 200 ? 200 : 200 + 25 * (Math.floor((lv - 200) / 25) + 1);
 }
 export const msGain = (lv) => (nextMs(lv) < 200 ? 2 : 4);   // что даст следующая веха
-const LGC = L10(CFG.costG);
-function chunkCost(base, lv, n) {                           // lg цены уровней lv..lv+n−1
-  const x = n * LGC;
-  return base + lv * LGC + x + (x < 15 ? L10(1 - Math.pow(10, -x)) : 0) - L10(CFG.costG - 1);
+// Рост цены уровня. Третий слой («Великий хаос»): каждый шаг «Скупщика теней» снимает chaosCut, но не ниже costFloor —
+// цена обязана расти быстрее урона на вехах (4^(1/25) = 1,057), иначе рост уходит в бесконечность.
+// Шаг даётся за Затмение, сделанное с рекордом от chaosWave (см. eclipse): по одному в сутки.
+export const chaosStep = (S) => Math.min(CFG.chaosMax, S.chaos || 0);
+export const chaosOpen = (S) => S.best >= CFG.chaosWave;
+export const costG = (S) => Math.max(CFG.costFloor, CFG.costG - CFG.chaosCut * chaosStep(S));
+function chunkCost(S, base, lv, n) {                        // lg цены уровней lv..lv+n−1
+  const c = S.d.cg, lgc = L10(c), x = n * lgc;
+  return base + lv * lgc + x + (x < 15 ? L10(1 - Math.pow(10, -x)) : 0) - L10(c - 1);
 }
-function affordable(bank, base, lv) {
+function affordable(S, bank, base, lv) {
   if (bank === NEG) return 0;
-  const x = bank + L10(CFG.costG - 1) - (base + lv * LGC);
-  return Math.max(0, Math.floor(lsum(x, 0) / LGC + 1e-9));
+  const c = S.d.cg, lgc = L10(c), x = bank + L10(c - 1) - (base + lv * lgc);
+  return Math.max(0, Math.floor(lsum(x, 0) / lgc + 1e-9));
 }
 
 // Всё, что зависит только от покупок и реликвий. Пересчитывается после каждой покупки.
@@ -107,7 +126,9 @@ export function derive(S) {
   let g = S.rel.blade * L10(1.2) + it("item-w-monster") * L10(1.08) + L10(1 + 0.5 * it("item-l-frenzy")) + L10(1 + 0.02 * S.statues.dmg);
   if (S.ashAll > NEG) g += S.ashAll > 12 ? S.ashAll + L10(CFG.ashDmg) : L10(1 + CFG.ashDmg * Math.pow(10, S.ashAll));
   g += L10(1 + CFG.achDmg * achCount(S));                    // ачивки: +1 % урона за каждую
+  g += 0.5 * (S.pat.wrath || 0);                             // покровитель «Гнев»: ×3,16 за уровень
   D.gmul = g;
+  D.cg = costG(S);
   D.hero = [NEG];
   let d = NEG, top = 0;
   for (let i = 1; i <= N; i++) {
@@ -131,7 +152,7 @@ export function derive(S) {
   D.buffMul = 1 + 0.1 * it("item-s-burst");
   D.flurry = 10 + 2 * it("item-s-charge");
   D.wispMul = Math.max(0.5, 1 - 0.1 * it("item-s-refresher"));
-  D.rushCap = L10(CFG.rush * CFG.mobs * (1 + 0.15 * it("item-w-fleet")) * (1 + it("item-x-carpet")));
+  D.rushCap = L10(CFG.rush * CFG.mobs * (1 + 0.15 * it("item-w-fleet")) * (1 + it("item-x-carpet"))) + L2 * (S.pat.rush || 0);   // покровитель «Прорыв»: вдвое за уровень
   D.tesla = 0.15 * it("item-w-tesla");
   D.pet = S.un.pet ? Math.min(0.8, 0.2 + 0.05 * it("item-v-beam")) : 0;
   D.offEff = Math.min(1, CFG.offEff + 0.05 * S.rel.urn + 0.05 * it("item-v-rite") + 0.25 * it("item-x-weave"));
@@ -211,6 +232,7 @@ function startWave(S) {
   S.waveLog.push(S.stats.played); if (S.waveLog.length > 30) S.waveLog.shift();
   if (S.waveLog.length === 30 && S.stats.played - S.waveLog[0] <= 60) feat(S, "carpet");
   if (S.z > S.zrec) S.zrec = S.z;
+  if (S.z > S.cycBest) S.cycBest = S.z;
   if (S.z > S.best) S.best = S.z;
   if (isBoss(S.z)) { S.bossT = S.d.bossTime; ev(S, { t: "boss_in", z: S.z, boss: bossOf(S.z) }); }
   else ev(S, { t: "wave", z: S.z });
@@ -387,8 +409,8 @@ export function offline(S, seconds) {
 // ---------- покупки ----------
 export function buyInfo(S, i, mode) {                       // mode: 1 | 10 | "ms" | "max"
   const lv = S.lv[i], base = i ? heroCost0(i) : WHIP_COST0;
-  let n = mode === "ms" ? nextMs(lv) - lv : mode === "max" ? Math.max(1, affordable(S.souls, base, lv)) : mode;
-  const cost = chunkCost(base, lv, n);
+  let n = mode === "ms" ? nextMs(lv) - lv : mode === "max" ? Math.max(1, affordable(S, S.souls, base, lv)) : mode;
+  const cost = chunkCost(S, base, lv, n);
   return { n, cost, can: cost <= S.souls };
 }
 export function buy(S, i, mode) {
@@ -569,25 +591,82 @@ export function ashGain(S) {                                // lg пепла, к
   const z = S.zrec;
   let base = z > CFG.ashFrom ? Math.pow((z - CFG.ashFrom) / CFG.ashDiv, CFG.ashPow) : 0;
   base += S.lvRun / CFG.ashLv;
-  return base < 1 ? NEG : ashInt(L10(Math.floor(base)) + S.rel.ashplus * L10(1.05));
+  return base < 1 ? NEG : ashInt(L10(Math.floor(base)) + S.rel.ashplus * L10(1.05) + z / 100 * L10(1 + 0.15 * (S.pat.might || 0)));   // «Мощь»: пепел растёт с волной
 }
 export function rebirth(S) {
   const g = ashGain(S);
   if (g === NEG || !S.un.rebirth) return false;
-  S.ash = ashInt(lsum(S.ash, g)); S.ashAll = ashInt(lsum(S.ashAll, g)); S.rb += 1;
+  S.ash = ashInt(lsum(S.ash, g)); S.ashAll = ashInt(lsum(S.ashAll, g)); S.ashLife = lsum(S.ashLife, g); S.rb += 1; S.cycRb += 1;
   const st = S.stats;
   st.ashOnce = Math.max(st.ashOnce || 0, g);
   if (st.rbAt !== undefined && st.played - st.rbAt <= 180) achMark(S, "speedrun");
   st.rbAt = st.played;
+  newRun(S);
+  ev(S, { t: "rebirth", ash: g, n: S.rb });
+  ev(S, { t: "wave", z: S.z });
+  checkUnlocks(S);
+  return true;
+}
+function newRun(S) {                                         // забег с начала: общее у возрождения и Затмения
   S.lv.fill(0); S.lvRun = 0; S.souls = NEG; S.run = NEG;
-  S.z = 1 + 10 * S.rel.start; if (isBoss(S.z)) S.z += 1;
+  // старт: реликвия «Старт» (по 10 волн) или «Наследие» (доля лучшей волны цикла) — что дальше
+  S.z = Math.max(1 + 10 * S.rel.start, Math.floor(Math.min(0.9, 0.15 * (S.pat.legacy || 0)) * S.cycBest));
+  if (isBoss(S.z)) S.z += 1;
   S.zrec = S.z; S.kills = 0; S.hp = 1; S.mode = "push"; S.wall = false;
   S.combo = 0; S.tier = -1; S.buff = {};
   S.items = {}; S.draft = null; S.drafts = 0; S.forgiven = 0;
   S.statues = { dmg: 0, souls: 0, crit: 0, timer: 0 }; S.altar = 0; S.urnOn = 0; S.statueOn = 0;
   for (const s of SKILLS) S.act[s.id] = 0;
   derive(S);
-  ev(S, { t: "rebirth", ash: g, n: S.rb });
+}
+
+// ---------- второй слой: Затмение, осколки, покровители ----------
+// Затмение открывается после победы над боссом 1000-й волны. Оно сжигает первый слой целиком — пепел и реликвии — и даёт
+// осколки: ⌊4 · lg(пепел этого цикла)⌋, считая и тот пепел, что дало бы возрождение прямо сейчас. Осколки, покровители,
+// ачивки, коллекция предметов, рекорды и открытое остаются. Покровитель «Мощь» — мотор слоя: пепел начинает расти
+// с волной, и каждое возрождение уходит глубже прошлого.
+export const eclOpen = (S) => S.best > CFG.eclWave;
+// Затмение приходит раз в сутки: сколько секунд ждать следующего. Часы перевели назад — ждать от нового времени.
+export function eclWait(S, now) {
+  if (!S.eclAt) return 0;
+  const t = now === undefined ? Date.now() : now;
+  if (t < S.eclAt) S.eclAt = t;
+  return Math.max(0, CFG.eclCool - (t - S.eclAt) / 1000);
+}
+export function shardsGain(S) {                              // сколько осколков даст Затмение сейчас
+  const a = lsum(S.ashAll, ashGain(S));
+  return a > 0 ? Math.floor(CFG.shardK * a + 1e-9) : 0;
+}
+export function shardsFree(S) {                              // осколки, которые ещё не потрачены
+  let spent = 0;
+  for (const p of PATRONS) { const L = S.pat[p.id] || 0; spent += p.cost === "pow" ? Math.pow(2, L) - 1 : L * (L + 1) / 2; }
+  return S.shards - spent;
+}
+export const patronCost = (S, p) => (p.cost === "pow" ? Math.pow(2, S.pat[p.id] || 0) : (S.pat[p.id] || 0) + 1);
+export function buyPatron(S, id) {
+  const p = PATRONS.find((x) => x.id === id);
+  if (!p || (p.cap && S.pat[id] >= p.cap) || patronCost(S, p) > shardsFree(S)) return false;
+  S.pat[id] += 1;
+  derive(S);
+  ev(S, { t: "patron", id, name: p.name, lv: S.pat[id] });
+  return true;
+}
+export function eclipse(S, now) {
+  const n = shardsGain(S);
+  if (!eclOpen(S) || n < 1 || eclWait(S, now) > 0) return false;
+  S.eclAt = now === undefined ? Date.now() : now;
+  const g = ashGain(S);
+  if (g !== NEG) S.ashLife = lsum(S.ashLife, g);
+  S.shards += n; S.ecl += 1;
+  S.stats.shardsOnce = Math.max(S.stats.shardsOnce || 0, n);
+  S.ash = NEG; S.ashAll = NEG;
+  for (const r of RELICS) S.rel[r.id] = 0;
+  S.cycBest = 1; S.cycRb = 0;
+  S.stats.rbAt = S.stats.played;
+  const step = chaosOpen(S) && S.chaos < CFG.chaosMax;       // третий слой: шаг «Скупщика теней» за это Затмение
+  if (step) S.chaos += 1;
+  newRun(S);
+  ev(S, { t: "eclipse", shards: n, n: S.ecl, chaos: step ? S.chaos : 0 });
   ev(S, { t: "wave", z: S.z });
   checkUnlocks(S);
   return true;
@@ -612,6 +691,7 @@ export function nextUp(S) {
   if (S.urnOn > 0) return { k: "urn", text: "Летит урна — бей по ней, награда растёт с каждым ударом" };
   for (const s of SKILLS) if (skillOpen(S, s) && S.cd[s.id] <= 0 && S.act[s.id] <= 0) return { k: "skill", text: "Готово умение «" + s.name + "»" };
   if (S.wall && canBeatBoss(S)) return { k: "boss", text: "Наёмники справятся с боссом — жми «На босса»" };
+  if (S.wall && eclOpen(S) && eclWait(S) <= 0 && S.cycRb >= 3 && shardsGain(S) >= Math.max(15, 0.5 * S.shards)) return { k: "eclipse", text: "Пора в Затмение: осколков выйдет " + shardsGain(S) + ". Кнопка — во вкладке «Реликвии»" };
   if (S.un.rebirth && ashGain(S) !== NEG && (S.ashAll === NEG || ashGain(S) >= S.ashAll) && S.wall) return { k: "rebirth", text: "Пора возрождаться: пепла выйдет не меньше, чем у тебя было" };
   let best = null;
   for (let i = 0; i <= Math.min(N, heroesShown(S)); i++) {
@@ -634,7 +714,11 @@ export function achValue(S, id) {                            // то, по че�
   switch (id) {
     case "best": return S.best;
     case "life": return S.life === NEG ? -1 : S.life;         // lg
-    case "ashAll": return S.ashAll === NEG ? -1 : S.ashAll;   // lg
+    case "ashAll": return S.ashLife === NEG ? -1 : S.ashLife;   // lg; за всё время, Затмение его не обнуляет
+    case "ecl": return S.ecl || 0;
+    case "shards": return S.shards || 0;
+    case "patrons": { let n = 0; for (const k in S.pat) n += S.pat[k] || 0; return n; }
+    case "chaos": return chaosStep(S);
     case "rb": return S.rb;
     case "elites": case "crates": case "altars": case "statues": case "urns": return S.album[id] || 0;
     case "wisps": return S.wisps || 0;

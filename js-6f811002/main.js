@@ -38,6 +38,10 @@ const hooks = {
     const g = C.ashGain(S);
     FX.rebirthScene(() => { C.rebirth(S); drain(); store(); }, txt(g));
   },
+  eclipse() {                                               // Затмение: та же сцена, что у возрождения, только сгорает и первый слой
+    const n = C.shardsGain(S);
+    FX.rebirthScene(() => { C.eclipse(S); drain(); store(); }, String(n), "осколков", "ecl");
+  },
   settings() { UI.applySettings(); store(); },
   reset() {                                                 // стереть прогресс насовсем; настройки остаются
     const N = C.newState(); Object.assign(N.set, S.set);
@@ -127,7 +131,8 @@ async function boot() {
     window.__dev = {
       S: () => S, C, UI, TW,
       give(x) { S.souls = x; S.life = Math.max(S.life, x); },
-      wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); FX.setState(S); },
+      wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.cycBest = Math.max(S.cycBest, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); C.derive(S); FX.setState(S); },
+      ecl() { S.eclAt = 0; },                                // Затмение доступно сразу, без суток ожидания
       wisp() { S.wispIn = 0; },
       lane(k) { C.touch(S); if (k === "crate") S.crateIn = 0; if (k === "statue") S.statueIn = 0; if (k === "urn") S.urnIn = 0; if (k === "altar") S.altarIn = 0; },
       skip(sec) { for (let t = 0; t < sec; t += 0.1) C.tick(S, 0.1, true); },

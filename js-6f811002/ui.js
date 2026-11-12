@@ -1,6 +1,6 @@
 // Интерфейс: полоса волны, счётчик душ, отряд, предметы и коллекция, реликвии, путь, чат, умения, бафы, окна.
 // Правило экрана: всё, что можно открыть, видно с первой секунды — закрытое показано с условием.
-import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE } from "./data.js";
+import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
 import { sfx, setSound } from "./audio.js";
@@ -44,6 +44,14 @@ export function mount(state, hooks) {
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
   $("skillbar").addEventListener("click", (e) => { const s = e.target.closest(".skill"); if (s && !s.classList.contains("lock")) { if (!C.useSkill(S, s.dataset.id)) sfx.deny(); slowT = 0; } });
   $("relicList").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.classList.contains("off")) { if (C.buyRelic(S, b.dataset.id)) { sfx.buy(); slowT = 0; } } });
+  $("patronList").addEventListener("click", (e) => {        // покровитель: «+1» или «макс» — сколько хватит осколков
+    const b = e.target.closest("button"); if (!b || b.classList.contains("off")) return;
+    let n = 0;
+    while (n < (b.dataset.max !== undefined ? 500 : 1) && C.buyPatron(S, b.dataset.id)) n += 1;
+    if (!n) sfx.deny();
+    slowT = 0; api.settings();
+  });
+  $("eclBox").addEventListener("click", (e) => { if (e.target.closest("[data-ecl]")) openEclipse(); });
   $("draft").addEventListener("pointerdown", () => { if (!draftReady()) draftClickAt = performance.now(); });   // клик по ещё не включённым карточкам отодвигает включение
   $("draft").addEventListener("click", (e) => {
     if (!draftReady()) return;                              // случайный клик на бегу ничего не берёт
@@ -324,7 +332,10 @@ function drawRoad() {
     const done = !!S.un[u.key], cur = !done && !next; if (cur) next = true;
     h += '<div class="rd' + (done ? " done" : cur ? " cur" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + u.title + "</b><span>" + condText(u) + "</span><p>" + u.say + "</p></div></div>";
   }
-  for (const x of ROAD_EXTRA) h += '<div class="rd' + (x.soon ? " soon" : "") + '"><i></i><div><b>' + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p></div></div>";
+  for (const x of ROAD_EXTRA) {
+    const done = x.key === "ecl" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : false;
+    h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p></div></div>";
+  }
   $("roadList").innerHTML = h;
 }
 
@@ -387,13 +398,75 @@ function buildRelics() {
   }
   drawRelics();
 }
+// ---------- второй слой: Затмение и покровители — под реликвиями, видны с первой минуты ----------
+const hms = (s) => (s >= 3600 ? Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин" : s >= 60 ? Math.ceil(s / 60) + " мин" : Math.ceil(s) + " с");
+let patronEls = null, eclKey = "";
+function buildPatrons() {
+  $("patronList").innerHTML = PATRONS.map((p) => '<div class="relic patron"><img alt="" src="' + art(p.icon) + '"><h4>' + p.name + '<small data-l></small></h4><p>' + p.text +
+    '</p><div class="pbuy"><button data-id="' + p.id + '"><img alt="" src="' + art("cur-shard") + '"><span></span></button><button class="mx" data-id="' + p.id + '" data-max>макс</button></div></div>').join("") +
+    '<div class="relic patron chaos" id="chaosRow"><img alt="" src="' + art("thief") + '"><h4>Скупщик теней<small data-l></small></h4><p data-t></p></div>';
+  patronEls = {};
+  for (const p of PATRONS) {
+    const b = $("patronList").querySelector('button[data-id="' + p.id + '"]:not(.mx)'), card = b.closest(".relic");
+    patronEls[p.id] = { b, mx: card.querySelector(".mx"), cost: b.querySelector("span"), lv: card.querySelector("[data-l]") };
+  }
+}
+function drawEclipse() {
+  if (tab !== "relics") return;
+  if (!patronEls) buildPatrons();
+  const open = C.eclOpen(S), wait = open ? C.eclWait(S) : 0, n = open ? C.shardsGain(S) : 0, free = C.shardsFree(S);
+  const key = [open, Math.ceil(wait / 30), n, free, S.shards, S.ecl, C.chaosStep(S), C.chaosOpen(S), JSON.stringify(S.pat)].join("|");
+  if (key === eclKey) return;
+  eclKey = key;
+  $("eclBox").innerHTML = !open
+    ? '<div>Затмение — второй слой</div><div class="big">после босса 1000-й волны</div><div>Победишь босса на 1000-й волне — откроется <b>Затмение</b>: пепел и реликвии сгорят, а взамен дадут <b>осколки</b>. ' +
+      "За осколки берут покровителей — они остаются навсегда, и каждый следующий заход уходит глубже прежнего. Сейчас рекорд: волна " + group(S.best) + ".</div>"
+    : "<div>Затмение сейчас даст</div><div class=\"big\">" + (n > 0 ? "+" + group(n) + " " + plural(n, "осколок", "осколка", "осколков") : "пока ничего") + "</div>" +
+      "<div>Сгорят пепел и реликвии, забег начнётся заново. Осколки, покровители, ачивки и коллекция остаются. Затмение приходит <b>раз в сутки</b>. Затмений было: <b>" + S.ecl +
+      "</b>, осколков свободно: <b>" + group(free) + "</b>.</div>" +
+      (wait > 0 ? '<button class="btn ecl off" disabled>Следующее Затмение через ' + hms(wait) + "</button>"
+        : n > 0 ? '<button class="btn ecl" data-ecl>Затмение…</button>' : '<button class="btn ecl off" disabled>Сначала возродись и набери пепла</button>');
+  for (const p of PATRONS) {
+    const e = patronEls[p.id], lv = S.pat[p.id] || 0, max = p.cap && lv >= p.cap, c = C.patronCost(S, p), off = !open || max || c > free;
+    e.lv.textContent = "ур. " + group(lv) + (p.cap ? " / " + p.cap : "");
+    e.cost.textContent = max ? "максимум" : group(c);
+    e.b.classList.toggle("off", off); e.mx.classList.toggle("off", off);
+  }
+  $("patronList").classList.toggle("shut", !open);
+  const row = $("chaosRow"), st = C.chaosStep(S);
+  row.classList.toggle("lockd", !C.chaosOpen(S));
+  row.querySelector("[data-l]").textContent = "шаг " + st + " / " + CFG.chaosMax;
+  row.querySelector("[data-t]").textContent = "Третий слой, Великий хаос. Цена уровня наёмника растёт медленнее: сейчас +" + ((C.costG(S) - 1) * 100).toFixed(2).replace(".", ",") +
+    " % за уровень. " + (C.chaosOpen(S) ? (st >= CFG.chaosMax ? "Все шаги взяты." : "Шаг даётся за каждое Затмение.") : "Шаг даётся за каждое Затмение после 15 000-й волны.");
+}
+function openEclipse() {                                     // окно Затмения: что сгорит, что останется; само действие — удержанием
+  const n = C.shardsGain(S);
+  if (!C.eclOpen(S) || n < 1 || C.eclWait(S) > 0) return;
+  const step = C.chaosOpen(S) && C.chaosStep(S) < CFG.chaosMax;
+  let t0 = 0, timer = 0;
+  const m = openModal('<img class="eclart" alt="" src="' + art("ev-rift") + '"><h2>Затмение</h2><div class="bignum ecl">+' + group(n) + " " + plural(n, "осколок", "осколка", "осколков") + "</div>" +
+    "<p><b>Сгорит:</b> весь пепел (" + txt(S.ash) + "), все реликвии, наёмники, предметы и души этого забега. Забег начнётся с первой волны.</p>" +
+    "<p><b>Останется:</b> осколки и покровители, ачивки, коллекция предметов и звёзды, рекорды, всё открытое.</p>" +
+    (step ? "<p><b>Великий хаос:</b> это Затмение даст шаг «Скупщика теней» — уровни наёмников станут дешевле.</p>" : "") +
+    "<p>Следующее Затмение — через 20 часов. Осколки потрать на покровителей во вкладке «Реликвии».</p>" +
+    '<div class="acts split"><button class="btn ghost" data-x>Не сейчас</button><button class="btn hold ecl" data-go><span class="fill"></span><span class="lbl">Держи 2 секунды — Затмение</span></button></div>',
+  (e) => { if (e.target.closest("[data-x]")) closeModal(); });
+  const go = m.querySelector("[data-go]");
+  const stop = () => { clearTimeout(timer); timer = 0; go.classList.remove("holding"); };
+  go.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); t0 = performance.now(); go.classList.add("holding");
+    timer = setTimeout(() => { stop(); closeModal(); api.eclipse(); }, CFG.eclHold * 1000);
+  });
+  for (const k of ["pointerup", "pointerleave", "pointercancel"]) go.addEventListener(k, stop);
+}
 function drawRelics() {
+  drawEclipse();
   if (tab !== "relics" || !relicsBuilt) return;
   const g = C.ashGain(S), open = !!S.un.relics;
   $("reBox").innerHTML = !S.un.rebirth
     ? '<div>Реликвии — навсегда</div><div class="big">с 50-й волны</div><div>Дойдёшь до 50-й волны — откроется <b>Возрождение</b>: забег начнётся заново, а ты получишь <b>пепел</b>. За пепел покупают реликвии, они не сгорают никогда.</div>'
     : "<div>Возрождение сейчас даст</div><div class=\"big\">" + (g === NEG ? "пока ничего" : "+" + txt(g) + " пепла") +
-      "</div><div>Каждый пепел, полученный за всё время, — <b>+2 % урона</b>. Всего получено: <b>" + txt(S.ashAll) + "</b>. Тратить не жалко: бонус считается от всего заработанного." +
+      "</div><div>Каждый пепел, полученный " + (S.ecl ? "с прошлого Затмения" : "за всё время") + ", — <b>+2 % урона</b>. Всего получено: <b>" + txt(S.ashAll) + "</b>. Тратить не жалко: бонус считается от всего заработанного." +
       (open ? "" : " Реликвии откроются после первого возрождения.") + "</div>";
   for (const r of RELICS) {
     const e = relicEls[r.id]; if (!e) continue;
@@ -465,8 +538,10 @@ function drawSlow() {
   TOP.tick(tab === "top");
   SWAP.tick();
   stepAch();
-  $("chipAsh").hidden = S.ashAll === NEG;
-  if (S.ashAll !== NEG) $("ashNum").textContent = txt(S.ash);
+  $("chipAsh").hidden = S.ashAll === NEG && !S.ecl;
+  if (S.ashAll !== NEG || S.ecl) $("ashNum").textContent = txt(S.ash);
+  $("chipShard").hidden = !S.shards;
+  if (S.shards) $("shardNum").textContent = group(C.shardsFree(S));
   const nx = C.nextUp(S), nl = $("nextLine"), flash = performance.now() < achUntil;
   const hint = flash ? achMsg : nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
   if (nl.textContent !== hint) { nl.textContent = hint; nl.title = hint; }   // строка обрезается на двух строках — целиком видна по наведению
@@ -474,7 +549,9 @@ function drawSlow() {
   const rb = $("btnRebirth"), g = C.ashGain(S);
   rb.hidden = false;
   rb.classList.toggle("weak", g === NEG || !S.un.rebirth);
-  rb.querySelector(".lbl").textContent = !S.un.rebirth ? "Возрождение — с 50-й волны" : g === NEG ? "Возрождение: пока рано" : "Возрождение: +" + txt(g) + " пепла (держи)";
+  const gt = g === NEG ? "" : txt(g);                       // длинное число — без приписки «(держи)»: кнопка узкая, а про удержание говорит подсказка
+  rb.querySelector(".lbl").textContent = !S.un.rebirth ? "Возрождение — с 50-й волны" : g === NEG ? "Возрождение: пока рано" : "Возрождение: +" + gt + " пепла" + (gt.length > 5 ? "" : " (держи)");
+  rb.title = S.un.rebirth && g !== NEG ? "Держи кнопку, чтобы возродиться" : "";
 }
 
 function stepDraft() {                                       // карточки предметов: включаются, когда пауза выдержана
@@ -506,7 +583,7 @@ export function onEvent(e) {
     if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") { slowT = 0; itemsKey = ""; }
   else if (e.t === "ach") achNew.push(e);
 }

@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=09983fc8">
-<link rel="stylesheet" href="css/ui.css?v=09983fc8">
-<link rel="stylesheet" href="css/game.css?v=09983fc8">
+<link rel="stylesheet" href="css/tokens.css?v=25c88dae">
+<link rel="stylesheet" href="css/ui.css?v=25c88dae">
+<link rel="stylesheet" href="css/game.css?v=25c88dae">
 </head>
 <body>
 
@@ -36,6 +36,10 @@
     <div class="chip ash" id="chipAsh" hidden title="Пепел: за него покупают реликвии">
       <img class="ico-farm" style="filter:none" data-art="cur-ash" alt="">
       <div class="stack"><span class="v" id="ashNum">0</span><span class="l">пепел</span></div>
+    </div>
+    <div class="chip shard" id="chipShard" hidden title="Осколки Затмения: за них берут покровителей">
+      <img class="ico-farm" style="filter:none" data-art="cur-shard" alt="">
+      <div class="stack"><span class="v" id="shardNum">0</span><span class="l">осколки</span></div>
     </div>
     <button class="btn twitch sm who" id="btnWho" type="button"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 3 2.5 6.8V19h4.6v2.5h2.6L12.2 19h3.7l5-5V3H4zm15 10.2-2.9 2.9h-4.6l-2.5 2.5v-2.5H5.4V4.8H19v8.4zM16 7.6v5h-1.7v-5H16zm-4.6 0v5H9.7v-5h1.7z"/></svg><span class="t">Войти</span></button>
     <button class="ibtn" id="btnSound" title="Звук" aria-label="Звук"></button>
@@ -172,9 +176,11 @@
     <div class="pane scroll" id="paneRoad" hidden><div class="road" id="roadList"></div></div>
     <div class="pane scroll" id="paneTop" hidden><div class="topbox" id="topBox"></div></div>
     <div class="pane" id="paneChat" hidden><div class="chatbox" id="chatBox"></div></div>
-    <div class="pane" id="paneRelics" hidden>
+    <div class="pane scroll" id="paneRelics" hidden>
       <div class="rebox" id="reBox"></div>
       <div class="relics" id="relicList"></div>
+      <div class="rebox ecl" id="eclBox"></div>
+      <div class="relics" id="patronList"></div>
     </div>
   </aside>
 </main>
@@ -183,7 +189,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-c603d265/main.js"></script>
+<script type="module" src="js-6f811002/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

@@ -766,3 +766,27 @@ html { scrollbar-gutter: stable; }
 .events.flash { box-shadow: 0 12px 30px rgba(5,6,20,.45), inset 0 0 0 2px var(--farm); }
 .events.flash .eyebrow { color: var(--farm); }
 .events.flash .nextline { color: #ffe9a8; }
+
+/* ---------- второй слой: Затмение и покровители во вкладке «Реликвии» ---------- */
+#paneRelics .relics { flex: none; overflow: visible; }
+.rebox.ecl { margin-top: 10px; background: linear-gradient(180deg, rgba(151,117,250,.2), rgba(151,117,250,.06)); box-shadow: inset 0 0 0 2px rgba(151,117,250,.4); }
+.rebox.ecl .big { color: #c3b1ff; }
+.btn.ecl { width: 100%; margin-top: 10px; color: #1b1140; background: linear-gradient(180deg, #e4dbff, #a78bfa); box-shadow: 0 4px 0 #5b3fc4, 0 8px 16px rgba(20,10,60,.45), inset 0 2px 0 rgba(255,255,255,.55); }
+.btn.ecl.off { color: var(--text-mute); background: #2b2f5e; box-shadow: 0 3px 0 #15173a; filter: none; cursor: default; }
+.modal .bignum.ecl { color: #c3b1ff; filter: drop-shadow(0 3px 0 #33207a); font-size: 28px; white-space: nowrap; }
+.relic.patron h4 small { white-space: nowrap; }
+.modal .eclart { float: right; width: 92px; height: 92px; margin: -6px -4px 6px 12px; object-fit: contain; filter: drop-shadow(0 0 16px rgba(151,117,250,.7)); }
+.modal .btn.hold.ecl { width: auto; margin-top: 0; }
+.btn.hold.ecl .fill { background: rgba(255,255,255,.55); }
+.btn.hold.ecl.holding .fill { transition: width 2s linear; }
+.relic.patron { box-shadow: inset 0 0 0 1px rgba(151,117,250,.35); }
+.relic.patron .pbuy { grid-column: span 2; display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.relic.patron .pbuy button { grid-column: auto; background: linear-gradient(180deg, #e4dbff, #a78bfa); box-shadow: 0 3px 0 #5b3fc4; color: #1b1140; }
+.relic.patron .pbuy button.mx { padding: 7px 10px; }
+.relic.patron .pbuy button.off { color: var(--text-mute); background: #2b2f5e; box-shadow: 0 3px 0 #15173a; cursor: default; }
+.relic.patron.chaos { grid-column: span 2; }
+.relic.patron.chaos.lockd { opacity: .55; }
+.chip.shard { border-radius: var(--r-3); background: rgba(151,117,250,.12); box-shadow: inset 0 0 0 2px rgba(151,117,250,.35); }
+.chip.shard .v { font: 800 17px/1 var(--display); color: #c3b1ff; }
+.chip.shard .l { color: #8f7fd6; }
+.ashfx.ecl .n { color: #c3b1ff; text-shadow: 0 0 30px rgba(151,117,250,.9); }

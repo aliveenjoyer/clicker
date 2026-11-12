@@ -423,6 +423,7 @@ export function onEvent(e) {
     }
     case "kill": {
       kills.push(now);
+      if (kills.length > 40 && (kills.length & 7)) break;     // прорыв на десятки волн в секунду: рисуем каждое восьмое убийство
       const b = enemyBox(), fast = kills.length > 6;
       spark(b.x, b.y, fast ? 4 : 12, facColor(), 300, 7);
       if (!fast) {
@@ -525,6 +526,12 @@ export function onEvent(e) {
     case "item": sfx.ms(); mood("happy", 1500); break;
     case "barrier": banner("Divine Barrier", "ещё одна попытка", "gold", 1300); sfx.wisp(); break;
     case "rebirth": setEnemy(); for (const o of orbs) o.el.remove(); orbs = []; break;
+    case "eclipse": {
+      setEnemy(); for (const o of orbs) o.el.remove(); orbs = [];
+      banner("Затмение", "+" + e.shards + " осколков" + (e.chaos ? " · Скупщик теней: шаг " + e.chaos : ""), "gold", 2600); mood("happy", 3000);
+      break;
+    }
+    case "patron": sfx.ms(); break;
   }
 }
 
@@ -622,10 +629,10 @@ export function frame(dt) {
 }
 
 // ---------- сцена возрождения: мир выгорает, число пепла, рассвет ----------
-export function rebirthScene(doRebirth, ashText) {
+export function rebirthScene(doRebirth, ashText, label, cls) {   // та же сцена у Затмения: label «осколков», cls «ecl»
   const o = document.createElement("div");
-  o.className = "ashfx"; o.innerHTML = '<div class="n"></div><div class="l">пепла</div>';
-  o.firstChild.textContent = "+" + ashText;
+  o.className = "ashfx " + (cls || ""); o.innerHTML = '<div class="n"></div><div class="l"></div>';
+  o.firstChild.textContent = "+" + ashText; o.lastChild.textContent = label || "пепла";
   document.body.appendChild(o);
   sfx.rebirth();
   const t0 = performance.now(), burn = calm ? 300 : 900, hold = 900, dawn = calm ? 300 : 600;
