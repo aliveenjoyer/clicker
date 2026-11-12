@@ -13,7 +13,14 @@ const LIST = clean(Q.get("channel")) ? [clean(Q.get("channel"))] : [OWN].concat(
 const DEAD_MS = 5 * 60000;                                   // плеер сказал «не в эфире» — столько канал не предлагаем: превью у Twitch запаздывает
 export let CHANNEL = LIST[0];                                // чей стрим сейчас фоном (и чей чат во вкладке); никто не в эфире — свой
 const $ = (id) => document.getElementById(id);
-let S = null, hooks = null, player = null, cur = "", live = false, muted = true, scriptP = null, probeT = 0, shown = false;
+let S = null, hooks = null, player = null, cur = "", live = false, scriptP = null, probeT = 0, shown = false;
+// Звук стрима: S.set.twSound — включён ли, S.set.twVol — громкость 0–100. Запоминаются вместе с настройками.
+const vol = () => Math.max(0, Math.min(100, Number(S.set.twVol === undefined ? 50 : S.set.twVol) || 0));
+const sound = () => !!S.set.twSound && vol() > 0;
+function applySound() {                                      // передать плееру громкость и «без звука»
+  if (!player || player === "loading") return;
+  try { player.setVolume(vol() / 100); player.setMuted(!sound()); } catch (e) { /* плеер ещё не готов */ }
+}
 let playing = false, askT = 0;                              // идёт ли показ; когда предложить кнопку «Включить стрим»
 const dead = {};
 
@@ -92,9 +99,9 @@ async function start() {
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; front(false); draw(); });
+  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); draw(); });
   player.addEventListener(T.PAUSE, () => { playing = false; askT = performance.now() + 1500; draw(); });
-  muted = true; playing = false; askT = performance.now() + 5000;
+  playing = false; askT = performance.now() + 5000;
 }
 function stop() {
   if (player && player !== "loading") { try { player.pause(); } catch (e) { /* плеер уже снят */ } }
@@ -120,9 +127,19 @@ export function draw() {
     : "Сейчас никто не в эфире. Когда стрим начнётся, он появится фоном линии";
   // Twitch не запускает показ сам, пока плеер чем-то закрыт: тогда нужен один клик по его кнопке ▶
   $("twplay").hidden = !(shown && !playing && player && player !== "loading" && performance.now() > askT) || $("field").classList.contains("twfront");
-  const sb = $("btnStreamSound");
-  sb.hidden = !shown;
-  if (shown) { sb.innerHTML = muted ? ICON_OFF : ICON_ON; sb.classList.toggle("off", muted); sb.title = muted ? "Включить звук стрима" : "Выключить звук стрима"; }
+  // звук стрима: значок и ползунок прямо на поле, пока стрим на фоне
+  $("twctl").hidden = !shown;
+  if (shown) {
+    const on = sound(), sb = $("btnStreamSound"), sl = $("twVol");
+    sb.innerHTML = on ? ICON_ON : ICON_OFF;
+    sb.classList.toggle("on", on);
+    sb.title = on ? "Выключить звук стрима" : "Включить звук стрима";
+    const v = String(on ? vol() : 0);
+    if (document.activeElement !== sl && sl.value !== v) sl.value = v;
+    sl.style.setProperty("--v", (on ? vol() : 0) + "%");
+    sl.title = "Громкость стрима: " + (on ? vol() : 0) + " %";
+    $("twWho").textContent = nice(cur);
+  }
 }
 
 function front(on) {                                         // плеер вперёд: по нему можно кликнуть; назад — он снова под игрой
@@ -137,12 +154,20 @@ export function mount(state, h) {
   $("twback").addEventListener("click", () => { front(false); askT = performance.now() + 8000; draw(); });
   if (S.set.stream === undefined) S.set.stream = true;
   $("btnStream").addEventListener("click", () => { S.set.stream = !S.set.stream; hooks.changed(); sync(); });
-  $("btnStreamSound").addEventListener("click", () => {
-    if (!player || player === "loading") return;
-    muted = !muted;
-    try { player.setMuted(muted); if (!muted) player.setVolume(0.5); } catch (e) { /* плеер ещё не готов */ }
-    draw();
+  $("btnStreamSound").addEventListener("click", () => {      // значок: звук включить или выключить
+    const on = !sound();
+    if (on && vol() === 0) S.set.twVol = 50;
+    S.set.twSound = on;
+    applySound(); hooks.changed(); draw();
   });
+  const sl = $("twVol");
+  sl.addEventListener("input", () => {                       // ползунок: громкость; в ноль — без звука
+    const v = Math.max(0, Math.min(100, Number(sl.value) || 0));
+    if (v > 0) S.set.twVol = v;
+    S.set.twSound = v > 0;
+    applySound(); draw();
+  });
+  sl.addEventListener("change", () => hooks.changed());
   window.addEventListener("resize", () => { if (shown) fit(); sync(); });
   check();
 }

@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=0a9738d2">
-<link rel="stylesheet" href="css/ui.css?v=0a9738d2">
-<link rel="stylesheet" href="css/game.css?v=0a9738d2">
+<link rel="stylesheet" href="css/tokens.css?v=60179629">
+<link rel="stylesheet" href="css/ui.css?v=60179629">
+<link rel="stylesheet" href="css/game.css?v=60179629">
 </head>
 <body>
 
@@ -62,7 +62,6 @@
       <button class="ibtn tw" id="btnStream" title="Стрим фоном линии" aria-label="Стрим фоном линии" hidden>
         <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 3 2.5 6.8V19h4.6v2.5h2.6L12.2 19h3.7l5-5V3H4zm15 10.2-2.9 2.9h-4.6l-2.5 2.5v-2.5H5.4V4.8H19v8.4zM16 7.6v5h-1.7v-5H16zm-4.6 0v5H9.7v-5h1.7z"/></svg>
       </button>
-      <button class="ibtn tw" id="btnStreamSound" title="Звук стрима" aria-label="Звук стрима" hidden></button>
       <div class="seg" id="modeSeg"><span data-mode="push" class="on">Вперёд</span><span data-mode="farm">Фарм</span></div>
       <div class="rec">рекорд<b id="waveRec">1</b></div>
     </div>
@@ -72,6 +71,11 @@
       <div class="twdim" id="twdim" hidden></div>
       <button class="btn twplay" id="twplay" hidden>▶ Включить стрим</button>
       <button class="btn ghost twback" id="twback" hidden>К игре</button>
+      <div class="twctl" id="twctl" hidden>
+        <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
+        <input class="twvol" id="twVol" type="range" min="0" max="100" step="1" value="0" aria-label="Громкость стрима">
+        <span class="twwho" id="twWho"></span>
+      </div>
       <div class="skyline" id="rushLines"></div>
       <canvas id="fxc"></canvas>
 
@@ -169,7 +173,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-f3b1a99f/main.js"></script>
+<script type="module" src="js-ac147b87/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

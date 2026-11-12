@@ -94,7 +94,7 @@ async function boot() {
   field.addEventListener("pointerdown", (e) => {
     audioUnlock(); TW.nudge();
     if (e.target.closest("#draft")) return;                 // идёт выбор предмета — удары не считаются
-    if (TW.isFront() || e.target.closest("#twplay, #twback")) return;   // плеер стрима выведен вперёд
+    if (TW.isFront() || e.target.closest("#twplay, #twback, #twctl")) return;   // плеер стрима выведен вперёд
     if (e.target.closest("#wisp")) { C.takeWisp(S); return; }
     if (e.target.closest("#crate")) { C.breakCrate(S); return; }
     if (e.target.closest("#statue")) { C.breakStatue(S); return; }
