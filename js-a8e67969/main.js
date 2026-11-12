@@ -9,77 +9,23 @@ import { loadArt } from "./art.js";
 import { txt, lg } from "./num.js";
 import * as TW from "./stream.js";
 
-const KEY = "hlystopad.save.v1", BAK = "hlystopad.backups.v1";
+const KEY = "hlystopad.save.v1";
 const STEP = 1 / 60;
 const Q = new URLSearchParams(location.search);
-const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // свой компьютер: только тут работают ?reset, ?dev и возврат из файла
-let S = null, last = 0, acc = 0, saveT = 0, bakT = 0, down = false, downT = 0, holdAcc = 0, hiddenAt = 0;
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // свой компьютер: только тут работают ?reset и ?dev
+let S = null, last = 0, acc = 0, saveT = 0, down = false, downT = 0, holdAcc = 0, hiddenAt = 0;
 
+// Прогресс хранится только в этом браузере. Загрузить его извне нельзя намеренно: ни текстом, ни ссылкой, ни из копий —
+// любая такая дверь стала бы способом накрутить рекорд.
 function store() { try { localStorage.setItem(KEY, C.save(S)); } catch (e) { /* хранилище недоступно — играем без сохранения */ } }
 function restore() {
-  if (LOCAL && Q.has("reset")) { try { const old = localStorage.getItem(KEY); if (old) backup("reset", old); localStorage.removeItem(KEY); } catch (e) {} }   // ?reset=1 — с копией
+  try { localStorage.removeItem("hlystopad.backups.v1"); localStorage.removeItem(KEY + ".rescue"); } catch (e) { /* следы прежней версии с копиями */ }
+  if (LOCAL && Q.has("reset")) { try { localStorage.removeItem(KEY); } catch (e) {} }
   let t = null;
   try { t = localStorage.getItem(KEY); } catch (e) {}
   return t ? C.load(t) : C.newState();
 }
-
-// ---------- копии сохранения: перед стиранием и заменой, плюс раз в полчаса ----------
-function backups() { try { const l = JSON.parse(localStorage.getItem(BAK)); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
-function summary(text) {                                    // что внутри сохранения; null — это не сохранение
-  try {
-    const o = JSON.parse(text);
-    return o && o.v === 1 && Array.isArray(o.lv) ? { at: o.at || 0, z: o.best || o.z || 1, played: Math.round((o.stats && o.stats.played) || 0), rb: o.rb || 0 } : null;
-  } catch (e) { return null; }
-}
-function backup(why, text) {                                // why: reset | import | swap | auto | rescue
-  const t = text || C.save(S), sm = summary(t);
-  if (!sm || (sm.played < 30 && !sm.rb)) return false;      // пустую игру хранить незачем
-  let list = backups();
-  if (why === "auto" && list.some((b) => b.why === "auto" && Date.now() - b.at < 25 * 60000)) return false;
-  list = list.filter((b) => b.save !== t);
-  list.unshift({ at: text ? sm.at || Date.now() : Date.now(), why, z: sm.z, played: sm.played, rb: sm.rb, save: t });
-  let autos = 0;
-  list = list.filter((b) => b.why !== "auto" || ++autos <= 2).slice(0, 6);   // шесть последних, из них авто-копий не больше двух
-  try { localStorage.setItem(BAK, JSON.stringify(list)); } catch (e) { return false; }
-  return true;
-}
-function swapState(N) {                                     // заменить игру целиком: стирание, возврат, загрузка
-  S = N; S.ev = []; S.combo = 0; S.comboIdle = 0;        // серия ударов из старого сохранения уже остыла
-  FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
-  document.getElementById("hint").hidden = S.stats.clicks > 0;
-}
-async function rescue() {                                   // сохранение, поднятое из файлов браузера, лежит рядом с игрой; только на своём компьютере
-  if (!LOCAL) return false;
-  try {
-    const r = await fetch("../saves/rescue.json", { cache: "no-store" });
-    if (!r.ok) return false;
-    const text = (await r.text()).trim(), sm = summary(text);
-    if (!sm) return false;
-    const id = String(sm.at || text.length);
-    if (localStorage.getItem(KEY + ".rescue") === id) return false;   // уже предлагали
-    localStorage.setItem(KEY + ".rescue", id);
-    if (backup("rescue", text)) { UI.showRescue(hooks.backups()[0]); return true; }
-  } catch (e) { /* файла нет — и не надо */ }
-  return false;
-}
-function linkSave() {                                       // сохранение в ссылке: …/#save=<текст сохранения в base64url>
-  const m = /^#save=([A-Za-z0-9_-]+)$/.exec(location.hash);
-  if (!m) return null;
-  try {
-    history.replaceState(null, "", location.pathname + location.search);   // второй раз по этой ссылке не предлагаем
-    const bin = atob(m[1].replace(/-/g, "+").replace(/_/g, "/"));
-    const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
-    return summary(text) ? text : null;
-  } catch (e) { return null; }
-}
-async function welcome() {                                  // первый запуск: три шага обучения; если нашлась прежняя игра — сначала она
-  const fromLink = linkSave();
-  if (fromLink && backup("rescue", fromLink)) {
-    try { localStorage.setItem(KEY + ".intro", "1"); } catch (e) { /* без хранилища обучение покажется ещё раз */ }
-    UI.showRescue(hooks.backups()[0], true);
-    return;
-  }
-  if (await rescue()) return;
+function welcome() {                                        // первый запуск: три шага обучения
   try {
     if (localStorage.getItem(KEY + ".intro") || S.stats.clicks >= 5 || S.rb) return;
     localStorage.setItem(KEY + ".intro", "1");
@@ -93,23 +39,13 @@ const hooks = {
     FX.rebirthScene(() => { C.rebirth(S); drain(); store(); }, txt(g));
   },
   settings() { UI.applySettings(); store(); },
-  reset() {                                                 // стереть прогресс: копия остаётся в списке прежних игр, настройки сохраняются
-    backup("reset");
+  reset() {                                                 // стереть прогресс насовсем; настройки остаются
     const N = C.newState(); Object.assign(N.set, S.set);
-    swapState(N);
+    S = N;
+    FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
+    document.getElementById("hint").hidden = false;
   },
   defaults() { Object.assign(S.set, { sound: true, calm: false, sci: false, autoBoss: true, stream: true }); UI.applySettings(); TW.sync(); store(); },
-  backups() { return backups().map((b, i) => ({ i, at: b.at, why: b.why, z: b.z, played: b.played, rb: b.rb })); },
-  restore(i) {                                              // вернуть прежнюю игру; нынешняя уходит в список копий
-    const b = backups()[i];
-    if (!b || !summary(b.save)) return false;
-    backup("swap");
-    try { localStorage.setItem(BAK, JSON.stringify(backups().filter((x) => x.save !== b.save))); } catch (e) {}
-    swapState(C.load(b.save));
-    return true;
-  },
-  exportSave() { return C.save(S); },
-  importSave(text) { if (!summary(text)) return false; backup("import"); swapState(C.load(text)); return true; },
 };
 
 function drain() {
@@ -140,8 +76,6 @@ function loop(ts) {
   UI.frame(dt);
   saveT += dt;
   if (saveT > 10) { saveT = 0; store(); }
-  bakT += dt;
-  if (bakT > 300) { bakT = 0; backup("auto"); }             // копия раз в полчаса: сама функция следит за промежутком
   requestAnimationFrame(loop);
 }
 
@@ -200,7 +134,6 @@ async function boot() {
   }
   last = performance.now();
   requestAnimationFrame(loop);
-  backup("auto");
   welcome();
 }
 boot();

@@ -437,27 +437,19 @@ export function showIntro(i) {
   });
 }
 
-// ---------- настройки, сохранение, стирание ----------
+// ---------- настройки и стирание ----------
 // У окна всегда один обработчик кликов: его ставит openModal. Раньше обработчики копились с каждым открытием настроек.
-const p2 = (n) => String(n).padStart(2, "0");
-const when = (ms) => { const d = new Date(ms); return p2(d.getDate()) + "." + p2(d.getMonth() + 1) + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()); };
+// Копий сохранения и загрузки прогресса нет намеренно: любая такая дверь — способ накрутить рекорд.
 const mins = (s) => (s >= 3600 ? Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин" : Math.max(1, Math.floor(s / 60)) + " мин");
-const WHY = { reset: "стёрта", import: "до загрузки", swap: "до возврата", auto: "копия", rescue: "найдена в браузере" };
-const bakLine = (b) => when(b.at) + " · волна " + group(b.z) + " · " + mins(b.played) + (b.rb ? " · возрождений: " + b.rb : "");
 let wipeT = 0;
 
 function openSettings() {
   const sw = (k, label) => '<div class="row"><span>' + label + '</span><button class="sw' + (S.set[k] ? " on" : "") + '" data-k="' + k + '" aria-label="' + label + '"></button></div>';
-  const baks = api.backups();
   openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
     sw("sci", "Научная запись чисел") + sw("autoBoss", "Сам идти на босса, когда наёмники справятся") +
     '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
-    '<div class="eyebrow sect">Сохранение</div>' +
     '<div class="row"><span>Сыграно</span><b>' + mins(S.stats.played) + " · ударов " + group(S.stats.clicks) + "</b></div>" +
-    '<div class="row"><span>Игра хранится в этом браузере. Копию можно держать у себя</span><span class="rowbtns"><button class="btn ghost sm" data-copy>Скопировать</button><button class="btn ghost sm" data-load>Загрузить</button></span></div>' +
-    (baks.length ? '<p class="note bakhead">Прежние игры. Любую можно вернуть:</p>' + baks.map((b) => '<div class="row bak"><span>' + bakLine(b) + " <i>" + (WHY[b.why] || "копия") +
-      '</i></span><button class="btn ghost sm" data-restore="' + b.i + '">Вернуть</button></div>').join("") : "") +
     '<div class="acts split"><button class="btn danger sm" data-wipe>Стереть весь прогресс…</button><button class="btn" data-x>Готово</button></div>',
   (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -466,64 +458,13 @@ function openSettings() {
     else if (d.x !== undefined) closeModal();
     else if (d.defaults !== undefined) { api.defaults(); drawSound(); openSettings(); toast("Настройки сброшены. Прогресс не тронут"); }
     else if (d.intro !== undefined) showIntro(0);
-    else if (d.copy !== undefined) copySave();
-    else if (d.load !== undefined) openLoad();
-    else if (d.restore !== undefined) openRestore(Number(d.restore));
     else if (d.wipe !== undefined) openWipe();
-  });
-}
-function copySave() {
-  const text = api.exportSave();
-  const manual = () => {
-    openModal("<h2>Сохранение</h2><p>Скопируй этот текст и сохрани у себя. Потом его можно загрузить обратно.</p>" +
-      '<textarea rows="6" readonly spellcheck="false"></textarea><div class="acts"><button class="btn" data-back>Назад</button></div>',
-    (e) => { if (e.target.closest("[data-back]")) openSettings(); });
-    const ta = $("modal").querySelector("textarea"); ta.value = text; ta.focus(); ta.select();
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Сохранение скопировано. Вставь его в заметки или отправь себе"), manual);
-  else manual();
-}
-function openLoad() {
-  openModal("<h2>Загрузить сохранение</h2><p>Вставь текст, который дала кнопка «Скопировать». Нынешняя игра не пропадёт: она попадёт в список прежних игр.</p>" +
-    '<textarea rows="6" spellcheck="false" placeholder="Текст сохранения"></textarea><p class="note err" hidden>Это не похоже на сохранение «Хлыстопада». Проверь, что текст скопирован целиком.</p>' +
-    '<div class="acts"><button class="btn ghost" data-back>Назад</button><button class="btn gold" data-go>Загрузить</button></div>',
-  (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.back !== undefined) openSettings();
-    else if (b.dataset.go !== undefined) {
-      const m = $("modal");
-      if (api.importSave(m.querySelector("textarea").value.trim())) { closeModal(); toast("Сохранение загружено: волна " + group(S.best)); }
-      else m.querySelector(".err").hidden = false;
-    }
-  });
-}
-function openRestore(i) {
-  const b = api.backups().find((x) => x.i === i);
-  if (!b) return;
-  openModal("<h2>Вернуть эту игру?</h2><p>" + bakLine(b) + ".</p><p>Нынешняя игра (волна " + group(S.best) + ", " + mins(S.stats.played) +
-    ") не пропадёт: она попадёт в список прежних игр, и её тоже можно будет вернуть.</p>" +
-    '<div class="acts"><button class="btn ghost" data-back>Назад</button><button class="btn gold" data-go>Вернуть</button></div>',
-  (e) => {
-    const t = e.target.closest("button"); if (!t) return;
-    if (t.dataset.back !== undefined) openSettings();
-    else if (t.dataset.go !== undefined && api.restore(i)) { closeModal(); toast("Игра возвращена: волна " + group(S.best)); }
-  });
-}
-export function showRescue(b, fromLink) {                   // прежняя игра нашлась в файлах браузера или пришла ссылкой — предлагаем вернуть
-  openModal((fromLink ? "<h2>В ссылке — сохранённая игра</h2><p>" + bakLine(b) + ".</p><p>Загрузить её сюда? Нынешняя игра попадёт в список прежних игр в настройках."
-    : "<h2>Прежняя игра нашлась</h2><p>Стёртую игру удалось достать: " + bakLine(b) + ".</p><p>Вернуть её? Нынешняя игра попадёт в список прежних игр в настройках.") + "</p>" +
-    '<div class="acts"><button class="btn ghost" data-x>' + (fromLink ? "Не загружать" : "Остаться в новой") + '</button><button class="btn gold big" data-go>' + (fromLink ? "Загрузить игру" : "Вернуть мою игру") + "</button></div>",
-  (e) => {
-    const t = e.target.closest("button"); if (!t) return;
-    if (t.dataset.x !== undefined) { closeModal(); toast("Она ждёт в настройках, в списке прежних игр"); }
-    else if (t.dataset.go !== undefined && api.restore(b.i)) { closeModal(); toast("Игра возвращена: волна " + group(S.best)); }
   });
 }
 function openWipe() {                                       // стирание — только удержанием: случайный или двойной клик ничего не сотрёт
   openModal("<h2>Стереть весь прогресс?</h2><p>Пропадёт всё, что накоплено: волна " + group(S.best) + ", " + mins(S.stats.played) +
     " игры, наёмники, пепел, реликвии, предметы и их звёзды. Игра начнётся с первой волны.</p>" +
-    "<p>Настройки это не трогает: для них есть отдельная кнопка «Сбросить настройки».</p>" +
-    '<p class="note">Копия стёртой игры останется в настройках, в списке прежних игр.</p>' +
+    "<p><b>Вернуть стёртое будет нельзя.</b> Настройки это не трогает: для них есть отдельная кнопка «Сбросить настройки».</p>" +
     '<div class="acts split"><button class="btn danger hold" data-wipe-go><span class="fill"></span><span class="lbl">Стереть: держи 3 секунды</span></button><button class="btn gold" data-x>Не стирать</button></div>',
   (e) => { if (e.target.closest("[data-x]")) openSettings(); });
   const b = $("modal").querySelector("[data-wipe-go]");
@@ -532,7 +473,7 @@ function openWipe() {                                       // стирание 
     if (e.button) return;
     b.classList.add("holding");
     clearTimeout(wipeT);
-    wipeT = setTimeout(() => { wipeT = 0; api.reset(); closeModal(); toast("Игра стёрта. Копия лежит в настройках, в списке прежних игр"); }, 3000);
+    wipeT = setTimeout(() => { wipeT = 0; api.reset(); closeModal(); toast("Прогресс стёрт. Начинаем с первой волны"); }, 3000);
   });
   for (const n of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(n, stop);
   b.addEventListener("contextmenu", (e) => e.preventDefault());
