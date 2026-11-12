@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Хлыстопад — кликер aliveenjoyer</title>
+<meta name="description" content="Кликер по Deadlock от aliveenjoyer: бей труперов хлыстом Лэша, нанимай героев, проходи боссов и собирай предметы. Работает прямо в браузере.">
+<meta name="theme-color" content="#12142a">
+<link rel="icon" href="assets/cur-farm.webp">
+<meta property="og:title" content="Хлыстопад — кликер aliveenjoyer">
+<meta property="og:description" content="Бей труперов хлыстом Лэша, нанимай героев, проходи боссов и собирай предметы. Когда идёт стрим, он играет фоном линии, а души сыплются вдвое быстрее.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://clicker.aliveenjoyer.art/">
+<meta property="og:image" content="https://clicker.aliveenjoyer.art/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://clicker.aliveenjoyer.art/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=4ac60750">
+<link rel="stylesheet" href="css/ui.css?v=4ac60750">
+<link rel="stylesheet" href="css/game.css?v=4ac60750">
+</head>
+<body>
+
+<header class="top">
+  <div class="logo">
+    <img class="mark" data-art="cur-farm" alt="">
+    <div><h1>Хлыстопад</h1><small>кликер · aliveenjoyer</small></div>
+  </div>
+  <div class="mid">
+    <div class="live" id="live" hidden><span class="dot"></span>Стрим идёт — фарм <b>×2</b></div>
+  </div>
+  <div class="right">
+    <div class="chip ash" id="chipAsh" hidden title="Пепел: за него покупают реликвии">
+      <img class="ico-farm" style="filter:none" data-art="cur-ash" alt="">
+      <div class="stack"><span class="v" id="ashNum">0</span><span class="l">пепел</span></div>
+    </div>
+    <button class="ibtn" id="btnSound" title="Звук" aria-label="Звук"></button>
+    <button class="ibtn" id="btnMenu" title="Настройки" aria-label="Настройки">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.3 2.5h4l.3-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4zM13 15.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z" transform="translate(-1 0)"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="main" id="main">
+  <section class="stage">
+
+    <div class="wavebar plate">
+      <div>
+        <div class="eyebrow">Волна</div>
+        <div class="w"><b id="waveNum">1</b><span class="dim" id="waveSub">трупер 1 / 10</span></div>
+      </div>
+      <div class="wavemid">
+        <div class="pips" id="pips"></div>
+        <div class="sub" id="waveNext"></div>
+      </div>
+      <div class="sp"></div>
+      <button class="btn gold" id="btnBoss" hidden>На босса</button>
+      <button class="ibtn tw" id="btnStream" title="Стрим фоном линии" aria-label="Стрим фоном линии" hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 3 2.5 6.8V19h4.6v2.5h2.6L12.2 19h3.7l5-5V3H4zm15 10.2-2.9 2.9h-4.6l-2.5 2.5v-2.5H5.4V4.8H19v8.4zM16 7.6v5h-1.7v-5H16zm-4.6 0v5H9.7v-5h1.7z"/></svg>
+      </button>
+      <button class="ibtn tw" id="btnStreamSound" title="Звук стрима" aria-label="Звук стрима" hidden></button>
+      <div class="seg" id="modeSeg"><span data-mode="push" class="on">Вперёд</span><span data-mode="farm">Фарм</span></div>
+      <div class="rec">рекорд<b id="waveRec">1</b></div>
+    </div>
+
+    <div class="field" id="field">
+      <div class="twbg" id="twbg" hidden><div id="twplayer"></div></div>
+      <div class="twdim" id="twdim" hidden></div>
+      <button class="btn twplay" id="twplay" hidden>▶ Включить стрим</button>
+      <button class="btn ghost twback" id="twback" hidden>К игре</button>
+      <div class="skyline" id="rushLines"></div>
+      <canvas id="fxc"></canvas>
+
+      <div class="bankwrap" id="bankBox">
+        <div class="bank">
+          <div class="num" id="bankNum">0</div>
+          <div class="cap"><img data-art="cur-farm" alt=""><span class="l">души</span></div>
+          <div class="rate" id="bankRate"></div>
+        </div>
+      </div>
+
+      <div class="unit q2" id="q2"><img alt=""></div>
+      <div class="unit q1" id="q1"><img alt=""></div>
+      <div class="plate-enemy" id="plate">
+        <div class="nameplate"><span class="who2"><i class="fac" id="facDot"></i><span id="enemyName">Трупер</span></span><span id="enemyCount"></span></div>
+        <div class="hp" id="hp" style="--p:100%; --g:100%"><em></em><i></i><span id="hpText"></span></div>
+      </div>
+      <div class="unit enemy" id="enemy"><span class="shadow"></span><img alt=""><span class="crown" id="crown" hidden></span><span class="weak" id="weak" hidden></span></div>
+
+      <svg class="lash" id="lash" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#ffe7a8" stop-opacity="0"/><stop offset=".45" stop-color="#fff6d8"/><stop offset="1" stop-color="#ffc861" stop-opacity=".25"/></linearGradient></defs>
+        <path id="lashGlow" d="" stroke="rgba(255,200,97,.35)" stroke-width="14" vector-effect="non-scaling-stroke"/>
+        <path id="lashLine" d="" stroke="url(#lg)" stroke-width="5" vector-effect="non-scaling-stroke"/>
+      </svg>
+
+      <div class="timer-ring bossring" id="bossRing" hidden>
+        <svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="31" fill="rgba(12,12,34,.6)" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle id="bossArc" cx="36" cy="36" r="31" fill="none" stroke="#ff5a6e" stroke-width="6" stroke-linecap="round" stroke-dasharray="194.8" stroke-dashoffset="0"/></svg>
+        <span class="t" id="bossT">30</span>
+      </div>
+
+      <div class="combo" id="combo" hidden><b id="comboN">0</b><span id="comboName"></span></div>
+      <div class="wisp" id="wisp" hidden><span class="ring"></span><img data-art="wisp" alt=""></div>
+      <img class="lnobj crate" id="crate" data-art="crate" alt="Ящик" draggable="false" hidden>
+      <img class="lnobj statue" id="statue" data-art="statue" alt="Золотая статуя" draggable="false" hidden>
+      <img class="lnobj urn" id="urn" data-art="ev-urn" alt="Урна душ" draggable="false" hidden>
+      <div id="fxl"></div>
+      <div class="banner" id="banner"></div>
+      <div class="draft" id="draft" hidden></div>
+      <div class="hint" id="hint">БЕЙ!</div>
+      <div id="pops"></div>
+
+      <div class="dushka" id="dushka">
+        <img id="pet" data-art="pet-idle" alt="">
+        <div class="say" id="say" hidden></div>
+      </div>
+
+      <div class="stats" id="stats">
+        <span>Удар<b id="stClick">1</b></span>
+        <span id="stDpsBox" hidden>Наёмники<b id="stDps">0</b></span>
+        <span>Крит<b id="stCrit">5 %</b></span>
+      </div>
+      <img class="cursor" id="cursor" data-art="whip-cursor" alt="">
+    </div>
+
+    <div class="lower">
+      <div class="skillbar plate" id="skillbar"></div>
+      <div class="events plate" id="nextBox">
+        <div class="eyebrow">Дальше</div>
+        <div class="nextline" id="nextLine">Бей труперов и собирай души</div>
+        <button class="btn rebirth" id="btnRebirth" hidden><span class="fill"></span><span class="lbl">Возрождение</span></button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side plate" id="side">
+    <div class="tabs" id="tabs"></div>
+    <div class="pane" id="paneSquad">
+      <div class="head">
+        <span class="eyebrow">Покупка</span>
+        <div class="seg" id="buySeg"></div>
+      </div>
+      <div class="list" id="mercList"></div>
+      <div class="rosterbox" id="rosterBox"></div>
+      <div class="foot"><span>Наёмников: <b id="footN">0</b></span><span>Всего урон: <b id="footDps">0</b></span></div>
+    </div>
+    <div class="pane scroll" id="paneItems" hidden>
+      <div class="eyebrow pad">В этом забеге</div>
+      <div class="slots" id="slotGrid"></div>
+      <div class="branches" id="branchList"></div>
+      <div class="eyebrow pad">Коллекция</div>
+      <div class="coll" id="collGrid"></div>
+      <div class="colldet" id="collDet"></div>
+    </div>
+    <div class="pane scroll" id="paneRoad" hidden><div class="road" id="roadList"></div></div>
+    <div class="pane" id="paneChat" hidden><div class="chatbox" id="chatBox"></div></div>
+    <div class="pane" id="paneRelics" hidden>
+      <div class="rebox" id="reBox"></div>
+      <div class="relics" id="relicList"></div>
+    </div>
+  </aside>
+</main>
+
+<div class="veil" id="veil" hidden></div>
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="js-a4863595/main.js"></script>
+<script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
+</body>
+</html>
