@@ -24,6 +24,63 @@ function applySound() {                                      // передать
   try { player.setVolume(vol() / 100); player.setMuted(!sound()); } catch (e) { /* плеер ещё не готов */ }
 }
 let playing = false, askT = 0;                              // идёт ли показ; когда предложить кнопку «Включить стрим»
+// Качество стрима: S.set.twQ — что выбрал игрок: "auto" или группа Twitch ("chunked" — исходное, "720p60", "480p30"…),
+// S.set.twQh — высота этого качества: у другого канала ступени могут называться иначе, тогда берём ближайшую не выше.
+let quals = [], setQ = "", menuOpen = false;                // что предлагает плеер; что ему уже поставлено
+const qH = (t) => parseInt((String(t).match(/(\d{3,4})p/) || [])[1], 10) || 0;
+const qNorm = (q) => (typeof q === "string" ? { g: q, name: q, h: qH(q) } : { g: String(q.group || q.name || ""), name: String(q.name || q.group || ""), h: Number(q.height) || qH(q.name) || qH(q.group) });
+const qShort = (q) => (q.g === "audio_only" ? "Звук" : q.name.replace(/\s*\(.*\)\s*$/, "") || q.g);
+function readQuals() {                                       // список приходит от плеера, когда стрим пошёл
+  let list = [];
+  if (player && player !== "loading") { try { list = player.getQualities() || []; } catch (e) { list = []; } }
+  quals = list.map(qNorm).filter((q) => q.g && q.g !== "auto");
+}
+function pickQ() {                                           // что поставить плееру: выбранное, а если такого тут нет — ближайшее не выше
+  const w = S.set.twQ || "auto";
+  if (w === "auto" || !quals.length) return "auto";
+  if (quals.some((q) => q.g === w)) return w;
+  const h = Number(S.set.twQh) || 0;
+  const low = h ? quals.filter((q) => q.h && q.h <= h).sort((a, b) => b.h - a.h)[0] : null;
+  return low ? low.g : "auto";
+}
+function applyQ() {                                          // зовётся, пока стрим идёт, и когда игрок выбрал качество
+  if (!player || player === "loading") return;
+  readQuals();
+  const want = S.set.twQ || "";
+  if (!want) return;                                         // игрок ничего не выбирал — оставляем как решил Twitch
+  if (want !== "auto" && !quals.length) return;              // список от плеера ещё не пришёл — подождём
+  const g = pickQ();
+  if (g === (setQ || "auto")) { setQ = g; return; }          // уже стоит; у нового плеера и так «авто»
+  try { player.setQuality(g); setQ = g; } catch (e) { /* плеер ещё не готов */ }
+}
+function qLabel() {
+  if (!S.set.twQ || S.set.twQ === "auto") return "Авто";
+  const q = quals.find((x) => x.g === pickQ());
+  return q ? qShort(q) : S.set.twQh ? S.set.twQh + "p" : "Авто";
+}
+function drawMenu() {
+  const m = $("twQMenu");
+  m.textContent = "";
+  const add = (g, text, sub) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.q = g; b.setAttribute("role", "menuitemradio");
+    const on = g === (S.set.twQ && S.set.twQ !== "auto" ? pickQ() : "auto");
+    b.setAttribute("aria-checked", on ? "true" : "false"); if (on) b.className = "on";
+    b.appendChild(document.createTextNode(text));
+    if (sub) { const s = document.createElement("small"); s.textContent = sub; b.appendChild(s); }
+    m.appendChild(b);
+  };
+  const head = document.createElement("b"); head.textContent = "Качество стрима"; m.appendChild(head);
+  add("auto", "Авто", "как решит Twitch");
+  for (const q of quals) add(q.g, qShort(q), q.g === "chunked" ? "исходное" : q.g === "audio_only" ? "без картинки" : "");
+  if (!quals.length) { const p = document.createElement("p"); p.textContent = playing ? "У этого стрима другого качества нет." : "Список появится, когда стрим пойдёт."; m.appendChild(p); }
+}
+function openMenu(on) {
+  menuOpen = !!on && shown;
+  if (menuOpen) { readQuals(); drawMenu(); }
+  $("twQMenu").hidden = !menuOpen;
+  $("btnStreamQ").setAttribute("aria-expanded", menuOpen ? "true" : "false");
+}
 const dead = {};
 
 const ICON_ON = '<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4zm12.5 3a4 4 0 0 0-2-3.5v7a4 4 0 0 0 2-3.5zM14.5 4.3v2.1a6 6 0 0 1 0 11.2v2.1a8 8 0 0 0 0-15.4z"/></svg>';
@@ -102,13 +159,14 @@ async function start() {
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); draw(); });
+  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
   player.addEventListener(T.PAUSE, () => { playing = false; askT = performance.now() + 1500; draw(); });
   playing = false; askT = performance.now() + 5000;
 }
 function stop() {
   if (player && player !== "loading") { try { player.pause(); } catch (e) { /* плеер уже снят */ } }
   player = null; playing = false; front(false);
+  quals = []; setQ = ""; openMenu(false);
   $("twplayer").textContent = "";
 }
 function show(on) {                                          // картинка стрима на поле: поставить или убрать
@@ -145,6 +203,9 @@ export function draw() {
     sl.style.setProperty("--v", (on ? vol() : 0) + "%");
     sl.title = "Громкость стрима: " + (on ? vol() : 0) + " %";
     $("twWho").textContent = nice(cur);
+    if (playing) applyQ();                                   // список качеств приходит не сразу: ставим выбранное, как только оно появилось
+    const qb = $("btnStreamQ"), ql = qLabel();
+    if (qb.textContent !== ql) qb.textContent = ql;
   }
 }
 
@@ -174,12 +235,28 @@ export function mount(state, h) {
     applySound(); draw();
   });
   sl.addEventListener("change", () => hooks.changed());
+  $("btnStreamQ").addEventListener("click", () => openMenu(!menuOpen));
+  $("twQMenu").addEventListener("click", (e) => {              // выбор качества: запоминается вместе с настройками
+    const b = e.target.closest("button[data-q]"); if (!b) return;
+    const q = quals.find((x) => x.g === b.dataset.q);
+    S.set.twQ = b.dataset.q; S.set.twQh = q ? q.h : 0;
+    applyQ(); hooks.changed(); openMenu(false); draw();
+    $("btnStreamQ").focus();
+  });
+  document.addEventListener("pointerdown", (e) => { if (menuOpen && !e.target.closest("#twQMenu, #btnStreamQ")) openMenu(false); }, true);
+  document.addEventListener("keydown", (e) => { if (menuOpen && e.code === "Escape") { openMenu(false); $("btnStreamQ").focus(); } });
   window.addEventListener("resize", () => { if (shown) fit(); sync(); });
   if (window.ResizeObserver) new ResizeObserver(() => { if (shown) fit(); }).observe($("field"));   // поле меняет высоту без смены окна
   check();
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }
 export const isLive = () => live;
+export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
+  const on = player && player !== "loading";
+  let q = null, list = [];
+  if (on) { try { q = player.getQuality(); list = player.getQualities() || []; } catch (e) { /* плеер не готов */ } }
+  return { channel: cur, shown, playing, want: S.set.twQ || "", sent: setQ, quality: q, qualities: list.map((x) => (typeof x === "string" ? x : x.group + "=" + x.name)) };
+}
 // Браузер не даёт плееру стартовать без действия человека: первый же удар по линии запускает показ.
 export function nudge() {
   if (!shown || !player || player === "loading") return;

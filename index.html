@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=78d4ff53">
-<link rel="stylesheet" href="css/ui.css?v=78d4ff53">
-<link rel="stylesheet" href="css/game.css?v=78d4ff53">
+<link rel="stylesheet" href="css/tokens.css?v=fa9b4b7d">
+<link rel="stylesheet" href="css/ui.css?v=fa9b4b7d">
+<link rel="stylesheet" href="css/game.css?v=fa9b4b7d">
 </head>
 <body>
 
@@ -134,7 +134,9 @@
       <div class="twctl" id="twctl" hidden>
         <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
         <input class="twvol" id="twVol" type="range" min="0" max="100" step="1" value="0" aria-label="Громкость стрима">
+        <button class="twq" id="btnStreamQ" type="button" aria-haspopup="menu" aria-expanded="false" title="Качество стрима">Авто</button>
         <span class="twwho" id="twWho"></span>
+        <div class="twqmenu" id="twQMenu" role="menu" aria-label="Качество стрима" hidden></div>
       </div>
     </div>
 
@@ -181,7 +183,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-121d40a9/main.js"></script>
+<script type="module" src="js-ed474a50/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

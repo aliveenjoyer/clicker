@@ -9,7 +9,7 @@ import { bossOf } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
 let S = null, el = {}, W = 1, H = 1, FW = 1, FH = 1, ctx = null, dpr = 1;   // W×H — холст эффектов, FW×FH — само поле
-let away = false, strike = null;                            // трупер вынесен с линии: эффекты рисуются поверх всей страницы
+let away = false, strike = null, notice = null;             // трупер вынесен с линии: эффекты рисуются в рамке вокруг него
 let docked = false, wantDock = false;                       // стрим фоном: счёт душ, комбо, цифры и Душка стоят в полосе под картинкой
 const pv = { x: -999, y: -999 };                            // указатель в координатах окна
 let parts = [], rings = [], orbs = [], flies = 0;
@@ -49,7 +49,7 @@ function resize() {
   FW = Math.max(1, r.width); FH = Math.max(1, r.height);
   el.field.style.setProperty("--fh", Math.round(FH) + "px");  // от высоты поля считается рост трупера, когда стрим на фоне
   el.dock.classList.toggle("wide", FW >= 1150); el.dock.classList.toggle("slim", FW < 800); el.dock.classList.toggle("tiny", FW < 600);   // полоса под картинкой подстраивается под ширину поля
-  W = away ? Math.max(1, window.innerWidth) : FW; H = away ? Math.max(1, window.innerHeight) : FH;
+  W = away ? Math.max(1, el.fxbox.clientWidth) : FW; H = away ? Math.max(1, el.fxbox.clientHeight) : FH;
   dpr = Math.min(2, window.devicePixelRatio || 1);
   el.fxc.width = Math.round(W * dpr); el.fxc.height = Math.round(H * dpr);
   small = FW < 560;
@@ -61,9 +61,8 @@ function onPtr(e) {
   ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top; ptr.inside = true; lastMove = performance.now();
   el.cursor.style.transform = "translate(" + (ptr.x - 6) + "px," + (ptr.y - 6) + "px)";
 }
-function org() {                                             // начало координат эффектов: угол поля, а с вынесенным трупером — угол окна
-  if (away) return { left: 0, top: 0 };
-  const f = el.field.getBoundingClientRect();
+function org() {                                             // начало координат эффектов: угол поля, а с вынесенным трупером — угол рамки вокруг него
+  const f = (away ? el.fxbox : el.field).getBoundingClientRect();
   return { left: f.left, top: f.top };
 }
 function enemyBox() {
@@ -84,16 +83,66 @@ function mood(m, ms) {                                      // Душка: idle 
 }
 
 // ---------- трупер вне линии: за ручку на табличке его можно утащить в любое место страницы и бить там ----------
-// Пока он снаружи, слои эффектов (искры, числа, хлыст, сферы) переезжают из поля в <body> и рисуются поверх всей страницы.
+// Пока он снаружи, слои эффектов (искры, числа, хлыст, сферы) переезжают из поля в рамку вокруг самого трупера (#foeFx).
+// Растягивать их на всё окно нельзя: Twitch считает чат, накрытый любым элементом — даже прозрачным и не ловящим клики, —
+// закрытым и отключает в нём ввод владельцу канала и модераторам. Поэтому рамка небольшая, а там, где она задела бы
+// чат, её поле подрезается. Если на чат поставили самого трупера, игрок получает подсказку.
+const FXM = { l: 220, t: 170, r: 130, b: 60 };              // поля рамки эффектов вокруг вынесенного трупера
+let fxm = null, fitT = 0, dragging = false, wasOver = false;
 function setAway(on) {
   if (on === away) return;
   away = on;
   parts = []; rings = [];
   for (const o of orbs) o.el.remove();
   orbs = []; el.pops.textContent = ""; el.fxl.textContent = ""; el.fxo.textContent = ""; flies = 0;
-  for (const n of [el.fxc, el.lash, el.fxl, el.fxo, el.pops]) { n.classList.toggle("fxfix", on); (on ? document.body : el.field).appendChild(n); }
-  resize();
+  for (const n of [el.fxc, el.lash, el.fxl, el.fxo, el.pops]) (on ? el.fxbox : el.field).appendChild(n);
+  fxm = null; wasOver = false;
+  if (on) fitBox(); else resize();
 }
+const chatFrames = () => [...document.querySelectorAll("#chatBox iframe")].map((n) => n.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0);
+function fitBox() {                                          // рамка эффектов: поля вокруг трупера, подрезанные там, где они накрыли бы чат Twitch
+  if (!away) return;
+  const f = el.float.getBoundingClientRect(), m = { l: FXM.l, t: FXM.t, r: FXM.r, b: FXM.b };
+  for (const c of chatFrames()) {
+    if (c.right <= f.left - m.l || c.left >= f.right + m.r || c.bottom <= f.top - m.t || c.top >= f.bottom + m.b) continue;   // чат рамку не задевает
+    if (c.left >= f.right) m.r = Math.max(0, Math.floor(c.left - f.right) - 4);
+    else if (c.right <= f.left) m.l = Math.max(0, Math.floor(f.left - c.right) - 4);
+    else if (c.top >= f.bottom) m.b = Math.max(0, Math.floor(c.top - f.bottom) - 4);
+    else if (c.bottom <= f.top) m.t = Math.max(0, Math.floor(f.top - c.bottom) - 4);
+    // иначе на чате стоит сам трупер: подрезать нечего, об этом скажет подсказка
+  }
+  if (!fxm || m.l !== fxm.l || m.t !== fxm.t || m.r !== fxm.r || m.b !== fxm.b) {
+    if (fxm) shiftFx(m.l - fxm.l, m.t - fxm.t);              // угол рамки сдвинулся — всё уже нарисованное остаётся на своём месте экрана
+    fxm = m;
+    const st = el.fxbox.style;
+    st.left = -m.l + "px"; st.top = -m.t + "px"; st.right = -m.r + "px"; st.bottom = -m.b + "px";
+    resize();
+  } else if (el.fxbox.clientWidth !== W || el.fxbox.clientHeight !== H) resize();   // трупер сменился на босса и обратно — рамка другого размера
+}
+function shiftFx(dx, dy) {
+  if (!dx && !dy) return;
+  for (const q of parts) { q.x += dx; q.y += dy; }
+  for (const r of rings) { r.x += dx; r.y += dy; }
+  for (const o of orbs) { o.x += dx; o.y += dy; }
+  for (const box of [el.pops, el.fxl, el.fxo]) {
+    for (const n of box.children) { n.style.left = (parseFloat(n.style.left) || 0) + dx + "px"; n.style.top = (parseFloat(n.style.top) || 0) + dy + "px"; }
+  }
+}
+function overChat() {                                        // стоит ли вынесенный трупер на чате Twitch; запас — на его тени: тень тоже считается закрытием
+  if (!away) return false;
+  const f = el.float.getBoundingClientRect();
+  return chatFrames().some((c) => c.left < f.right + 30 && c.right > f.left - 30 && c.top < f.bottom + 30 && c.bottom > f.top - 30);
+}
+function stepAway(now) {                                     // четыре раза в секунду: страницу могли прокрутить, вкладку чата — открыть
+  if (!away || now < fitT) return;
+  fitT = now + 250;
+  fitBox();
+  if (dragging) return;
+  const over = overChat();
+  if (over && !wasOver && notice) notice("Трупер закрывает чат Twitch. Пока чат чем-то закрыт, Twitch не даёт писать в него владельцу канала и модераторам — отодвинь трупера");
+  wasOver = over;
+}
+export function onNotice(fn) { notice = fn; }                // ui.js: чем показать подсказку
 
 // ---------- стрим фоном: всё, что закрывало картинку постоянно, переезжает в полосу под ней ----------
 // Счёт душ, комбо, цифры урона и Душка в обычном виде стоят на поле. Когда фоном идёт стрим, на картинке остаётся только
@@ -113,14 +162,15 @@ function bankSpot() {                                        // куда лет�
   const b = el.bankBox.getBoundingClientRect(), f = org();
   if (!docked) return { x: b.left - f.left + 34, y: b.top - f.top + 40, px: b.right - f.left + 10, py: b.top - f.top + 30 };
   const x = b.left - f.left + 18, y = b.top - f.top + b.height / 2;
-  // полоса лежит под полем: с вынесенным трупером эффекты видны и там, а на линии души уходят за нижний край картинки
-  return away ? { x, y, px: b.right - f.left + 10, py: b.top - f.top - 6 } : { x, y: Math.min(y, H + 34), px: Math.min(Math.max(12, b.left - f.left), W - 170), py: H - 46 };
+  // полоса лежит под полем: души уходят за нижний край картинки, а у вынесенного трупера — за край его рамки
+  return { x, y: away ? y : Math.min(y, H + 34), px: Math.min(Math.max(12, b.left - f.left), W - 170), py: H - 46 };
 }
 function placeFoe(x, y) {                                    // поставить вынесенного трупера: левый верхний угол, в пределах окна
   const r = el.float.getBoundingClientRect();
   x = Math.max(6, Math.min(window.innerWidth - r.width - 6, x));
   y = Math.max(6, Math.min(window.innerHeight - r.height - 6, y));
   el.float.style.left = Math.round(x) + "px"; el.float.style.top = Math.round(y) + "px";
+  fitBox();
 }
 function detach(x, y) {
   if (!el.float) {
@@ -128,6 +178,8 @@ function detach(x, y) {
     document.body.appendChild(el.float);
     el.float.addEventListener("pointerdown", (e) => { if (strike) strike(e); });
     el.float.addEventListener("contextmenu", (e) => e.preventDefault());
+    el.fxbox = document.createElement("div"); el.fxbox.className = "foe-fx"; el.fxbox.id = "foeFx";
+    el.float.appendChild(el.fxbox);
   }
   el.float.hidden = false;
   el.float.appendChild(el.plate); el.float.appendChild(el.enemy); el.float.appendChild(el.bossRing);
@@ -156,30 +208,37 @@ function syncFoe() {                                         // при запу�
 }
 function bindFoe() {
   let drag = null;
+  const grab = () => { try { el.foeGrip.setPointerCapture(drag.id); } catch (err) { /* указатель уже отпущен */ } };
   const move = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
+    if (e.pointerType === "mouse" && e.buttons === 0) { end(); return; }   // кнопку отпустили там, где страница этого не увидела
     if (!drag.moved) {
       if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
       drag.moved = true;
-      if (!away) detach(e.clientX - drag.dx, e.clientY - drag.dy);
+      if (!away) { detach(e.clientX - drag.dx, e.clientY - drag.dy); grab(); }   // табличка переехала в другой блок — захват указателя берём заново
       document.body.classList.add("foedrag");
     }
     placeFoe(e.clientX - drag.dx, e.clientY - drag.dy);
   };
   const end = (e) => {
-    if (!drag || (e && e.pointerId !== drag.id)) return;
+    if (!drag || (e && e.pointerId !== undefined && e.pointerId !== drag.id)) return;
     const moved = drag.moved;
-    drag = null;
-    window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
-    document.body.classList.remove("foedrag");
-    if (moved) savePos();
+    try { el.foeGrip.releasePointerCapture(drag.id); } catch (err) { /* захвата уже нет */ }
+    drag = null; dragging = false;
+    window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end); window.removeEventListener("blur", end);
+    document.body.classList.remove("foedrag", "foegrab");
+    if (moved) { savePos(); fitT = 0; }
   };
   el.foeGrip.addEventListener("pointerdown", (e) => {
     if (e.button) return;
     e.preventDefault(); e.stopPropagation();
+    if (drag) end();
     const r = (away ? el.float : el.plate).getBoundingClientRect();
     drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+    dragging = true;
+    grab();
+    document.body.classList.add("foegrab");                  // пока тащим, окна Twitch (чат, плеер) мышь не перехватывают
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end); window.addEventListener("blur", end);
   });
   el.foeHome.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
   el.foeHome.addEventListener("click", (e) => { e.stopPropagation(); attach(); savePos(); });
@@ -223,7 +282,8 @@ export function banner(title, sub, cls, dur) {
   restart(el.banner, "show");
 }
 function lash(x, y) {
-  const ox = Math.max(0, x - FW * 0.34), oy = Math.min(H, y + FH * 0.34), cx = x - FW * 0.2, cy = y - FH * 0.42;
+  const rx = away ? Math.min(FW * 0.34, FXM.l - 30) : FW * 0.34, ry = away ? Math.min(FH * 0.34, 130) : FH * 0.34;   // у вынесенного трупера хлыст короче: он обязан уместиться в рамку
+  const ox = Math.max(0, x - rx), oy = Math.min(H, y + ry), cx = x - rx * (0.2 / 0.34), cy = y - ry * (0.42 / 0.34);
   const d = "M" + (ox / W * 100).toFixed(1) + " " + (oy / H * 100).toFixed(1) + " Q" + (cx / W * 100).toFixed(1) + " " + (cy / H * 100).toFixed(1) + " " + (x / W * 100).toFixed(1) + " " + (y / H * 100).toFixed(1);
   el.lashGlow.setAttribute("d", d); el.lashLine.setAttribute("d", d);
   restart(el.lash, "go");
@@ -277,11 +337,12 @@ function addOrb(x, y, loot) {
   el.fxo.appendChild(n); orbs.push(o);
 }
 function stepOrbs(dt) {
+  const f = away && orbs.length ? org() : null;
   for (let i = orbs.length - 1; i >= 0; i--) {
     const o = orbs[i];
-    o.life -= dt; o.y -= 18 * dt; o.el.style.top = o.y + "px";
+    o.life -= dt; o.y -= 18 * dt; o.el.style.left = o.x + "px"; o.el.style.top = o.y + "px";
     if (o.pet !== undefined) o.pet -= dt;
-    const near = (away ? Math.hypot(pv.x - o.x, pv.y - o.y) < 56 : ptr.inside && Math.hypot(ptr.x - o.x, ptr.y - o.y) < 56) || o.pet <= 0;
+    const near = (f ? Math.hypot(pv.x - f.left - o.x, pv.y - f.top - o.y) < 56 : ptr.inside && Math.hypot(ptr.x - o.x, ptr.y - o.y) < 56) || o.pet <= 0;
     if (near) {
       C.orbBonus(S, o.loot);
       pop("+" + txt(o.loot + L10(CFG.orbBonus)), o.x, o.y - 26, "soul");
@@ -406,8 +467,8 @@ export function onEvent(e) {
       break;
     }
     case "gift": {
-      const spot = bankSpot();
-      pop("+" + txt(e.loot), spot.px, spot.py, "soul big"); bumpBank(); sfx.wisp();
+      const spot = bankSpot(), b = away ? enemyBox() : null;
+      pop("+" + txt(e.loot), b ? b.x - 40 : spot.px, b ? Math.max(8, b.y - b.h * 0.5) : spot.py, "soul big"); bumpBank(); sfx.wisp();
       break;
     }
     case "skill": {
@@ -532,6 +593,7 @@ export function frame(dt) {
 
   stepOrbs(dt);
   stepSay(now);
+  stepAway(now);
 
   // осколки и кольца
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

@@ -55,6 +55,7 @@ export function mount(state, hooks) {
   bindHold($("btnRebirth"));
   TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); }, stage: (on) => FX.setDock(on) });
   TOP.mount(S, { toast });
+  FX.onNotice((text) => toast(text, 7000));
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
   $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();
   drawSound(); drawBuySeg(); buildSkills(); drawTabs();
@@ -437,9 +438,11 @@ function openModal(html, onClick) {                         // onClick — ед�
   clearTimeout(wipeT); wipeT = 0;
   const m = $("modal"); m.innerHTML = html; m.onclick = onClick || null; m.hidden = false; m.scrollTop = 0; $("veil").hidden = false; return m;
 }
-export function toast(text) {
-  const t = $("toast"); t.textContent = text; t.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600);
+export function toast(text, ms) {                           // всплывает над серединой линии: поверх чата Twitch ничего показывать нельзя
+  const t = $("toast"), s = document.querySelector(".stage").getBoundingClientRect();
+  t.style.left = Math.round(s.left + s.width / 2) + "px"; t.style.maxWidth = Math.max(220, Math.round(s.width - 24)) + "px";
+  t.textContent = text; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms || 2600);
 }
 export function showOffline(o) {
   const h = Math.floor(o.counted / 3600), m = Math.floor(o.counted % 3600 / 60);

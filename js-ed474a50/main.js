@@ -45,7 +45,7 @@ const hooks = {
     FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
     document.getElementById("hint").hidden = false;
   },
-  defaults() { Object.assign(S.set, { sound: true, calm: false, sci: false, autoBoss: true, stream: true }); UI.applySettings(); TW.sync(); store(); },
+  defaults() { Object.assign(S.set, { sound: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
 };
 
 function drain() {
@@ -124,7 +124,7 @@ async function boot() {
 
   if (LOCAL && Q.has("dev")) {                                       // ?dev=1 — ручки для проверки: __dev.give(30), __dev.wave(49)
     window.__dev = {
-      S: () => S, C, UI,
+      S: () => S, C, UI, TW,
       give(x) { S.souls = x; S.life = Math.max(S.life, x); },
       wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); FX.setState(S); },
       wisp() { S.wispIn = 0; },
