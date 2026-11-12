@@ -78,7 +78,7 @@ export const WISP = [
   { id: "storm", p: 0.12, dur: 10, title: "Буря", text: "Удар ×500 на 10 секунд" },
 ];
 
-// Реликвии за пепел: цена уровня L — grow^L, для «Ячейки» — своя.
+// Реликвии за пепел: цена уровня L — grow^L, округлённая вниз до целого пепла; для «Ячейки» — своя.
 export const RELICS = [
   { id: "blade", name: "Клинок", text: "Урон ×1,2", grow: 1.3, icon: "relic-blade" },
   { id: "greed", name: "Жадность", text: "Души ×1,15", grow: 1.25, icon: "relic-greed" },

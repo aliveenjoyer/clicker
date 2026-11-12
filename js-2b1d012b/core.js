@@ -49,6 +49,7 @@ export function load(text) {
     else S[k] = o[k];
   }
   for (const k of LG_KEYS) if (S[k] === null || S[k] === undefined) S[k] = NEG;
+  S.ash = ashInt(S.ash); S.ashAll = ashInt(S.ashAll);       // пепел — целый: дробные остатки прежних версий срезаются
   if (S.lv.length < N + 1) S.lv = S.lv.concat(new Array(N + 1 - S.lv.length).fill(0));
   S.ev = [];
   derive(S);
@@ -540,16 +541,23 @@ export function pickItem(S, id) {
 }
 
 // ---------- возрождение ----------
+// Пепел — целое число, пока оно умещается в обычную запись: и остаток, и цены реликвий, и награда за возрождение.
+// Иначе на экране «1 пепел» и цена «1», а на деле 1,45 и 1,69 — и покупка не проходит.
+function ashInt(x) {
+  if (x === NEG || x >= 15) return x;
+  const v = Math.floor(Math.pow(10, x) + 1e-6);
+  return v <= 0 ? NEG : L10(v);
+}
 export function ashGain(S) {                                // lg пепла, который даст возрождение сейчас
   const z = S.zrec;
   let base = z > CFG.ashFrom ? Math.pow((z - CFG.ashFrom) / CFG.ashDiv, CFG.ashPow) : 0;
   base += S.lvRun / CFG.ashLv;
-  return base < 1 ? NEG : L10(Math.floor(base)) + S.rel.ashplus * L10(1.05);
+  return base < 1 ? NEG : ashInt(L10(Math.floor(base)) + S.rel.ashplus * L10(1.05));
 }
 export function rebirth(S) {
   const g = ashGain(S);
   if (g === NEG || !S.un.rebirth) return false;
-  S.ash = lsum(S.ash, g); S.ashAll = lsum(S.ashAll, g); S.rb += 1;
+  S.ash = ashInt(lsum(S.ash, g)); S.ashAll = ashInt(lsum(S.ashAll, g)); S.rb += 1;
   S.lv.fill(0); S.lvRun = 0; S.souls = NEG; S.run = NEG;
   S.z = 1 + 10 * S.rel.start; if (isBoss(S.z)) S.z += 1;
   S.zrec = S.z; S.kills = 0; S.hp = 1; S.mode = "push"; S.wall = false;
@@ -563,13 +571,13 @@ export function rebirth(S) {
   checkUnlocks(S);
   return true;
 }
-export const relicCost = (S, r) => (r.base ? L10(r.base) : 0) + S.rel[r.id] * L10(r.grow);
+export const relicCost = (S, r) => ashInt((r.base ? L10(r.base) : 0) + S.rel[r.id] * L10(r.grow));   // цена уровня — целая, вниз
 export function buyRelic(S, id) {
   const r = RELICS.find((x) => x.id === id);
   if (!r || (r.cap && S.rel[id] >= r.cap)) return false;
   const c = relicCost(S, r);
   if (S.ash === NEG || c > S.ash + 1e-9) return false;
-  S.ash = lsub(S.ash, c); if (S.ash < -6) S.ash = NEG;
+  S.ash = ashInt(lsub(S.ash, c));
   S.rel[id] += 1;
   derive(S);
   ev(S, { t: "relic", id });
