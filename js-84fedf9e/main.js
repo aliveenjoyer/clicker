@@ -44,7 +44,7 @@ function backup(why, text) {                                // why: reset | impo
   return true;
 }
 function swapState(N) {                                     // заменить игру целиком: стирание, возврат, загрузка
-  S = N; S.ev = [];
+  S = N; S.ev = []; S.combo = 0; S.comboIdle = 0;        // серия ударов из старого сохранения уже остыла
   FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
   document.getElementById("hint").hidden = S.stats.clicks > 0;
 }
@@ -62,7 +62,23 @@ async function rescue() {                                   // сохранен�
   } catch (e) { /* файла нет — и не надо */ }
   return false;
 }
+function linkSave() {                                       // сохранение в ссылке: …/#save=<текст сохранения в base64url>
+  const m = /^#save=([A-Za-z0-9_-]+)$/.exec(location.hash);
+  if (!m) return null;
+  try {
+    history.replaceState(null, "", location.pathname + location.search);   // второй раз по этой ссылке не предлагаем
+    const bin = atob(m[1].replace(/-/g, "+").replace(/_/g, "/"));
+    const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    return summary(text) ? text : null;
+  } catch (e) { return null; }
+}
 async function welcome() {                                  // первый запуск: три шага обучения; если нашлась прежняя игра — сначала она
+  const fromLink = linkSave();
+  if (fromLink && backup("rescue", fromLink)) {
+    try { localStorage.setItem(KEY + ".intro", "1"); } catch (e) { /* без хранилища обучение покажется ещё раз */ }
+    UI.showRescue(hooks.backups()[0], true);
+    return;
+  }
   if (await rescue()) return;
   try {
     if (localStorage.getItem(KEY + ".intro") || S.stats.clicks >= 5 || S.rb) return;

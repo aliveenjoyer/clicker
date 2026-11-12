@@ -509,9 +509,10 @@ function openRestore(i) {
     else if (t.dataset.go !== undefined && api.restore(i)) { closeModal(); toast("Игра возвращена: волна " + group(S.best)); }
   });
 }
-export function showRescue(b) {                             // прежняя игра нашлась в файлах браузера — предлагаем вернуть
-  openModal("<h2>Прежняя игра нашлась</h2><p>Стёртую игру удалось достать: " + bakLine(b) + ".</p><p>Вернуть её? Нынешняя игра попадёт в список прежних игр в настройках.</p>" +
-    '<div class="acts"><button class="btn ghost" data-x>Остаться в новой</button><button class="btn gold big" data-go>Вернуть мою игру</button></div>',
+export function showRescue(b, fromLink) {                   // прежняя игра нашлась в файлах браузера или пришла ссылкой — предлагаем вернуть
+  openModal((fromLink ? "<h2>В ссылке — сохранённая игра</h2><p>" + bakLine(b) + ".</p><p>Загрузить её сюда? Нынешняя игра попадёт в список прежних игр в настройках."
+    : "<h2>Прежняя игра нашлась</h2><p>Стёртую игру удалось достать: " + bakLine(b) + ".</p><p>Вернуть её? Нынешняя игра попадёт в список прежних игр в настройках.") + "</p>" +
+    '<div class="acts"><button class="btn ghost" data-x>' + (fromLink ? "Не загружать" : "Остаться в новой") + '</button><button class="btn gold big" data-go>' + (fromLink ? "Загрузить игру" : "Вернуть мою игру") + "</button></div>",
   (e) => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.dataset.x !== undefined) { closeModal(); toast("Она ждёт в настройках, в списке прежних игр"); }
