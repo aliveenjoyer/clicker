@@ -293,8 +293,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .draft { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(8,8,26,.66); backdrop-filter: blur(2px); animation: darkin 220ms; }
 .draft h3 { font: 900 24px/1 var(--display); color: #fff; text-shadow: 0 4px 0 var(--outline); }
 .draft .more { font: 800 12px/1 var(--ui); color: var(--text-dim); }
+.draft .dhint { min-height: 16px; margin: -6px 0 -2px; font: 800 12.5px/16px var(--ui); color: var(--farm); text-shadow: 0 2px 0 var(--outline); }
+.draft.lock .dcard { pointer-events: none; filter: saturate(.45) brightness(.7); }
 .dcards { display: flex; gap: 14px; }
-.dcard { width: 172px; padding: 14px 12px 12px; border-radius: 22px; text-align: center; color: var(--text); background: linear-gradient(180deg, #2f3370, #1c1f43); box-shadow: 0 6px 0 #0f1130, 0 14px 30px rgba(0,0,0,.5), inset 0 0 0 3px var(--bc); animation: dcin 320ms var(--ease-pop) both; transition: transform 140ms var(--ease-pop), box-shadow 140ms; }
+.dcard { width: 172px; padding: 14px 12px 12px; border-radius: 22px; text-align: center; color: var(--text); background: linear-gradient(180deg, #2f3370, #1c1f43); box-shadow: 0 6px 0 #0f1130, 0 14px 30px rgba(0,0,0,.5), inset 0 0 0 3px var(--bc); animation: dcin 320ms var(--ease-pop) both; transition: transform 140ms var(--ease-pop), box-shadow 140ms, filter 200ms; }
 .dcard:hover { transform: translateY(-10px) scale(1.05); box-shadow: 0 6px 0 #0f1130, 0 0 34px var(--bc), inset 0 0 0 3px var(--bc); }
 .dcard:active { transform: translateY(-2px) scale(.98); }
 .dcard img { width: 88px; height: 88px; object-fit: contain; margin: 0 auto 8px; filter: drop-shadow(0 6px 8px rgba(5,6,20,.6)); }

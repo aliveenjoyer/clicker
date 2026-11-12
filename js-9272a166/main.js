@@ -122,7 +122,7 @@ async function boot() {
 
   if (LOCAL && Q.has("dev")) {                                       // ?dev=1 — ручки для проверки: __dev.give(30), __dev.wave(49)
     window.__dev = {
-      S: () => S, C,
+      S: () => S, C, UI,
       give(x) { S.souls = x; S.life = Math.max(S.life, x); },
       wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); FX.setState(S); },
       wisp() { S.wispIn = 0; },

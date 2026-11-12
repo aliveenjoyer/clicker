@@ -19,6 +19,11 @@ let S = null, api = null;
 let buyMode = 1, tab = "squad", rows = [], shownLg = NEG, lastSfx = null, lastK = -1, bankText = null, bankSfx = null;
 let slowT = 0, pipsKey = "", skillEls = {}, relicEls = {}, holdT = 0, holding = false, bulkShown = null;
 let draftKey = "", itemsKey = "", rosterKey = "", roadKey = "", collSel = null, relicsBuilt = false, chatBuilt = false;
+// Выбор предмета появляется прямо под курсором, а игрок в этот момент часто кликает без остановки. Поэтому карточки
+// включаются не сразу: секунду после появления и ещё треть секунды после последнего клика они не нажимаются.
+const DRAFT_LOCK = 1000, DRAFT_QUIET = 350;
+let draftAt = 0, draftClickAt = 0, draftLocked = null;
+const draftReady = () => { const t = performance.now(); return t - draftAt >= DRAFT_LOCK && t - draftClickAt >= DRAFT_QUIET; };
 
 export function mount(state, hooks) {
   S = state; api = hooks;
@@ -37,7 +42,12 @@ export function mount(state, hooks) {
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
   $("skillbar").addEventListener("click", (e) => { const s = e.target.closest(".skill"); if (s && !s.classList.contains("lock")) { if (!C.useSkill(S, s.dataset.id)) sfx.deny(); slowT = 0; } });
   $("relicList").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.classList.contains("off")) { if (C.buyRelic(S, b.dataset.id)) { sfx.buy(); slowT = 0; } } });
-  $("draft").addEventListener("click", (e) => { const c = e.target.closest(".dcard"); if (c && C.pickItem(S, c.dataset.id)) { slowT = 0; draftKey = "?"; } });
+  $("draft").addEventListener("pointerdown", () => { if (!draftReady()) draftClickAt = performance.now(); });   // клик по ещё не включённым карточкам отодвигает включение
+  $("draft").addEventListener("click", (e) => {
+    if (!draftReady()) return;                              // случайный клик на бегу ничего не берёт
+    const c = e.target.closest(".dcard");
+    if (c && C.pickItem(S, c.dataset.id)) { slowT = 0; draftKey = "?"; }
+  });
   $("collGrid").addEventListener("click", (e) => { const t = e.target.closest(".ctile"); if (t) { collSel = t.dataset.id; itemsKey = ""; drawItems(); } });
   $("btnSound").addEventListener("click", () => { S.set.sound = !S.set.sound; setSound(S.set.sound); drawSound(); });
   $("btnMenu").addEventListener("click", openSettings);
@@ -169,7 +179,8 @@ function drawDraft() {
   draftKey = key;
   const box = $("draft");
   if (!S.draft) { box.hidden = true; box.textContent = ""; return; }
-  box.innerHTML = "<h3>Выбери предмет</h3><div class=\"dcards\">" + S.draft.map((id, i) => {
+  draftAt = performance.now(); draftClickAt = 0; draftLocked = null;   // новые карточки — новая пауза
+  box.innerHTML = "<h3>Выбери предмет</h3><p class=\"dhint\" id=\"draftHint\"></p><div class=\"dcards\">" + S.draft.map((id, i) => {
     const x = ITEMS.find((q) => q.id === id), r = S.items[id] || 0, b = BRANCH[x.branch], ra = RARITY[x.rar];
     return '<button class="dcard rar-' + x.rar + '" data-id="' + id + '" style="--bc:' + (x.rar === "c" || x.rar === "r" ? b.color : ra.color) + ";animation-delay:" + i * 70 + 'ms"><img alt="" src="' + art(id) +
       '"><h4>' + x.name + '</h4><span class="br" style="background:' + b.color + '">' + b.name + "</span><p>" + x.text + '</p><span class="rk">' +
@@ -385,9 +396,20 @@ function drawSlow() {
   rb.querySelector(".lbl").textContent = !S.un.rebirth ? "Возрождение — с 50-й волны" : g === NEG ? "Возрождение: пока рано" : "Возрождение: +" + txt(g) + " пепла (держи)";
 }
 
+function stepDraft() {                                       // карточки предметов: включаются, когда пауза выдержана
+  if (!S.draft) return;
+  const lock = !draftReady();
+  if (lock !== draftLocked) { draftLocked = lock; $("draft").classList.toggle("lock", lock); }
+  const h = $("draftHint");
+  if (!h) return;
+  const t = !lock ? "" : performance.now() - draftAt < DRAFT_LOCK ? "Секунду: посмотри, что выпало" : "Останови клики — и выбирай";
+  if (h.textContent !== t) h.textContent = t;
+}
+
 export function frame(dt) {
   drawBank(dt);
   stepHold(dt);
+  stepDraft();
   slowT -= dt;
   if (slowT <= 0) { slowT = 0.15; drawSlow(); }
 }
