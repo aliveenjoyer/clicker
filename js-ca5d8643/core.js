@@ -441,10 +441,10 @@ export function orbBonus(S, loot) { gain(S, loot + L10(CFG.orbBonus)); }   // п
 
 // ---------- обменник: души кликера → души RPG стрима ----------
 // Здесь только цена в душах кликера. Сколько душ RPG можно взять за день, решает сервер (js/swap.js).
-export const swapPriceLg = (n) => CFG.swapBase * Math.pow(10, (n - 1) / CFG.swapStep);   // lg цены n-й души RPG за день
+export const swapPriceLg = (n) => CFG.swapBase + Math.pow(n / CFG.swapK, 1 / CFG.swapP);   // lg цены n-й души RPG за день
 export function swapMax(S, took, left) {                    // на сколько душ RPG хватает банка сейчас, не больше left
   let c = NEG, m = 0;
-  while (m < left && m < 250) {
+  while (m < left && m < 1000) {
     c = lsum(c, swapPriceLg(took + m + 1));
     if (S.souls === NEG || c > S.souls) break;
     m++;
