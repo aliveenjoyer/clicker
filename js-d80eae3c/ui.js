@@ -7,11 +7,12 @@ import { sfx, setSound } from "./audio.js";
 import { art, heroArt, applyArt } from "./art.js";
 import * as FX from "./fx.js";
 import * as TW from "./stream.js";
+import * as TOP from "./top.js";
 
 const $ = (id) => document.getElementById(id);
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const RANK = ["", "I", "II", "III", "IV"];
-const TABS = [["squad", "Отряд"], ["items", "Предметы"], ["relics", "Реликвии"], ["road", "Путь"], ["chat", "Чат"]];
+const TABS = [["squad", "Отряд"], ["items", "Предметы"], ["relics", "Реликвии"], ["road", "Путь"], ["top", "Топ"], ["chat", "Чат"]];
 let S = null, api = null;
 let buyMode = 1, tab = "squad", rows = [], shownLg = NEG, lastSfx = null, lastK = -1, bankText = null, bankSfx = null;
 let slowT = 0, pipsKey = "", skillEls = {}, relicEls = {}, holdT = 0, holding = false, bulkShown = null;
@@ -41,11 +42,12 @@ export function mount(state, hooks) {
   $("veil").addEventListener("click", closeModal);
   bindHold($("btnRebirth"));
   TW.mount(S, { changed: () => { slowT = 0; api.settings(); } });
+  TOP.mount(S, { toast });
   drawSound(); drawBuySeg(); buildSkills(); drawTabs();
 }
 export function setState(state) {
   S = state; rows = []; $("mercList").textContent = ""; shownLg = NEG; lastK = -1; slowT = 0;
-  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; TW.setState(S); drawTabs();
+  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; TW.setState(S); TOP.setState(S); drawTabs();
 }
 
 function drawSound() {
@@ -68,6 +70,7 @@ function drawTabs() {
   if (tab === "items") { itemsKey = ""; drawItems(); }
   if (tab === "road") { roadKey = ""; drawRoad(); }
   if (tab === "chat") buildChat();
+  if (tab === "top") TOP.open();
 }
 
 // ---------- удержание кнопки возрождения ----------
@@ -366,6 +369,7 @@ function drawSlow() {
   drawRelics(); drawItems(); drawRoad(); drawDraft();
   drawSkills();
   TW.draw();
+  TOP.tick(tab === "top");
   $("chipAsh").hidden = S.ashAll === NEG;
   if (S.ashAll !== NEG) $("ashNum").textContent = txt(S.ash);
   const nx = C.nextUp(S);
@@ -414,6 +418,25 @@ export function showOffline(o) {
     '<div class="acts"><button class="btn gold big" data-x>Забрать</button></div>');
   m2.querySelector("[data-x]").addEventListener("click", closeModal);
 }
+// ---------- микрообучение: три шага при первом запуске ----------
+const INTRO = [
+  ["cur-farm", "Бей труперов — собирай души", "Кликай по врагу или держи кнопку мыши. Души — главная валюта: на них нанимают отряд."],
+  ["whip", "Собери отряд", "Справа — Хлыст и наёмники. Хлыст усиливает твой удар, наёмники бьют сами, даже когда игра закрыта."],
+  ["cur-ash", "Упёрся в босса — возрождайся", "Возрождение начинает забег с первой волны и даёт пепел. Пепел навсегда усиливает урон, а ещё за него покупают реликвии."],
+];
+export function showIntro(i) {
+  i = i || 0;
+  const [icon, title, text] = INTRO[i], last = i === INTRO.length - 1;
+  openModal('<div class="intro"><img alt="" src="' + art(icon) + '"><div class="dots">' + INTRO.map((_, k) => '<i class="' + (k === i ? "on" : "") + '"></i>').join("") +
+    "</div><h2>" + title + "</h2><p>" + text + "</p></div>" +
+    '<div class="acts split">' + (last ? "<span></span>" : '<button class="btn ghost sm" data-skip>Пропустить</button>') +
+    '<button class="btn gold big" data-next>' + (last ? "Играть" : "Дальше") + "</button></div>",
+  (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.skip !== undefined || last) closeModal(); else showIntro(i + 1);
+  });
+}
+
 // ---------- настройки, сохранение, стирание ----------
 // У окна всегда один обработчик кликов: его ставит openModal. Раньше обработчики копились с каждым открытием настроек.
 const p2 = (n) => String(n).padStart(2, "0");
@@ -428,6 +451,7 @@ function openSettings() {
   const baks = api.backups();
   openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
     sw("sci", "Научная запись чисел") + sw("autoBoss", "Сам идти на босса, когда наёмники справятся") +
+    '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
     '<div class="eyebrow sect">Сохранение</div>' +
     '<div class="row"><span>Сыграно</span><b>' + mins(S.stats.played) + " · ударов " + group(S.stats.clicks) + "</b></div>" +
@@ -441,6 +465,7 @@ function openSettings() {
     if (d.k) { S.set[d.k] = !S.set[d.k]; b.classList.toggle("on", S.set[d.k]); api.settings(); drawSound(); TW.sync(); }
     else if (d.x !== undefined) closeModal();
     else if (d.defaults !== undefined) { api.defaults(); drawSound(); openSettings(); toast("Настройки сброшены. Прогресс не тронут"); }
+    else if (d.intro !== undefined) showIntro(0);
     else if (d.copy !== undefined) copySave();
     else if (d.load !== undefined) openLoad();
     else if (d.restore !== undefined) openRestore(Number(d.restore));

@@ -49,17 +49,26 @@ function swapState(N) {                                     // заменить 
   document.getElementById("hint").hidden = S.stats.clicks > 0;
 }
 async function rescue() {                                   // сохранение, поднятое из файлов браузера, лежит рядом с игрой; только на своём компьютере
-  if (!LOCAL) return;
+  if (!LOCAL) return false;
   try {
     const r = await fetch("../saves/rescue.json", { cache: "no-store" });
-    if (!r.ok) return;
+    if (!r.ok) return false;
     const text = (await r.text()).trim(), sm = summary(text);
-    if (!sm) return;
+    if (!sm) return false;
     const id = String(sm.at || text.length);
-    if (localStorage.getItem(KEY + ".rescue") === id) return;   // уже предлагали
+    if (localStorage.getItem(KEY + ".rescue") === id) return false;   // уже предлагали
     localStorage.setItem(KEY + ".rescue", id);
-    if (backup("rescue", text)) UI.showRescue(hooks.backups()[0]);
+    if (backup("rescue", text)) { UI.showRescue(hooks.backups()[0]); return true; }
   } catch (e) { /* файла нет — и не надо */ }
+  return false;
+}
+async function welcome() {                                  // первый запуск: три шага обучения; если нашлась прежняя игра — сначала она
+  if (await rescue()) return;
+  try {
+    if (localStorage.getItem(KEY + ".intro") || S.stats.clicks >= 5 || S.rb) return;
+    localStorage.setItem(KEY + ".intro", "1");
+  } catch (e) { return; }
+  UI.showIntro(0);
 }
 
 const hooks = {
@@ -176,6 +185,6 @@ async function boot() {
   last = performance.now();
   requestAnimationFrame(loop);
   backup("auto");
-  rescue();
+  welcome();
 }
 boot();
