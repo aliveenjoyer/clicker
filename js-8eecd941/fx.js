@@ -49,6 +49,7 @@ function resize() {
   FW = Math.max(1, r.width); FH = Math.max(1, r.height);
   el.field.style.setProperty("--fh", Math.round(FH) + "px");  // от высоты поля считается рост трупера, когда стрим на фоне
   el.dock.classList.toggle("wide", FW >= 1150); el.dock.classList.toggle("slim", FW < 800); el.dock.classList.toggle("tiny", FW < 600);   // полоса под картинкой подстраивается под ширину поля
+  el.field.parentNode.classList.toggle("mid", FW < 900); el.field.parentNode.classList.toggle("narrow", FW < 760);   // и блоки вокруг: полоса волны, умения
   W = away ? Math.max(1, el.fxbox.clientWidth) : FW; H = away ? Math.max(1, el.fxbox.clientHeight) : FH;
   dpr = Math.min(2, window.devicePixelRatio || 1);
   el.fxc.width = Math.round(W * dpr); el.fxc.height = Math.round(H * dpr);

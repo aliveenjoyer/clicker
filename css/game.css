@@ -604,7 +604,7 @@ body.foegrab iframe { pointer-events: none !important; }     /* пока тру�
    урона, Душка, звук стрима), стоит в полосе под картинкой: туда их переносит js/fx.js (setDock). На картинке остаётся
    только бой: трупер на своей табличке в правом нижнем углу и то, что нужно бить. Страница при этом раздвигается так,
    чтобы картинка была как можно больше, но помещалась на экран вместе с полосой и умениями. */
-body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh - 384px, 1080px) * 16 / 9 + 504px)); }
+body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh - 388px, 1080px) * 16 / 9 + 504px)); }
 .field.tw { height: auto; aspect-ratio: 16 / 9; min-height: 300px; max-height: calc(100vh - 110px); background-image: none !important; background-color: #000; border-radius: var(--r-5) var(--r-5) 0 0;
   --ew: clamp(150px, calc(var(--fh, 500px) * .34), 270px); --pw: calc(var(--ew) + 44px); }
 .field.tw::after, .field.tw.dark::before { display: none; }
@@ -698,3 +698,37 @@ body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh 
 /* вынесенный трупер появляется на месте, без выезда справа: выезд на 120 пикселей мог на миг накрыть чат рядом */
 .foe-float .enemy.enter { animation-name: enterfloat; }
 @keyframes enterfloat { 0% { transform: scale(.7); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+/* ---------- высота страницы не меняется во время игры ----------
+   В раскладке со стримом страница занимает окно впритык. Стоит любому блоку подрасти — справа включается полоса
+   прокрутки, окно становится уже на её ширину, и вся страница дёргается влево, а потом обратно. Поэтому у блоков под
+   линией и у полосы под картинкой высота задана жёстко, а место под полосу прокрутки держится всегда.
+   Проверка: node tools/layout_test.mjs. */
+html { scrollbar-gutter: stable; }
+.nextline { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 37px; min-height: 0; }
+.buffs { max-height: 100%; overflow: hidden; }
+@media (min-width: 721px) {
+  .lower > .plate { height: 126px; min-height: 0; box-sizing: border-box; overflow: hidden; }
+}
+.dock { height: 66px; box-sizing: border-box; }
+.dock .bank { height: 46px; align-content: center; }
+.dock .bank .num { height: 28px; line-height: 28px; }
+.dock .combo { height: 30px; }
+.dock .combo b { line-height: 30px; }
+.dock.slim { height: 94px; align-content: center; }
+.dock.tiny { height: auto; min-height: 66px; }
+@media (max-height: 760px) { .dock.slim:not(.tiny) { height: 66px; } }
+/* узкая линия (стрим на небольшом экране): полоса волны не должна вылезать за свою плашку */
+.wavebar .wavemid { min-width: 0; }
+.wavebar .wavemid .sub { overflow: hidden; text-overflow: ellipsis; }
+.stage.narrow .wavebar { gap: 12px; }
+.stage.narrow .wavebar .rec, .stage.narrow #waveSub { display: none; }
+/* умения сжимаются вместе с плашкой, а не наезжают друг на друга; плашки бафов видны, только когда им есть место */
+.skillbar .sk { flex: 1 1 0; min-width: 0; max-width: 66px; }
+.skillbar .skill { width: 100%; height: auto; aspect-ratio: 1; }
+.skillbar .skill-cap { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buffs { flex: none; }
+.stage.mid .buffs { display: none; }
+.stage.narrow .lower { grid-template-columns: minmax(0, 1fr) 260px; }
+.stage.narrow .skillbar { gap: 8px; padding: 12px; }
+.stage.narrow .btn.rebirth { font-size: 12.5px; padding: 11px 8px; }

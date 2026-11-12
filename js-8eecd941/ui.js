@@ -293,9 +293,9 @@ function drawSkills() {
     else e.t.textContent = "";
   }
   const pills = [];
-  for (const id in BUFFS) {
-    const left = Math.max(S.act[id] || 0, S.buff[id] || 0);
-    if (left > 0) pills.push('<span><img alt="" src="' + art(BUFF_ICON[id] || "wisp") + '"><b>' + BUFFS[id].name + "</b> " + clock(left) + "</span>");
+  for (const id in BUFFS) {                                  // плашки — только для бафов без своей кнопки (огоньки): умение показывает время на себе
+    const left = S.buff[id] || 0;
+    if (left > 0 && pills.length < 2) pills.push('<span><img alt="" src="' + art(BUFF_ICON[id] || "wisp") + '"><b>' + BUFFS[id].name + "</b> " + clock(left) + "</span>");
   }
   $("buffs").innerHTML = pills.join("");
 }
@@ -392,8 +392,9 @@ function drawSlow() {
   SWAP.tick();
   $("chipAsh").hidden = S.ashAll === NEG;
   if (S.ashAll !== NEG) $("ashNum").textContent = txt(S.ash);
-  const nx = C.nextUp(S);
-  $("nextLine").textContent = nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
+  const nx = C.nextUp(S), nl = $("nextLine");
+  const hint = nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
+  if (nl.textContent !== hint) { nl.textContent = hint; nl.title = hint; }   // строка обрезается на двух строках — целиком видна по наведению
   const rb = $("btnRebirth"), g = C.ashGain(S);
   rb.hidden = false;
   rb.classList.toggle("weak", g === NEG || !S.un.rebirth);
