@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=1e47605c">
-<link rel="stylesheet" href="css/ui.css?v=1e47605c">
-<link rel="stylesheet" href="css/game.css?v=1e47605c">
+<link rel="stylesheet" href="css/tokens.css?v=981b51d7">
+<link rel="stylesheet" href="css/ui.css?v=981b51d7">
+<link rel="stylesheet" href="css/game.css?v=981b51d7">
 </head>
 <body>
 
@@ -146,7 +146,11 @@
         <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
         <input class="twvol" id="twVol" type="range" min="0" max="100" step="1" value="0" aria-label="Громкость стрима">
         <button class="twq" id="btnStreamQ" type="button" aria-haspopup="menu" aria-expanded="false" title="Качество стрима">Авто</button>
-        <span class="twwho" id="twWho"></span>
+        <!-- чей стрим на фоне: рекомендуемый канал (свой, а когда его нет — кто из друзей в эфире) или LoFi-музыка (js/stream.js) -->
+        <div class="twsrc" id="twSrc" role="group" aria-label="Чей стрим на фоне">
+          <button type="button" data-src="auto" id="twSrcRec"></button>
+          <button type="button" data-src="lofi" id="twSrcLofi" title="LoFi-музыка: канал lofigirl, играет круглые сутки. Бонусов эфира и сундуков не даёт">LoFi<span class="w">-музыка</span></button>
+        </div>
         <div class="twqmenu" id="twQMenu" role="menu" aria-label="Качество стрима" hidden></div>
       </div>
     </div>
@@ -203,7 +207,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-fb8218c6/main.js"></script>
+<script type="module" src="js-8a3d3a5c/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

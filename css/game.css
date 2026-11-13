@@ -696,6 +696,15 @@ body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh 
 .dock .twvol { flex: none; width: 76px; }
 .dock .twwho { display: none; }                              /* имя канала — только на широком поле (класс wide) */
 .dock.wide .twwho { display: block; }
+.dock .twsrc .w { display: none; }                           /* «LoFi-музыка» целиком — на широком поле, иначе «LoFi» */
+.dock.wide .twsrc .w { display: inline; }
+.dock.wide .twsrc button { max-width: 130px; }
+/* узкая полоса (окно ноутбука со стримом): места на две кнопки нет — видна одна, выбранная, она же переключатель; ползунок короче */
+.dock.slim .twvol { width: 40px; }
+.dock.slim .twsrc { padding: 0; margin-right: 0; background: none; box-shadow: none; }
+.dock.slim .twsrc button:not(.on) { display: none; }
+.dock.slim .twsrc button.on { max-width: 70px; padding: 0 8px; cursor: pointer; }
+.dock.slim .twsrc button.on::after { content: " ⇄"; opacity: .85; }
 
 .dock.slim { flex-wrap: wrap; }
 .dock.slim .twctl { margin-left: auto; }
@@ -1020,3 +1029,11 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 /* в широкой панели ячейки предметов и коллекция не раздуваются: столбцов больше */
 @media (min-width: 1620px) { .slots { grid-template-columns: repeat(6, 1fr); } .coll { grid-template-columns: repeat(10, 1fr); } }
 @media (max-width: 720px) { #paneSquad { max-height: none; overflow: visible; } .hg-info { height: auto; min-height: 34px; padding: 6px 12px; flex-wrap: wrap; gap: 4px 12px; white-space: normal; } }
+
+/* чей стрим на фоне: в пилюле рядом стоят рекомендуемый канал и LoFi-музыка, выбранный подсвечен */
+.twsrc { display: flex; flex: none; align-items: center; gap: 2px; height: 28px; padding: 2px; margin-right: 2px; border-radius: 999px; background: rgba(20,10,50,.45); box-shadow: inset 0 0 0 1px rgba(145,70,255,.45); }
+.twsrc button { height: 24px; max-width: 92px; padding: 0 9px; border: 0; border-radius: 999px; font: 800 12px/1 var(--ui); color: #cdbcf5; background: transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.twsrc button:hover { color: #fff; }
+.twsrc button.on { color: #fff; background: #9146ff; box-shadow: 0 2px 0 #5a23b3; cursor: default; }
+.twsrc button:disabled { opacity: .5; cursor: default; }
+.twsrc button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

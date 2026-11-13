@@ -3,6 +3,10 @@
 // комбо, цифры урона, Душка и звук стрима уезжают в полосу под картинкой (hooks.stage → js/fx.js, setDock).
 // Показываем свой канал, а когда он не в эфире — первый живой из списка друзей, по порядку. Как только свой стрим
 // начинается, фон возвращается на него. Бонус «эфир ×2» даёт только свой канал.
+// Вместо этого «рекомендуемого» канала игрок может поставить фоном LoFi-музыку (канал lofigirl, идёт круглые сутки):
+// выбор — в пилюле под картинкой, рядом с именем рекомендуемого канала, запоминается в настройках (S.set.twPick). LoFi —
+// чужой канал: ни «эфира ×2», ни сундуков эфира он не даёт, чат во вкладке остаётся свой. Свой эфир начался — фон
+// возвращается на него и выбор сбрасывается.
 // Идёт ли стрим — узнаём по картинке-превью Twitch: когда канал не в эфире, её адрес переадресует на заглушку.
 import * as C from "./core.js";
 
@@ -14,12 +18,15 @@ const FAKEPLAY = Q.has("fakeplay");                          // считать, 
 const clean = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9_]/g, "");
 const OWN = "aliveenjoyer";
 const FRIENDS = ["sashawaify", "qissme_", "aiihosh1no", "archyyyh8", "libez"];   // по порядку: кто первый в эфире, того и показываем
-const NAMES = { aliveenjoyer: "aliveenjoyer", sashawaify: "sashawaify", qissme_: "QissMe_", aiihosh1no: "aiihosh1no", archyyyh8: "archyyyh8", libez: "libez" };
+const LOFI = "lofigirl";                                     // LoFi-музыка: тот же канал, на котором игра проверяется
+const NAMES = { aliveenjoyer: "aliveenjoyer", sashawaify: "sashawaify", qissme_: "QissMe_", aiihosh1no: "aiihosh1no", archyyyh8: "archyyyh8", libez: "libez", lofigirl: "LoFi-музыка" };
 const LIST = clean(Q.get("channel")) ? [clean(Q.get("channel"))] : [OWN].concat(FRIENDS);   // ?channel=<имя> — проверка на чужом канале
 const DEAD_MS = 5 * 60000;                                   // плеер сказал «не в эфире» — столько канал не предлагаем: превью у Twitch запаздывает
 export let CHANNEL = LIST[0];                                // чей стрим сейчас фоном (и чей чат во вкладке); никто не в эфире — свой
 const $ = (id) => document.getElementById(id);
 let S = null, hooks = null, player = null, cur = "", live = false, scriptP = null, probeT = 0, shown = false;
+let rec = "", ownWas = null;                                 // кто сейчас рекомендуемый ("" — никто не в эфире); был ли свой канал в эфире при прошлой проверке
+const lofi = () => S.set.twPick === "lofi";
 // Звук стрима: S.set.twSound — включён ли, S.set.twVol — громкость 0–100. Запоминаются вместе с настройками.
 const vol = () => Math.max(0, Math.min(100, Number(S.set.twVol === undefined ? 50 : S.set.twVol) || 0));
 const sound = () => !!S.set.twSound && vol() > 0;
@@ -113,20 +120,25 @@ async function probe(ch) {                                   // идёт ли с
     return r.ok && !(r.redirected && /404_preview/.test(r.url));
   } catch (e) { return false; }
 }
-async function pick() {                                      // кого показывать: свой канал, иначе друзья по порядку; "" — никто не в эфире
-  if (Q.has("forcestream")) return LIST[0];
+async function pick() {                                      // кого показывать; "" — никто не в эфире
+  if (Q.has("forcestream")) { rec = LIST[0]; return rec; }
   const now = Date.now();
+  let r = "";                                                // рекомендуемый: свой канал, иначе друзья по порядку
   for (const ch of LIST) {
     if (dead[ch] > now) continue;
-    if (await probe(ch)) return ch;
+    if (await probe(ch)) { r = ch; break; }
   }
-  return "";
+  rec = r;
+  const ownNow = r === LIST[0];
+  if (lofi() && ownNow && ownWas === false) { S.set.twPick = "auto"; if (hooks) hooks.changed(); }   // свой эфир начался — фон возвращается на него
+  ownWas = ownNow;
+  return lofi() && !(dead[LOFI] > now) ? LOFI : r;
 }
 function setChannel(ch) {
-  const own = !!ch && ch === LIST[0];
-  if (ch === cur && own === live) return;
+  const own = ch === LIST[0] ? !!ch : !!rec && rec === LIST[0] && ch === LOFI;   // свой канал в эфире («эфир ×2») — и когда фоном вместо него выбрана LoFi-музыка
+  if (ch === cur && own === live) { draw(); return; }
   const changed = ch !== cur;
-  cur = ch; live = own; CHANNEL = ch || LIST[0];
+  cur = ch; live = own; CHANNEL = ch && !(ch === LOFI && !own) ? ch : LIST[0];   // чат во вкладке: под LoFi-музыку остаётся свой
   C.setLive(S, own);
   drawLive();
   if (changed) {
@@ -142,7 +154,7 @@ function drawLive() {                                        // плашка н�
   if (!cur) return;
   el.textContent = "";
   const dot = document.createElement("span"); dot.className = "dot"; el.appendChild(dot);
-  el.appendChild(document.createTextNode(live ? "Стрим идёт — фарм " : "На фоне стрим "));
+  el.appendChild(document.createTextNode(live ? "Стрим идёт — фарм " : cur === LOFI ? "На фоне " : "На фоне стрим "));
   const b = document.createElement("b"); b.textContent = live ? "×2" : nice(cur); el.appendChild(b);
 }
 async function check() {
@@ -191,8 +203,8 @@ export function draw() {
   b.hidden = !ok;
   b.classList.toggle("on", !!S.set.stream && !!cur);
   b.classList.toggle("off", !S.set.stream);
-  b.title = !S.set.stream ? "Стрим фоном выключен" : cur ? "Фоном линии идёт стрим " + nice(cur) + ". Нажми, чтобы убрать"
-    : "Сейчас никто не в эфире. Когда стрим начнётся, он появится фоном линии";
+  b.title = !S.set.stream ? "Стрим фоном выключен" : cur === LOFI && !live ? "Фоном линии идёт LoFi-музыка. Нажми, чтобы убрать" : cur ? "Фоном линии идёт стрим " + nice(cur) + ". Нажми, чтобы убрать"
+    : "Сейчас никто не в эфире. Нажми — фоном пойдёт LoFi-музыка";
   // Twitch не запускает показ сам, пока плеер чем-то закрыт: тогда нужен один клик по его кнопке ▶
   $("twplay").hidden = !(shown && !playing && player && player !== "loading" && performance.now() > askT) || $("field").classList.contains("twfront");
   // звук стрима: значок и ползунок в полосе под картинкой, пока стрим на фоне
@@ -206,7 +218,17 @@ export function draw() {
     if (document.activeElement !== sl && sl.value !== v) sl.value = v;
     sl.style.setProperty("--v", (on ? vol() : 0) + "%");
     sl.title = "Громкость стрима: " + (on ? vol() : 0) + " %";
-    $("twWho").textContent = nice(cur);
+    // чей стрим на фоне: рекомендуемый канал или LoFi-музыка
+    const rb = $("twSrcRec"), lb = $("twSrcLofi"), isLofi = cur === LOFI && lofi();
+    const rt = rec ? nice(rec) : "нет эфира";
+    if (rb.textContent !== rt) rb.textContent = rt;
+    rb.classList.toggle("on", !isLofi); lb.classList.toggle("on", isLofi);
+    rb.disabled = !rec && isLofi;
+    rb.setAttribute("aria-pressed", isLofi ? "false" : "true"); lb.setAttribute("aria-pressed", isLofi ? "true" : "false");
+    const one = (isLofi ? rb : lb).offsetParent === null;    // узкая полоса: кнопка одна, она же переключатель
+    rb.title = (rec ? "Рекомендуемый канал: сейчас в эфире " + nice(rec) + (rec === LIST[0] ? " — свой стрим, фарм ×2 и сундуки эфира" : "") : "Из рекомендуемых каналов сейчас никто не в эфире") +
+      (one && !isLofi ? ". Нажми — фоном пойдёт LoFi-музыка" : "");
+    lb.title = "LoFi-музыка: канал lofigirl, играет круглые сутки. Бонусов эфира и сундуков не даёт" + (one && isLofi ? (rec ? ". Нажми — вернётся " + nice(rec) : ". Из рекомендуемых каналов сейчас никто не в эфире") : "");
     if (playing) applyQ();                                   // список качеств приходит не сразу: ставим выбранное, как только оно появилось
     const qb = $("btnStreamQ"), ql = qLabel();
     if (qb.textContent !== ql) qb.textContent = ql;
@@ -224,7 +246,24 @@ export function mount(state, h) {
   $("twplay").addEventListener("click", () => { front(true); draw(); });
   $("twback").addEventListener("click", () => { front(false); askT = performance.now() + 8000; draw(); });
   if (S.set.stream === undefined) S.set.stream = true;
-  $("btnStream").addEventListener("click", () => { S.set.stream = !S.set.stream; hooks.changed(); sync(); });
+  $("btnStream").addEventListener("click", () => {
+    if (S.set.stream && !cur) { S.set.twPick = "lofi"; hooks.changed(); setChannel(LOFI); check(); return; }   // никто не в эфире — включаем LoFi-музыку
+    S.set.stream = !S.set.stream; hooks.changed(); sync();
+  });
+  $("twSrc").addEventListener("click", (e) => {               // выбор: рекомендуемый канал или LoFi-музыка
+    const b = e.target.closest("button[data-src]"); if (!b || b.disabled) return;
+    const now = lofi() ? "lofi" : "auto";
+    let want = b.dataset.src === "lofi" ? "lofi" : "auto";
+    if (want === now) {                                      // на узкой полосе видна одна кнопка — выбранная: нажатие переключает на другую
+      if ($(want === "lofi" ? "twSrcRec" : "twSrcLofi").offsetParent !== null) return;
+      want = now === "lofi" ? "auto" : "lofi";
+    }
+    if (want === "auto" && !rec) return;                    // из рекомендуемых никто не в эфире
+    S.set.twPick = want; ownWas = rec === LIST[0];
+    hooks.changed();
+    setChannel(want === "lofi" ? LOFI : rec);               // сразу, не дожидаясь проверки эфира
+    check();
+  });
   $("btnStreamSound").addEventListener("click", () => {      // значок: звук включить или выключить
     const on = !sound();
     if (on && vol() === 0) S.set.twVol = 50;
@@ -255,6 +294,7 @@ export function mount(state, h) {
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }
 export const isLive = () => live;
+export const ownShown = () => !!cur && cur === LIST[0];      // фоном стоит именно свой канал: сундук эфира копится только так
 export const watching = () => shown && (playing || FAKEPLAY);              // стрим сейчас идёт фоном линии
 export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
   const on = player && player !== "loading";

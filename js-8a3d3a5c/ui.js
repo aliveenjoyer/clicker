@@ -781,7 +781,7 @@ function stepDraft() {                                       // карточки
 
 export function frame(dt) {
   if (TW.watching()) C.achNote(S, "tw", dt);                // ачивка «Кино и клики»: время игры со стримом на фоне
-  C.setWatch(S, TW.watching() && TW.isLive());              // сундук эфира копится, пока свой стрим идёт фоном
+  C.setWatch(S, TW.watching() && TW.isLive() && TW.ownShown());              // сундук эфира копится, пока свой стрим идёт фоном
   drawBank(dt);
   stepHold(dt);
   stepDraft();
