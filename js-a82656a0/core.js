@@ -14,6 +14,7 @@ export function newState() {
     souls: NEG, life: NEG, run: NEG,
     lv: new Array(N + 1).fill(0), lvRun: 0,
     z: 1, zrec: 1, best: 1, kills: 0, hp: 1, mode: "push", wall: false, bossT: 0,
+    runZ: 1, pw0: { t: 0, n: 0 },                           // датчик темпа: волна, с которой начат забег, и счётчики движения вперёд на его старте
     combo: 0, comboIdle: 0, tier: -1,
     cd: {}, act: {}, buff: {}, flAcc: 0, bucket: 40,
     wispIn: 0, wispOn: 0, wisps: 0,
@@ -88,6 +89,13 @@ export function load(text) {
   const og = o.rpg && typeof o.rpg === "object" && Array.isArray(o.rpg.skins) ? o.rpg.skins : [];
   S.rpg = { skins: og.filter((id, i) => RPG_SKINS[id] && og.indexOf(id) === i).sort() };
   if (o.ashLife === undefined) S.ashLife = S.ashAll;
+  // датчик темпа: в сохранении до него нет старта забега — среднее за забег считается с этой загрузки
+  const num = (v) => Math.max(0, Number(v) || 0);
+  S.stats.pushT = num(S.stats.pushT); S.stats.pushN = Math.floor(num(S.stats.pushN));
+  S.runZ = o.runZ === undefined ? Math.min(S.zrec, 1 + 10 * (S.rel.start || 0)) : Math.max(1, Math.min(S.zrec, Math.floor(num(o.runZ)) || 1));
+  const op = o.pw0 && typeof o.pw0 === "object" ? o.pw0 : null;
+  S.pw0 = op ? { t: Math.min(S.stats.pushT, num(op.t)), n: Math.min(S.stats.pushN, Math.floor(num(op.n))) } : { t: S.stats.pushT, n: S.stats.pushN };
+  if (!Array.isArray(S.waveLog)) S.waveLog = [];
   const oa = o.auto && typeof o.auto === "object" ? o.auto : {};
   S.auto = { on: !!oa.on, fav: (Array.isArray(oa.fav) ? oa.fav : []).filter((id, i, a) => ITEMS.some((x) => x.id === id) && a.indexOf(id) === i) };
   S.ev = [];
@@ -257,7 +265,7 @@ function startWave(S) {
   S.hp = 1; S.kills = 0;
   S.waveLog.push(S.stats.played); if (S.waveLog.length > 30) S.waveLog.shift();
   if (S.waveLog.length === 30 && S.stats.played - S.waveLog[0] <= 60) feat(S, "carpet");
-  if (S.z > S.zrec) S.zrec = S.z;
+  if (S.z > S.zrec) { S.zrec = S.z; S.stats.pushN = (S.stats.pushN || 0) + 1; }   // пройденная волна — новый рекорд забега
   if (S.z > S.cycBest) S.cycBest = S.z;
   if (S.z > S.best) S.best = S.z;
   if (isBoss(S.z)) { S.bossT = S.d.bossTime; ev(S, { t: "boss_in", z: S.z, boss: bossOf(S.z) }); }
@@ -355,6 +363,7 @@ export function hit(S, src, weak) {                         // src: click | hold
 // ---------- ход времени ----------
 export function tick(S, dt, live) {                         // live=false — офлайн: без умений, комбо и огоньков
   S.stats.played += live ? dt : 0;
+  if (live && S.mode === "push" && !S.wall) S.stats.pushT = (S.stats.pushT || 0) + dt;   // время движения вперёд: не «Фарм» и не стена перед боссом
   if (live) {
     S.sess += dt;
     if (S.live) S.stats.live = (S.stats.live || 0) + dt;      // идёт стрим aliveenjoyer
@@ -688,11 +697,38 @@ function newRun(S) {                                         // забег с н
   S.z = Math.max(1 + 10 * S.rel.start, Math.floor(Math.min(0.9, 0.15 * (S.pat.legacy || 0)) * S.cycBest));
   if (isBoss(S.z)) S.z += 1;
   S.zrec = S.z; S.kills = 0; S.hp = 1; S.mode = "push"; S.wall = false;
+  S.runZ = S.z; S.pw0 = { t: S.stats.pushT || 0, n: S.stats.pushN || 0 }; S.waveLog = [S.stats.played];   // датчик темпа меряет забег с начала
   S.combo = 0; S.tier = -1; S.buff = {};
   S.items = {}; S.draft = null; S.drafts = 0; S.forgiven = 0;
   S.statues = { dmg: 0, souls: 0, crit: 0, timer: 0 }; S.altar = 0; S.urnOn = 0; S.statueOn = 0;
   for (const s of SKILLS) S.act[s.id] = 0;
   derive(S);
+}
+
+// ---------- датчик темпа: за сколько проходится волна и не пора ли возрождаться ----------
+// now — сколько сейчас уходит на волну: среднее по последним пройденным (до восьми), а если текущая тянется дольше — она сама.
+// mine — среднее за забег: секунды движения вперёд на одну пройденную волну. То же самое сервер усредняет по всем игрокам.
+// limit — предел: время волны, с которого следующего босса уже не взять. У босса здоровья как у целой волны, а времени
+// на него — таймер босса (с поправкой на урон по боссам). Значит, пока наёмники проходят волну быстрее этого времени,
+// босс им по силам; волна дольше — упёрлись. Первая версия считала порог по скорости набора пепла — она звала возрождаться
+// через 17 секунд после открытия возрождения, поэтому порог привязан к правилу самой игры, а не к выгоде.
+// state: fly — быстрее половины предела; slow — от половины предела до предела; stuck — дольше предела или босс не по зубам;
+// farm — игрок сам стоит в «Фарме»; none — мерить пока нечего. canRb — возрождение уже что-то даст.
+export function pace(S) {
+  const log = S.waveLog, t = S.stats.played, n = log.length;
+  let now = null;
+  if (n >= 2) { const k = Math.min(8, n - 1); now = (log[n - 1] - log[n - 1 - k]) / k; }
+  const cur = n ? Math.max(0, t - log[n - 1]) : 0;           // столько уже идёт текущая волна
+  if (n && (now === null || cur > now)) now = cur;
+  const dn = (S.stats.pushN || 0) - S.pw0.n, dt = (S.stats.pushT || 0) - S.pw0.t;
+  const mine = dn >= 1 && dt > 0 ? dt / dn : null;
+  const limit = S.d.bossTime * Math.pow(10, Math.min(6, S.d.bossMul));
+  const canRb = !!S.un.rebirth && ashGain(S) !== NEG;
+  let state = "none";
+  if (S.wall && !canBeatBoss(S)) state = "stuck";
+  else if (S.mode === "farm" && !S.wall) state = "farm";
+  else if (now !== null) state = now >= limit ? "stuck" : now >= limit / 2 ? "slow" : "fly";
+  return { now, mine, limit, state, canRb };
 }
 
 // ---------- второй слой: Затмение, осколки, покровители ----------

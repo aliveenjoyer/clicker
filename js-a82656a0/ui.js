@@ -538,6 +538,34 @@ function drawWave() {
   $("modeSeg").hidden = boss;
   $("modeSeg").querySelectorAll("span").forEach((n) => n.classList.toggle("on", n.dataset.mode === S.mode));
 }
+// Датчик темпа в полосе волны: сколько сейчас уходит на волну, вердикт, полоска «до порога возрождения» и средние —
+// своё за забег и по всем игрокам (приходит с сервером таблицы). Пишется в DOM, только когда текст изменился.
+const secs = (s) => (s < 0.1 ? "меньше 0,1 с" : s < 10 ? s.toFixed(1).replace(".", ",") + " с" : s < 100 ? Math.round(s) + " с"
+  : s < 3600 ? Math.floor(s / 60) + " мин " + Math.floor(s % 60) + " с" : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин");
+const PACE_WORD = { fly: "идёшь хорошо", slow: "замедляешься", farm: "стоишь в «Фарме»" };
+let paceKey = "";
+function drawPace() {
+  const p = C.pace(S), all = TOP.paceAll();
+  const now = p.now === null ? "—" : secs(p.now);
+  const word = p.state === "stuck" ? (p.canRb ? "пора возрождаться" : "упёрся: качай отряд") : PACE_WORD[p.state] || "";
+  const fill = p.state === "stuck" ? 100 : p.now === null ? 0 : Math.round(Math.min(1, p.now / p.limit) * 100);
+  const sub = [p.mine === null ? "" : "среднее <b>" + secs(p.mine) + "</b>", all ? "у игроков <b>" + secs(all.avg) + "</b>" : "", "предел <b>" + secs(p.limit) + "</b>"].filter(Boolean).join(" · ");
+  const key = [now, word, p.state, fill, sub].join("|");
+  if (key === paceKey) return;
+  paceKey = key;
+  const box = $("paceBox"), v = $("paceVerdict");
+  box.className = "pace p-" + p.state;
+  $("paceNow").textContent = now;
+  v.hidden = !word; v.textContent = word;
+  $("paceFill").style.width = fill + "%";
+  $("paceSub").innerHTML = sub;
+  box.title = (p.now === null ? "Здесь видно, сколько времени уходит на волну." : "Сейчас на волну уходит " + now + ".") +
+    " У босса здоровья как у целой волны, а времени на него — " + secs(p.limit) + ". Когда волна идёт дольше, босса уже не взять: ты упёрся" +
+    (p.canRb ? " — пора возрождаться." : S.un.rebirth ? " — качай отряд." : " — качай отряд; возрождение откроется на 50-й волне.") +
+    (p.mine === null ? "" : " В среднем за забег у тебя " + secs(p.mine) + " на волну.") +
+    (all ? " У игроков в среднем " + secs(all.avg) + " (замерено игроков: " + all.n + ", за сегодня и вчера)." : "");
+}
+
 function drawBank(dt) {
   if (shownLg === NEG || S.souls < shownLg || S.souls - shownLg > 3) shownLg = S.souls;
   else { shownLg += (S.souls - shownLg) * Math.min(1, dt * 12); if (S.souls - shownLg < 0.0004) shownLg = S.souls; }
@@ -559,7 +587,7 @@ const RANKS = { тыс: "Тысяча!", млн: "Миллион!", млрд: "�
 const rankWord = (s) => RANKS[s] || s.toUpperCase() + "!";
 
 function drawSlow() {
-  drawWave();
+  drawWave(); drawPace();
   const r = C.rateLg(S);
   $("bankRate").innerHTML = r === NEG ? "бей труперов — души твои" : "<b>+" + txt(r) + "</b> в секунду";
   $("stClick").textContent = txt(C.clickLg(S));

@@ -10,6 +10,11 @@ const MEDAL = ["medal-gold", "medal-silver", "medal-bronze"];
 const $ = (id) => document.getElementById(id);
 let S = null, rows = null, total = 0, rank = 0, best = 0, got = 0, err = "", busy = false, sentKey = "", lastSend = 0, lastLoad = 0, shownKey = "", toast = null;
 let mineEl = null;
+// Датчик темпа: с каждым отчётом уходит, сколько секунд игрок шёл вперёд и сколько волн прошёл с прошлого отчёта.
+// Сервер держит сумму по игроку за сегодня и вчера и отвечает средним по всем игрокам: {avg — секунд на волну, n — игроков}.
+let paceT = null, paceN = null, paceAllNow = null;
+const pushT = () => S.stats.pushT || 0, pushN = () => S.stats.pushN || 0;
+export const paceAll = () => paceAllNow;
 
 const soulsNow = () => (S.life === NEG || !(S.life > 0) ? 0 : S.life);       // lg душ, заработанных за всё время
 const soulsTxt = (lg) => (lg > 0 ? txt(lg) : "0");
@@ -18,10 +23,12 @@ const stateKey = () => S.best + ":" + S.rb + ":" + Math.floor(soulsNow() * 50); 
 async function send() {                                     // отправить души и рекорд; сервер отвечает местом и таблицей
   if (busy || !A.logged()) return false;
   busy = true;
-  const key = stateKey(), mine = soulsNow();
-  const d = await A.api("/score", { sid: A.sid(), wave: S.best, rb: S.rb, played: Math.round(S.stats.played), souls: +mine.toFixed(3) });
+  const key = stateKey(), mine = soulsNow(), t1 = pushT(), n1 = pushN();
+  const pt = paceT === null ? 0 : Math.max(0, t1 - paceT), pw = paceN === null ? 0 : Math.max(0, n1 - paceN);   // первый отчёт только ставит точку отсчёта
+  const d = await A.api("/score", { sid: A.sid(), wave: S.best, rb: S.rb, played: Math.round(S.stats.played), souls: +mine.toFixed(3), pt: +pt.toFixed(1), pw });
   busy = false; lastSend = Date.now();
   if (d.ok) {
+    paceT = t1; paceN = n1; paceAllNow = d.pace || null;
     const first = !rank;
     err = ""; rows = d.top; total = d.total; rank = d.rank; best = d.best; got = d.souls || 0; lastLoad = Date.now();
     sentKey = d.best >= S.best && got + 0.02 >= mine ? key : "";   // сервер ещё догоняет — пришлём снова через минуту
@@ -36,7 +43,7 @@ export async function pushNow() {                           // перед обм
 async function load() {
   lastLoad = Date.now();
   const d = await A.top();
-  if (d.ok) { rows = d.top; total = d.total; err = ""; }
+  if (d.ok) { rows = d.top; total = d.total; err = ""; paceAllNow = d.pace || null; }
   else if (!rows) err = "Таблица сейчас недоступна. Попробуй позже";
   draw(true);
 }
@@ -90,12 +97,13 @@ export function mount(state, hooks) {
   box.addEventListener("click", (e) => { if (e.target.closest("[data-logout]")) A.logout(); });
   A.onChange(() => { if (!A.logged()) { rank = 0; best = 0; got = 0; sentKey = ""; } else lastSend = 0; shownKey = ""; draw(false); });
 }
-export function setState(state) { S = state; sentKey = ""; shownKey = ""; }
+export function setState(state) { S = state; sentKey = ""; shownKey = ""; paceT = paceN = null; }
 export const myRank = () => (A.logged() ? rank : 0);         // место в таблице, как его знает сервер; 0 — не в таблице
 export function open() { shownKey = ""; if (!lastLoad || Date.now() - lastLoad > 15000) load(); else draw(true); }
 export function tick(visible) {                             // зовётся из UI несколько раз в секунду
   const now = Date.now();
   if (A.logged() && !busy && now - lastSend > 60000 && stateKey() !== sentKey) send();   // новое число — не чаще раза в минуту
   if (visible && !busy && now - lastLoad > 60000) load();
+  else if (!visible && !busy && now - lastLoad > 600000) load();   // вкладка закрыта: среднее по игрокам для датчика темпа — раз в десять минут
   if (visible) draw(false);
 }

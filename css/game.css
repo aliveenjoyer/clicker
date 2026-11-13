@@ -15,7 +15,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .ibtn.off { color: var(--text-mute); }
 
 /* ---------- полоса волны ---------- */
-.wavebar { display: flex; align-items: center; gap: 22px; padding: 10px 18px; }
+.wavebar { display: flex; align-items: center; gap: 20px; padding: 10px 18px; }
 .wavebar .w { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .wavebar .w b { font: 900 34px/1 var(--display); color: var(--text); font-variant-numeric: tabular-nums; }
 .wavebar .sub { font-size: 12px; color: var(--text-dim); margin-top: 7px; white-space: nowrap; }
@@ -380,6 +380,32 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .dcard.rar-x { background: linear-gradient(180deg, #5a1f52, #24183f); }
 .dcard.rar-l .rk, .dcard.rar-x .rk { color: var(--bc); }
 .dcard.rar-r { box-shadow: 0 6px 0 #0f1130, 0 14px 30px rgba(0,0,0,.5), inset 0 0 0 3px var(--bc), 0 0 0 2px rgba(77,163,255,.5); }
+
+/* датчик темпа в полосе волны: три строки не выше соседних блоков, чтобы полоса не росла */
+.wavebar { container: wavebar / inline-size; }
+.wavebar .pace { flex: 0 1 auto; min-width: 0; max-width: 380px; overflow: hidden; }
+/* полоса уже 900 пикселей (окно ноутбука): «трупер N / 10» и рекорд уступают место датчику; уже 800 — уходит и подпись «Волна за» */
+@container wavebar (min-width: 700px) and (max-width: 900px) { .rec, #waveSub { display: none; } }
+@container wavebar (min-width: 700px) and (max-width: 800px) { .pace .eyebrow { display: none; } }
+.pace .pa { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.pace .pa .eyebrow { flex: none; }
+.pace .pv { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pace .pa b { font: 800 18px/1 var(--display); color: var(--text); font-variant-numeric: tabular-nums; }
+.pace .pv { align-self: center; padding: 3px 8px; border-radius: 999px; font: 900 9.5px/1 var(--ui); letter-spacing: .05em; text-transform: uppercase; color: #0d2a1b; background: #63e6a5; }
+.pace.p-slow .pv { color: #2a1c00; background: var(--farm); }
+.pace.p-stuck .pv { color: #2a0610; background: var(--danger-soft); }
+.pace.p-farm .pv { color: var(--text-dim); background: var(--surface-3); }
+.pace .pm { display: block; height: 3px; margin-top: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.pace .pm u { display: block; height: 100%; width: 0; background: #63e6a5; transition: width 200ms; }
+.pace.p-slow .pm u { background: var(--farm); }
+.pace.p-stuck .pm u { background: var(--danger-soft); }
+.wavebar .pace .sub { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+.wavebar .pace .sub b { color: var(--text); font-weight: 800; }
+.stage.narrow .wavebar .pace { max-width: 250px; }
+@media (max-width: 720px) {                                  /* телефон: датчик — своей строкой под полосой, без полоски */
+  .wavebar .pace, .stage.narrow .wavebar .pace { order: 6; flex: 1 1 100%; max-width: none; }
+  .pace .pm { display: none; }
+}
 
 /* автовыбор предметов: выключатель, любимые по номерам, кнопки у выбранного предмета */
 .autobox { margin: 6px 12px 4px; padding: 10px 12px; border-radius: var(--r-3); background: rgba(10,10,30,.35); box-shadow: inset 0 0 0 1px var(--line); }
