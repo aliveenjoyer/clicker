@@ -6,7 +6,11 @@
 // Идёт ли стрим — узнаём по картинке-превью Twitch: когда канал не в эфире, её адрес переадресует на заглушку.
 import * as C from "./core.js";
 
-const Q = new URLSearchParams(location.search);
+// Параметры адреса для проверки (?channel=…, ?forcestream, ?fakeplay) работают только на своём компьютере. На сайте они
+// выключены: иначе «своим» каналом становился бы любой, кто в эфире круглые сутки, — а это души ×2 и сундуки эфира без конца.
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const Q = new URLSearchParams(LOCAL ? location.search : "");
+const FAKEPLAY = Q.has("fakeplay");                          // считать, что плеер играет, как только картинка стрима на поле: в Chrome без окна видео Twitch не стартует
 const clean = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9_]/g, "");
 const OWN = "aliveenjoyer";
 const FRIENDS = ["sashawaify", "qissme_", "aiihosh1no", "archyyyh8"];   // по порядку: кто первый в эфире, того и показываем
@@ -251,7 +255,7 @@ export function mount(state, h) {
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }
 export const isLive = () => live;
-export const watching = () => shown && playing;              // стрим сейчас идёт фоном линии
+export const watching = () => shown && (playing || FAKEPLAY);              // стрим сейчас идёт фоном линии
 export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
   const on = player && player !== "loading";
   let q = null, list = [];

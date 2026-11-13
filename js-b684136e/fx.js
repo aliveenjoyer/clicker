@@ -4,7 +4,7 @@ import { CFG } from "./data.js";
 import * as C from "./core.js";
 import { txt, lsum, L10 } from "./num.js";
 import { sfx } from "./audio.js";
-import { art, has, districtArt } from "./art.js";
+import { tskinArt, art, has, districtArt } from "./art.js";
 import { bossOf } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -25,7 +25,7 @@ export function mount(state) {
     "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome", "stats", "dock", "twctl"]) el[id] = $(id);
   ctx = el.fxc.getContext("2d");
   el.weak.style.backgroundImage = "url(" + art("fx-weak") + ")";
-  for (const u of [el.q1, el.q2]) u.querySelector("img").src = trooper();
+  refreshLine();
   el.facDot.className = "fac " + (S.set.faction === "sapphire" ? "fac-amber" : "fac-sapphire");
   resize();
   window.addEventListener("resize", resize);
@@ -41,7 +41,7 @@ export function mount(state) {
   syncFoe();
   setDock(wantDock);
 }
-export function setState(state) { S = state; setEnemy(); syncFoe(); }
+export function setState(state) { S = state; refreshLine(); setEnemy(); syncFoe(); }
 export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", calm); }
 
 function resize() {
@@ -77,6 +77,22 @@ function anim(cls) {                                        // у цели од�
 }
 const facColor = () => (S.set.faction === "sapphire" ? "#ffa53d" : "#4da3ff");
 const trooper = () => art(S.set.faction === "sapphire" ? "trooper-amber" : "trooper-sapphire");
+// Скины труперов: кто стоит на линии и двое в очереди за ним. После каждого убитого очередь сдвигается, в хвост встаёт
+// случайный из тех, что в строю (core.js, pickSkin). На быстром прорыве очередь не трогаем: мелькание никто не разглядит.
+let line = ["std", "std", "std"], qNow = ["", ""];
+const tsprite = (id) => (id && id !== "std" ? tskinArt(id) : trooper());
+function drawQueue() {
+  const q = [tsprite(line[1]), tsprite(line[2])];
+  if (q[0] !== qNow[0]) { qNow[0] = q[0]; el.q1.querySelector("img").src = q[0]; }
+  if (q[1] !== qNow[1]) { qNow[1] = q[1]; el.q2.querySelector("img").src = q[1]; }
+}
+export function refreshLine() {                              // строй поменялся (новый скин, галочка в гардеробе, новая игра)
+  line = [C.pickSkin(S), C.pickSkin(S), C.pickSkin(S)];
+  if (!el.q1) return;
+  drawQueue();
+  if (el.enemy && spriteNow) setEnemy();
+}
+function nextTrooper() { line = [line[1], line[2], C.pickSkin(S)]; drawQueue(); setEnemy(); }
 let bgNow = "", spriteNow = "", moodUntil = 0, moodNow = "";
 function mood(m, ms) {                                      // Душка: idle | happy | scared | sleepy
   if (m !== moodNow) { moodNow = m; el.pet.src = art("pet-" + m); }
@@ -314,7 +330,7 @@ function setEnemy() {
   if (bg !== bgNow) { bgNow = bg; el.field.style.backgroundImage = "url(" + bg + ")"; }
   const altar = S.altar > 0, elite = C.isElite(S);
   const bossArt = boss && has("boss-" + bossOf(S.z).id) ? art("boss-" + bossOf(S.z).id) : null;
-  const sprite = altar ? art("ev-altar") : bossArt || (elite ? art(S.set.faction === "sapphire" ? "elite-amber" : "elite-sapphire") : trooper());
+  const sprite = altar ? art("ev-altar") : bossArt || (elite ? art(S.set.faction === "sapphire" ? "elite-amber" : "elite-sapphire") : tsprite(line[0]));
   el.enemy.classList.toggle("elite", elite && !altar); el.enemy.classList.toggle("altar", altar);
   el.plate.classList.toggle("gold", altar || elite);
   if (sprite !== spriteNow) { spriteNow = sprite; el.enemy.querySelector("img").src = sprite; }
@@ -429,7 +445,7 @@ export function onEvent(e) {
       if (!fast) {
         const tok = ++dieTok;
         anim("die"); sfx.kill(); fximg("fx-puff", b.x, b.y + b.h * 0.12, e.elite ? 230 : 150, "puff");
-        setTimeout(() => { if (tok === dieTok && el.enemy.classList.contains("die")) anim("enter"); }, 170);
+        setTimeout(() => { if (tok !== dieTok) return; nextTrooper(); if (el.enemy.classList.contains("die")) anim("enter"); }, 170);
       }
       if (e.elite) { banner("Элита повержена", "+" + txt(e.loot) + " душ", "gold", 1100); spark(b.x, b.y, 30, "#ffe58f", 420, 7); mood("happy", 1500); }
       if (S.un.orbs && e.src !== "ult") addOrb(b.x, b.y - b.h * 0.1, e.loot);
@@ -437,6 +453,7 @@ export function onEvent(e) {
       break;
     }
     case "wave": setEnemy(); break;
+    case "chest_in": banner(e.kind === "air" ? "Сундук эфира" : "Сундук дня", "открой во вкладке «Скины»", "gold", 1900); mood("happy", 2200); sfx.rank(); break;
     case "boss_in": {
       setEnemy(); anim("bossin");
       banner(e.boss.name, "волна " + e.z + " · " + Math.round(S.d.bossTime) + " секунд", "boss", 1500);

@@ -35,6 +35,8 @@ export async function loadArt() {
 export const has = (name) => !!ready[name];
 export const art = (name) => ready[name] || (ALIAS[name] && ready[ALIAS[name]]) || FALLBACK[name] || C + name + ".webp";
 export const heroArt = (id) => ready["hero-" + id] || "art/heroes/hero-" + id + ".webp";
+export const tskinArt = (id) => "art/troopers/" + id + ".webp";        // скин трупера (tools/cut_troopers.py)
+export const rpgSkinArt = (id) => "art/skins/skin-" + id + ".webp";     // скин героя из RPG стрима, 320×420
 export function districtArt(z, tall) {                      // tall — поле узкое: берём вертикальный вариант фона
   const name = DISTRICTS[Math.floor((Math.max(1, z) - 1) / 100) % DISTRICTS.length];
   const base = has(name) ? name : "bg-street";

@@ -136,6 +136,8 @@ async function boot() {
       wisp() { S.wispIn = 0; },
       lane(k) { C.touch(S); if (k === "crate") S.crateIn = 0; if (k === "statue") S.statueIn = 0; if (k === "urn") S.urnIn = 0; if (k === "altar") S.altarIn = 0; },
       skip(sec) { for (let t = 0; t < sec; t += 0.1) C.tick(S, 0.1, true); },
+      chest(kind, n) { S.chest[kind || "air"] += n || 1; },   // положить сундук: __dev.chest("day", 3)
+      FX,
     };
     if (Q.has("give")) window.__dev.give(lg(Number(Q.get("give"))));
     if (Q.has("wave")) window.__dev.wave(Number(Q.get("wave")));

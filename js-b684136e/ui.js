@@ -1,10 +1,10 @@
 // Интерфейс: полоса волны, счётчик душ, отряд, предметы и коллекция, реликвии, путь, чат, умения, бафы, окна.
 // Правило экрана: всё, что можно открыть, видно с первой секунды — закрытое показано с условием.
-import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS } from "./data.js";
+import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
 import { sfx, setSound } from "./audio.js";
-import { art, heroArt, applyArt } from "./art.js";
+import { art, heroArt, applyArt, tskinArt, rpgSkinArt } from "./art.js";
 import * as FX from "./fx.js";
 import * as TW from "./stream.js";
 import * as TOP from "./top.js";
@@ -14,13 +14,13 @@ import * as ACCT from "./acct.js";
 const $ = (id) => document.getElementById(id);
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const RANK = ["", "I", "II", "III", "IV"];
-const TABS = [["squad", "Отряд"], ["items", "Предметы"], ["relics", "Реликвии"], ["road", "Путь"], ["top", "Топ"], ["chat", "Чат"]];
+const TABS = [["squad", "Отряд"], ["items", "Предметы"], ["relics", "Реликвии"], ["skins", "Скины"], ["road", "Путь"], ["top", "Топ"], ["chat", "Чат"]];
 let S = null, api = null;
 let buyMode = 1, tab = "squad", rows = [], shownLg = NEG, lastSfx = null, lastK = -1, bankText = null, bankSfx = null;
 let slowT = 0, pipsKey = "", skillEls = {}, relicEls = {}, holdT = 0, holding = false, bulkShown = null;
 let draftKey = "", itemsKey = "", rosterKey = "", roadKey = "", collSel = null, relicsBuilt = false, chatBuilt = false;
 let badge = 0, achNew = [], achDrawAt = 0, achSfxAt = 0;    // ачивки: значок на вкладке, очередь уведомлений, когда рисовали и звучали
-let achMsg = "", achUntil = 0;                              // уведомление об ачивке: показывается в плашке «Дальше», пока не истечёт
+let achMsg = "", achUntil = 0, achCap = "Ачивка";          // уведомление в плашке «Дальше»: текст, до какого времени и подпись над ним
 // Выбор предмета появляется прямо под курсором, а игрок в этот момент часто кликает без остановки. Поэтому карточки
 // включаются не сразу: секунду после появления и ещё треть секунды после последнего клика они не нажимаются.
 const DRAFT_LOCK = 1000, DRAFT_QUIET = 350;
@@ -52,6 +52,9 @@ export function mount(state, hooks) {
     slowT = 0; api.settings();
   });
   $("eclBox").addEventListener("click", (e) => { if (e.target.closest("[data-ecl]")) openEclipse(); });
+  $("keepBox").addEventListener("click", keepClick); ACCT.bind($("keepBox"));
+  $("liveChest").addEventListener("click", () => { tab = "skins"; drawTabs(); slowT = 0; });
+  ACCT.onChange(() => { keepKey = ""; rpgAt = 0; syncRpg(true); });
   $("draft").addEventListener("pointerdown", () => { if (!draftReady()) draftClickAt = performance.now(); });   // клик по ещё не включённым карточкам отодвигает включение
   $("draft").addEventListener("click", (e) => {
     if (!draftReady()) return;                              // случайный клик на бегу ничего не берёт
@@ -69,10 +72,11 @@ export function mount(state, hooks) {
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
   $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();
   drawSound(); drawBuySeg(); buildSkills(); drawTabs();
+  syncRpg(true);
 }
 export function setState(state) {
   S = state; rows = []; $("mercList").textContent = ""; shownLg = NEG; lastK = -1; slowT = 0;
-  itemsKey = rosterKey = roadKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0;
+  itemsKey = rosterKey = roadKey = keepKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0; chestBadge = -1;
   TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
 
@@ -92,8 +96,9 @@ function drawBuySeg() {
 function tabStrip() {                                        // на «Пути» — число ачивок, которых игрок ещё не видел
   if (tab === "road") S.achSeen = C.achCount(S);
   badge = Math.max(0, C.achCount(S) - (S.achSeen || 0));
+  const cw = C.chestsWaiting(S);                             // на «Скинах» — сколько сундуков ждёт
   $("tabs").innerHTML = TABS.map(([t, l]) => '<span class="tab' + (t === tab ? " on" : "") + '" data-t="' + t + '">' + l +
-    (t === "road" && badge ? '<span class="n">' + badge + "</span>" : "") + "</span>").join("");
+    (t === "road" && badge ? '<span class="n">' + badge + "</span>" : t === "skins" && cw ? '<span class="n gold">' + cw + "</span>" : "") + "</span>").join("");
 }
 function drawTabs() {
   tabStrip();
@@ -101,6 +106,7 @@ function drawTabs() {
   if (tab === "relics") buildRelics();
   if (tab === "items") { itemsKey = ""; drawItems(); }
   if (tab === "road") { roadKey = ""; drawRoad(); }
+  if (tab === "skins") { keepKey = ""; drawKeep(); syncRpg(false); }
   if (tab === "chat") buildChat();
   if (tab === "top") TOP.open();
 }
@@ -125,7 +131,8 @@ function stepHold(dt) {
 // ---------- отряд ----------
 function rowHtml(i) {
   const whip = i === 0, h = whip ? null : HEROES[i - 1];
-  return '<div class="por"><img alt="" src="' + (whip ? art("whip") : heroArt(h.id)) + '">' + (whip ? "" : '<span class="tier">' + (ROMAN[h.k] || h.k) + "</span>") + "</div>" +
+  const sid = whip ? "lesh" : h.id;                          // скин из RPG ложится на портрет; у хлыста — скин Лэша
+  return '<div class="por' + porCls(sid) + '"' + porTip(sid) + '><img alt="" src="' + (whip && !C.hasRpgSkin(S, "lesh") ? art("whip") : porArt(sid)) + '">' + (whip ? "" : '<span class="tier">' + (ROMAN[h.k] || h.k) + "</span>") + "</div>" +
     '<div><div class="name">' + (whip ? "Хлыст Лэша" : h.name) + ' <span class="lvl"><small>ур.</small><span data-f="lv">0</span></span></div>' +
     '<div class="meta"><span class="dmg">' + (whip ? "удар" : "урон") + ' <b data-f="dmg">0</b></span></div>' +
     '<div class="ms"><i></i></div><div class="ms-cap" data-f="cap"></div></div>' +
@@ -179,13 +186,13 @@ function drawRoster() {
   if (!rest.length) { $("rosterBox").innerHTML = '<div class="note pad">Весь отряд в сборе.</div>'; return; }
   let h = "";
   for (const x of rest.slice(0, 3)) {
-    h += '<div class="merc soon"><div class="por"><img alt="" src="' + heroArt(x.id) + '"><span class="tier">' + (ROMAN[x.k] || x.k) + '</span></div><div><div class="name">' + x.name +
+    h += '<div class="merc soon"><div class="por' + porCls(x.id) + '"' + porTip(x.id) + '><img alt="" src="' + porArt(x.id) + '"><span class="tier">' + (ROMAN[x.k] || x.k) + '</span></div><div><div class="name">' + x.name +
       '</div><div class="meta">откроется, когда наймёшь предыдущего</div></div><div class="price farm short"><img alt="" src="' + art("lock") + '"><b>' + txt(heroCost0(x.k)) + "</b></div></div>";
   }
   const more = rest.slice(3);
   if (more.length) {
     h += '<div class="eyebrow pad">Ещё ждут: ' + more.length + "</div><div class=\"roster\">" +
-      more.map((x) => '<div class="rt" title="' + x.name + " · " + txt(heroCost0(x.k)) + ' душ"><img alt="" loading="lazy" src="' + heroArt(x.id) + '"><span>' + (ROMAN[x.k] || x.k) + "</span></div>").join("") + "</div>";
+      more.map((x) => '<div class="rt" title="' + x.name + " · " + txt(heroCost0(x.k)) + ' душ"><img alt="" loading="lazy" src="' + porArt(x.id) + '"><span>' + (ROMAN[x.k] || x.k) + "</span></div>").join("") + "</div>";
   }
   $("rosterBox").innerHTML = h;
 }
@@ -300,15 +307,16 @@ function achKey() {                                          // меняется
 // подсказка внизу страницы закрывала бы умения. Сколько бы ачивок ни пришло разом — одна строка.
 function flushAch() {
   if (!achNew.length) return;
+  if (achCap !== "Ачивка" && performance.now() < achUntil) return;   // под линией сейчас сундук или задание дня: ачивки подождут своей очереди
   const n = achNew.length, last = achNew[n - 1], now = performance.now();
   achMsg = n === 1 ? "«" + last.name + "»: " + last.text.charAt(0).toLowerCase() + last.text.slice(1) + ". +1 % урона"
     : "Новых ачивок: " + n + ", +" + n + " % урона. Последняя — «" + last.name + "»";
-  achUntil = now + 3800;
+  achUntil = now + 3800; achCap = "Ачивка";
   if (now - achSfxAt > 8000) { achSfxAt = now; sfx.ms(); }
   achNew = []; roadKey = "";
 }
 export function achBoot(n) {                                 // при загрузке: сколько ачивок засчитано задним числом
-  if (n > 0) { achMsg = "Засчитано ачивок: " + n + ", +" + n + " % урона. Список — во вкладке «Путь»"; achUntil = performance.now() + 12000; }
+  if (n > 0) { achCap = "Ачивка"; achMsg = "Засчитано ачивок: " + n + ", +" + n + " % урона. Список — во вкладке «Путь»"; achUntil = performance.now() + 12000; }
 }
 function stepAch() {                                         // зовётся несколько раз в секунду: то, что знает только интерфейс
   if (ACCT.logged()) C.achMark(S, "login");
@@ -532,7 +540,7 @@ function drawSlow() {
   $("stCrit").textContent = Math.round(C.critChance(S) * 100) + " %";
   if (!!S.un.bulk !== bulkShown) { bulkShown = !!S.un.bulk; drawBuySeg(); }
   if (tab === "squad") drawRows();
-  drawRelics(); drawItems(); drawRoad(); drawDraft();
+  drawRelics(); drawItems(); drawRoad(); drawDraft(); drawKeep();
   drawSkills();
   TW.draw();
   TOP.tick(tab === "top");
@@ -545,7 +553,9 @@ function drawSlow() {
   const nx = C.nextUp(S), nl = $("nextLine"), flash = performance.now() < achUntil;
   const hint = flash ? achMsg : nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
   if (nl.textContent !== hint) { nl.textContent = hint; nl.title = hint; }   // строка обрезается на двух строках — целиком видна по наведению
-  if ($("nextBox").classList.contains("flash") !== flash) { $("nextBox").classList.toggle("flash", flash); $("nextCap").textContent = flash ? "Ачивка" : "Дальше"; }
+  if ($("nextBox").classList.contains("flash") !== flash) $("nextBox").classList.toggle("flash", flash);
+  const cap = flash ? achCap : "Дальше";
+  if ($("nextCap").textContent !== cap) $("nextCap").textContent = cap;
   const rb = $("btnRebirth"), g = C.ashGain(S);
   rb.hidden = false;
   rb.classList.toggle("weak", g === NEG || !S.un.rebirth);
@@ -566,6 +576,7 @@ function stepDraft() {                                       // карточки
 
 export function frame(dt) {
   if (TW.watching()) C.achNote(S, "tw", dt);                // ачивка «Кино и клики»: время игры со стримом на фоне
+  C.setWatch(S, TW.watching() && TW.isLive());              // сундук эфира копится, пока свой стрим идёт фоном
   drawBank(dt);
   stepHold(dt);
   stepDraft();
@@ -586,6 +597,11 @@ export function onEvent(e) {
   else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") { slowT = 0; itemsKey = ""; }
   else if (e.t === "ach") achNew.push(e);
+  else if (e.t === "chest_in") {
+    note("Сундук", (e.kind === "air" ? "Выпал сундук эфира" : "Все задания дня сделаны — сундук дня твой" + (e.streak > 1 ? ", серия " + e.streak + " " + plural(e.streak, "день", "дня", "дней") : "")) + ". Открой во вкладке «Скины»", 9000);
+    keepKey = "";
+  } else if (e.t === "task") { note("Задание дня", "«" + e.text + "» — готово: +" + txt(e.loot) + " душ", 6000); sfx.ms(); keepKey = ""; }
+  else if (e.t === "rpgskins") { note("Скины RPG", "Из RPG пришло скинов: " + e.added.length + ". Они на твоих наёмниках, весь урон от скинов " + mulText(S.d.rpg), 9000); resetRows(); keepKey = ""; }
 }
 
 // ---------- окна ----------
@@ -684,3 +700,148 @@ function openWipe() {                                       // стирание 
   b.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 export function applySettings() { setSound(S.set.sound); setSci(S.set.sci); FX.setCalm(S.set.calm); }
+
+// ---------- вкладка «Скины»: сундуки, задания дня, скины труперов, скины героев из RPG ----------
+// Правила — core.js, раздел «удержание». Вкладка строится заново, только когда поменялось что-то по существу
+// (keepKey); таймер сундука и счёт заданий обновляются на месте, чтобы кнопки не прыгали под курсором.
+let keepKey = "", keepEls = null, chestBadge = -1, rpgAt = 0, rpgBusy = false;
+const RPG_URL = "https://rpg.aliveenjoyer.art/game/hero";
+const mmss = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+const mulText = (l) => { const v = Math.pow(10, l); return "×" + (v < 1000 ? String(Math.round(v * 10) / 10).replace(".", ",") : txt(l)); };
+const porArt = (id) => (C.hasRpgSkin(S, id) ? rpgSkinArt(id) : heroArt(id));
+const porCls = (id) => (C.hasRpgSkin(S, id) ? " skin rar-" + RPG_SKINS[id][1] : "");
+const porTip = (id) => (C.hasRpgSkin(S, id) ? ' title="Скин из RPG «' + RPG_SKINS[id][0] + "»: весь урон ×" + String(C.rpgSkinMul(id)).replace(".", ",") + '"' : "");
+function resetRows() { rows = []; $("mercList").textContent = ""; rosterKey = ""; slowT = 0; }
+function note(cap, text, ms) { achCap = cap; achMsg = text; achUntil = performance.now() + ms; slowT = 0; }
+function airNote() {
+  const c = S.chest;
+  if (c.air >= KEEP.airCap) return "Ждёт " + c.air + " — открой, и начнут копиться новые";
+  if (S.live && S.watch) return "Следующий через " + mmss(Math.max(0, KEEP.airEvery - c.airT));
+  if (S.live) return "Стрим идёт! Включи его фоном — кнопка Twitch над линией";
+  return "Копится, пока идёт стрим aliveenjoyer и он включён здесь фоном: 10 минут — сундук";
+}
+function taskLine(i) {                                       // «312 / 400» или «12 / 20 мин»
+  const q = S.tsk.list[i], t = TASKS.find((x) => x.id === q.id), v = C.taskNow(S, i);
+  return t.min ? Math.floor(v / 60) + " / " + Math.round(t.need / 60) + " мин" : group(Math.floor(v)) + " / " + group(t.need);
+}
+function buildKeep() {
+  const c = S.chest, T = S.tsk, h = [];
+  const streakPct = Math.round(KEEP.streakStep * Math.min(KEEP.streakMax, T.streak) * 100);
+  const done = T.done.filter(Boolean).length;
+  h.push('<div class="kchest air' + (c.air ? " ready" : "") + '"><img alt="" src="' + art(c.air ? "ev-chest" : "ev-chest") + '"><div class="kc"><b>Сундук эфира' + (c.air ? " · " + c.air : "") +
+    '</b><span data-k="airNote"></span><div class="achbar sm"><i data-k="airBar"></i></div></div><button class="btn gold sm' + (c.air ? "" : " off") + '" data-open="air"' + (c.air ? "" : " disabled") + ">Открыть</button></div>");
+  h.push('<div class="kchest day' + (c.day ? " ready" : "") + '"><img alt="" src="' + art("ev-chest") + '"><div class="kc"><b>Сундук дня' + (c.day ? " · " + c.day : "") + "</b><span>" +
+    (T.all ? "Сегодняшний получен. Новые задания — завтра" : "За три задания дня. Сделано " + done + " из " + T.list.length) +
+    '</span></div><button class="btn gold sm' + (c.day ? "" : " off") + '" data-open="day"' + (c.day ? "" : " disabled") + ">Открыть</button></div>");
+  h.push('<p class="note kn">В сундуках — души, а иногда скин трупера. ' + (C.tskinCount(S) < TSKINS.length ? "Новый скин выпадет не позже чем через " + Math.max(1, KEEP.pity - c.dry + 1) + " " +
+    plural(Math.max(1, KEEP.pity - c.dry + 1), "сундук", "сундука", "сундуков") + "." : "Все скины труперов собраны: за повторку души сундука удваиваются.") + "</p>");
+
+  h.push('<h4 class="achg">Задания дня<span>' + done + " / " + T.list.length + "</span></h4>");
+  for (let i = 0; i < T.list.length; i++) {
+    const t = TASKS.find((x) => x.id === T.list[i].id);
+    h.push('<div class="ktask' + (T.done[i] ? " done" : "") + '"><div class="kt"><b>' + C.taskText(t) + '</b><span data-k="task' + i + '"></span></div><div class="achbar sm"><i data-k="bar' + i + '"></i></div></div>');
+  }
+  h.push('<p class="note kn">Каждое задание — 10 минут дохода душами. Все три — сундук дня и день в серию. Серия: <b>' + T.streak + " " + plural(T.streak, "день", "дня", "дней") +
+    "</b>, души <b>+" + streakPct + " %</b> (по 10 % за день, до +100 %). Пропустишь день — серия уменьшится вдвое.</p>");
+
+  const own = C.tskinCount(S);
+  h.push('<h4 class="achg">Скины труперов<span>' + own + " / " + TSKINS.length + '</span></h4><p class="note kn">Выпадают из сундуков. Отмеченные выходят на линию вперемешку — нажми, чтобы убрать или вернуть.</p><div class="tskins">');
+  h.push('<button type="button" class="tsk' + (S.skins.on.std ? " on" : "") + '" data-skin="std"><img alt="" src="' + art(S.set.faction === "sapphire" ? "trooper-amber" : "trooper-sapphire") + '"><b>Обычный</b><small>' + (S.skins.on.std ? "в строю" : "отдыхает") + "</small></button>");
+  for (const x of TSKINS) {
+    const n = S.skins.own[x.id] || 0, on = n > 0 && S.skins.on[x.id];
+    h.push('<button type="button" class="tsk rar-' + x.rar + (n ? "" : " lockd") + (on ? " on" : "") + '" data-skin="' + x.id + '" style="--bc:' + TSKIN_RAR[x.rar].color + '"' + (n ? "" : ' title="Ещё не выпал: ищи в сундуках"') +
+      '><img alt="" loading="lazy" src="' + tskinArt(x.id) + '"><b>' + x.name + "</b><small>" + (n ? (on ? "в строю" : "отдыхает") + (n > 1 ? " · ×" + n : "") : TSKIN_RAR[x.rar].name.toLowerCase()) + "</small></button>");
+  }
+  h.push("</div>");
+
+  const have = S.rpg.skins.length;
+  h.push('<h4 class="achg">Скины героев из RPG<span>' + have + " / " + Object.keys(RPG_SKINS).length + "</span></h4>");
+  h.push('<div class="rpgsum"><b>' + (have ? "Весь урон " + mulText(S.d.rpg) : "Скин из RPG — и герой дерётся в нём") + "</b><span>Скины, выбитые на странице RPG стрима, надеваются на твоих наёмников и умножают весь урон: серебро ×1,5, золото ×2, хаос ×3 — каждый скин. " +
+    'Сундук скинов — на странице персонажа.</span><a class="btn sm" href="' + RPG_URL + '" target="_blank" rel="noopener">Открыть RPG</a></div>');
+  h.push('<div id="rpgLogin"></div><div class="rskins">');
+  const ids = Object.keys(RPG_SKINS).sort((a, b) => (C.hasRpgSkin(S, b) ? 1 : 0) - (C.hasRpgSkin(S, a) ? 1 : 0));
+  for (const id of ids) {
+    const sk = RPG_SKINS[id], mine = C.hasRpgSkin(S, id), hero = id === "lesh" ? "Лэш" : (HEROES.find((x) => x.id === id) || { name: id }).name;
+    h.push('<div class="rsk rar-' + sk[1] + (mine ? " own" : "") + '" title="' + hero + " — «" + sk[0] + "», " + RPG_RAR[sk[1]].name.toLowerCase() + ": весь урон ×" + String(KEEP.rpgMul[sk[1]]).replace(".", ",") +
+      (mine ? "" : ". Ещё не выбит") + '"><img alt="" loading="lazy" src="' + rpgSkinArt(id) + '"><span>×' + String(KEEP.rpgMul[sk[1]]).replace(".", ",") + "</span></div>");
+  }
+  h.push("</div>");
+  const box = $("keepBox");
+  box.innerHTML = h.join("");
+  keepEls = {};
+  box.querySelectorAll("[data-k]").forEach((n) => { keepEls[n.dataset.k] = n; });
+  if (!ACCT.logged()) ACCT.card(box.querySelector("#rpgLogin"), "Войди через Twitch — и скины, которые ты выбил в RPG стрима, появятся на твоих наёмниках.");
+}
+function drawKeep() {
+  const cw = C.chestsWaiting(S);
+  if (cw !== chestBadge) { chestBadge = cw; tabStrip(); }
+  drawLiveChest();
+  if (Date.now() - rpgAt > 600000) syncRpg(false);
+  if (tab !== "skins") return;
+  const T = S.tsk, c = S.chest;
+  const key = [c.air, c.day, c.dry, T.day, T.done.join(""), T.all, T.streak, JSON.stringify(S.skins), S.rpg.skins.join(), S.set.faction, ACCT.logged(), ACCT.state.phase, ACCT.state.code, ACCT.state.err].join("|");
+  if (key !== keepKey) { keepKey = key; buildKeep(); }
+  const E = keepEls;
+  if (!E || !E.airNote) return;
+  const an = airNote();
+  if (E.airNote.textContent !== an) E.airNote.textContent = an;
+  E.airBar.style.width = (c.air >= KEEP.airCap ? 100 : Math.min(100, c.airT / KEEP.airEvery * 100)).toFixed(1) + "%";
+  for (let i = 0; i < T.list.length; i++) {
+    const tn = E["task" + i], tb = E["bar" + i];
+    if (!tn) continue;
+    const t = TASKS.find((x) => x.id === T.list[i].id), line = T.done[i] ? "готово" : taskLine(i);
+    if (tn.textContent !== line) tn.textContent = line;
+    tb.style.width = (C.taskNow(S, i) / t.need * 100).toFixed(0) + "%";
+  }
+}
+function drawLiveChest() {                                   // рядом с плашкой «Стрим идёт»: сколько до сундука эфира
+  const b = $("liveChest"), c = S.chest;
+  const text = c.air > 0 ? "Сундук эфира ждёт" + (c.air > 1 ? " · " + c.air : "") : !S.live ? "" : S.watch ? "Сундук через " + mmss(Math.max(0, KEEP.airEvery - c.airT)) : "Включи стрим — будут сундуки";
+  if (b.hidden !== !text) b.hidden = !text;
+  if (text && b.textContent !== text) b.textContent = text;
+  b.classList.toggle("ready", c.air > 0);
+}
+function openChest(kind) {                                   // открыть сундук и показать, что внутри
+  const r = C.openChest(S, kind);
+  if (!r) { sfx.deny(); return; }
+  sfx.rank(); keepKey = ""; slowT = 0; api.settings();
+  const more = C.chestsWaiting(S), next = S.chest.air > 0 ? "air" : "day";
+  let h = '<img class="chestart" alt="" src="' + art("ev-chest-open") + '"><h2>' + (kind === "air" ? "Сундук эфира" : "Сундук дня") + '</h2><div class="bignum chest">+' + txt(r.loot) + " душ</div>";
+  if (r.skin) {
+    const ra = TSKIN_RAR[r.rar];
+    h += '<div class="gotskin" style="--bc:' + ra.color + '"><img alt="" src="' + tskinArt(r.skin) + '"><div><b>' + r.name + "</b><span>" + ra.name + " скин трупера</span><em>" +
+      (r.dupe ? "Такой уже есть — зато души этого сундука удвоены" : "Новый! Уже вышел на линию") + "</em></div></div>";
+    if (!r.dupe) FX.refreshLine();
+  } else if (C.tskinCount(S) < TSKINS.length) {
+    const k = Math.max(1, KEEP.pity - S.chest.dry + 1);
+    h += "<p>Скина в этот раз нет. Новый выпадет не позже чем через " + k + " " + plural(k, "сундук", "сундука", "сундуков") + ".</p>";
+  }
+  if (kind === "air") h += "<p>В придачу — «Жатва»: урон ×5 на минуту.</p>";
+  h += '<div class="acts split">' + (more ? '<button class="btn gold" data-more="' + next + '">Открыть ещё · ' + more + "</button>" : "<span></span>") + '<button class="btn ghost" data-x>Забрать</button></div>';
+  openModal(h, (e) => { const b = e.target.closest("[data-more]"); if (b) openChest(b.dataset.more); else if (e.target.closest("[data-x]")) closeModal(); });
+}
+function keepClick(e) {
+  const o = e.target.closest("[data-open]");
+  if (o) { if (!o.disabled) openChest(o.dataset.open); return; }
+  const s = e.target.closest("[data-skin]");
+  if (s) {
+    const id = s.dataset.skin;
+    if (id !== "std" && !(S.skins.own[id] > 0)) { sfx.deny(); return; }
+    C.wearSkin(S, id, !S.skins.on[id]); FX.refreshLine(); sfx.buy(); keepKey = ""; slowT = 0; api.settings();
+  }
+}
+async function syncRpg(force) {                              // скины героев из RPG: сервер отдаёт их вошедшему через Twitch
+  const before = S.rpg.skins.join();
+  if (!ACCT.logged()) {                                      // вышел из аккаунта — чужие скины не остаются
+    if (before) { C.setRpgSkins(S, []); resetRows(); keepKey = ""; api.settings(); }
+    return;
+  }
+  const now = Date.now();
+  if (rpgBusy || (!force && now - rpgAt < 60000)) return;
+  rpgBusy = true; rpgAt = now;
+  const d = await ACCT.api("/me", { sid: ACCT.sid() });
+  rpgBusy = false;
+  if (!d || !d.ok || !Array.isArray(d.skins)) return;        // нет связи или сервер ещё не знает про скины — оставляем как было
+  C.setRpgSkins(S, d.skins);
+  if (S.rpg.skins.join() !== before) { resetRows(); keepKey = ""; api.settings(); }
+}

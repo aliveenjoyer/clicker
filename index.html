@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=25c88dae">
-<link rel="stylesheet" href="css/ui.css?v=25c88dae">
-<link rel="stylesheet" href="css/game.css?v=25c88dae">
+<link rel="stylesheet" href="css/tokens.css?v=700db263">
+<link rel="stylesheet" href="css/ui.css?v=700db263">
+<link rel="stylesheet" href="css/game.css?v=700db263">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
   </div>
   <div class="mid">
     <div class="live" id="live" hidden><span class="dot"></span>Стрим идёт — фарм <b>×2</b></div>
+    <button class="livechest" id="liveChest" type="button" hidden></button>
   </div>
   <div class="right">
     <button class="chip stream" id="btnSwap" type="button" title="Обменник: души кликера на души RPG стрима"><img class="ico-stream" data-art="cur-stream" alt=""><span class="stack"><span class="v" id="swapV">Обмен</span><span class="l">души RPG</span></span></button>
@@ -173,6 +174,7 @@
       <div class="coll" id="collGrid"></div>
       <div class="colldet" id="collDet"></div>
     </div>
+    <div class="pane scroll" id="paneSkins" hidden><div class="keep" id="keepBox"></div></div>
     <div class="pane scroll" id="paneRoad" hidden><div class="road" id="roadList"></div></div>
     <div class="pane scroll" id="paneTop" hidden><div class="topbox" id="topBox"></div></div>
     <div class="pane" id="paneChat" hidden><div class="chatbox" id="chatBox"></div></div>
@@ -189,7 +191,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-6f811002/main.js"></script>
+<script type="module" src="js-b684136e/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

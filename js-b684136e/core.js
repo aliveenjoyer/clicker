@@ -2,7 +2,7 @@
 // Этот модель потом переедет на сервер (PLAN.md § 19): клиент шлёт намерения, сервер считает то же самое.
 // Все большие числа — lg (см. num.js). События для картинки и звука складываются в S.ev, их забирает main.js.
 import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
-import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS } from "./data.js";
+import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
 
 const N = HEROES.length;
 const L2 = L10(2), L4 = L10(4);
@@ -28,6 +28,13 @@ export function newState() {
     // второй слой. Цикл — от Затмения до Затмения: ashAll и реликвии живут в цикле, осколки и покровители — навсегда
     ecl: 0, shards: 0, pat: {}, cycBest: 1, cycRb: 0, ashLife: NEG, eclAt: 0,   // eclAt — когда было прошлое Затмение, мс
     chaos: 0,                                               // третий слой: шаги «Скупщика теней», 0…16
+    // удержание: сундуки (air/day — ждут открытия, airT — секунд просмотра до следующего, dry — сундуков без нового скина),
+    // задания дня (list — [{id, base}], done, all — сундук дня уже выдан, streak — серия, full — последний полный день),
+    // скины труперов (own — копий, on — в строю), скины героев из RPG (приходят с сервера)
+    chest: { air: 0, airT: 0, day: 0, dry: 0 },
+    tsk: { day: 0, list: [], done: [], all: false, streak: 0, full: 0 },
+    skins: { own: {}, on: { std: true } },
+    rpg: { skins: [] },
     set: { sound: true, calm: false, sci: false, autoBoss: true },
   };
   for (const r of RELICS) S.rel[r.id] = 0;
@@ -40,7 +47,7 @@ export function newState() {
 
 export function save(S) {
   const o = {};
-  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "sess" && k !== "achT") o[k] = S[k];
+  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "sess" && k !== "achT") o[k] = S[k];
   o.at = Date.now();
   return JSON.stringify(o, (k, v) => (v === -Infinity ? null : v));
 }
@@ -67,6 +74,18 @@ export function load(text) {
   for (const p of PATRONS) S.pat[p.id] = Math.max(0, Math.min(p.cap || 100000, Math.floor(Number(o.pat && typeof o.pat === "object" ? o.pat[p.id] : 0) || 0)));
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
   if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
+  // удержание: всё приводится к виду, который ждёт игра; чего в сохранении нет или что испорчено — как у нового игрока
+  const N0 = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+  const oc = o.chest && typeof o.chest === "object" ? o.chest : {}, ot = o.tsk && typeof o.tsk === "object" ? o.tsk : {};
+  S.chest = { air: N0(oc.air, KEEP.airCap), airT: Math.max(0, Math.min(KEEP.airEvery, Number(oc.airT) || 0)), day: N0(oc.day, 30), dry: N0(oc.dry, 1000) };
+  const tl = (Array.isArray(ot.list) ? ot.list : []).filter((q) => q && TASKS.some((t) => t.id === q.id)).slice(0, 3).map((q) => ({ id: q.id, base: Math.max(0, Number(q.base) || 0) }));
+  S.tsk = { day: N0(ot.day, 1e7), list: tl, done: tl.map((q, i) => !!(Array.isArray(ot.done) && ot.done[i])), all: !!ot.all && tl.length > 0, streak: N0(ot.streak, 100000), full: N0(ot.full, 1e7) };
+  const os = o.skins && typeof o.skins === "object" ? o.skins : {};
+  S.skins = { own: {}, on: { std: !os.on || os.on.std !== false } };
+  for (const x of TSKINS) { const n = N0(os.own && os.own[x.id], 100000); if (n) { S.skins.own[x.id] = n; S.skins.on[x.id] = !os.on || os.on[x.id] !== false; } }
+  if (!lineSkins(S).length) S.skins.on.std = true;
+  const og = o.rpg && typeof o.rpg === "object" && Array.isArray(o.rpg.skins) ? o.rpg.skins : [];
+  S.rpg = { skins: og.filter((id, i) => RPG_SKINS[id] && og.indexOf(id) === i).sort() };
   if (o.ashLife === undefined) S.ashLife = S.ashAll;
   S.ev = [];
   derive(S);
@@ -127,6 +146,9 @@ export function derive(S) {
   if (S.ashAll > NEG) g += S.ashAll > 12 ? S.ashAll + L10(CFG.ashDmg) : L10(1 + CFG.ashDmg * Math.pow(10, S.ashAll));
   g += L10(1 + CFG.achDmg * achCount(S));                    // ачивки: +1 % урона за каждую
   g += 0.5 * (S.pat.wrath || 0);                             // покровитель «Гнев»: ×3,16 за уровень
+  let rg = 0;
+  for (const id of S.rpg.skins) rg += L10(rpgSkinMul(id));    // скины героев из RPG: весь урон ×1,5 / ×2 / ×3 за скин
+  D.rpg = rg; g += rg;
   D.gmul = g;
   D.cg = costG(S);
   D.hero = [NEG];
@@ -143,7 +165,8 @@ export function derive(S) {
   for (const x of ITEMS) br[x.branch] += raw(x.id);
   D.whip = L10(1 + S.lv[0]) + msMult(S.lv[0]) + g + L10(1 + 0.2 * it("item-w-glass")) + L10(BRANCH.w.click[branchTier(br.w)]);
   D.share = CFG.clickOfDps + 0.01 * S.rel.hand;
-  D.souls = S.rel.greed * L10(1.15) + L10(1 + 0.5 * it("item-x-curse")) + L10(1 + 0.02 * S.statues.souls);
+  D.souls = S.rel.greed * L10(1.15) + L10(1 + 0.5 * it("item-x-curse")) + L10(1 + 0.02 * S.statues.souls)
+    + L10(1 + KEEP.streakStep * Math.min(KEEP.streakMax, S.tsk.streak));   // серия дней: души +10 % за день, до +100 %
   D.crit = CFG.critChance + 0.03 * it("item-w-lucky") + 0.01 * S.statues.crit;
   D.bossTime = Math.max(5, CFG.bossTime + 2 * S.rel.clock + 2 * it("item-v-unstoppable") - it("item-w-glass") + 5 * it("item-l-cheat") + S.statues.timer + BRANCH.v.timer[branchTier(br.v)]);
   D.bossMul = S.rel.colossus * L10(1.25) + L10(1 + 0.1 * it("item-v-colossus"));
@@ -332,7 +355,11 @@ export function tick(S, dt, live) {                         // live=false — о
   if (live) {
     S.sess += dt;
     if (S.live) S.stats.live = (S.stats.live || 0) + dt;      // идёт стрим aliveenjoyer
-    S.achT += dt; if (S.achT >= 0.25) { S.achT = 0; checkAch(S); }
+    S.achT += dt; if (S.achT >= 0.25) { S.achT = 0; checkAch(S); stepKeep(S); }
+    if (S.watch && S.live && S.chest.air < KEEP.airCap) {     // сундук эфира: копится, пока свой стрим идёт фоном в игре
+      S.chest.airT += dt;
+      if (S.chest.airT >= KEEP.airEvery) { S.chest.airT -= KEEP.airEvery; S.chest.air += 1; ev(S, { t: "chest_in", kind: "air" }); }
+    }
   }
   S.bucket = Math.min(40, S.bucket + CFG.clickCap * dt);
   if (live) {
@@ -684,11 +711,131 @@ export function buyRelic(S, id) {
   return true;
 }
 
+// ---------- удержание: сундуки, задания дня, скины ----------
+// Всё это не сбрасывается ни возрождением, ни Затмением. Числа — KEEP в data.js.
+export function setWatch(S, v) { S.watch = !!v; }           // стрим aliveenjoyer идёт и включён фоном в игре (js/stream.js)
+export const dayNo = (now) => {                              // номер дня по часам игрока
+  const d = now === undefined ? new Date() : new Date(now);
+  return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+};
+export function taskValue(S, src) {                         // счётчики заданий: растут всю игру, возрождение их не трогает
+  const st = S.stats;
+  switch (src) {
+    case "crates": case "altars": return S.album[src] || 0;
+    case "wisps": return S.wisps || 0;
+    case "rb": return S.rb || 0;
+    case "items": { let n = 0; for (const k in S.col) n += S.col[k] || 0; return n; }
+    default: return st[src] || 0;
+  }
+}
+export const taskText = (t) => t.text.replace("#", group(t.min ? Math.round(t.need / 60) : t.need));
+export function taskNow(S, i) {                             // сколько сделано по заданию i сегодня, не больше нужного
+  const q = S.tsk.list[i], t = q && TASKS.find((x) => x.id === q.id);
+  if (!t) return 0;
+  return S.tsk.done[i] ? t.need : Math.max(0, Math.min(t.need, taskValue(S, t.src) - q.base));
+}
+function rollTasks(S, d) {                                   // три задания дня: порядок общий для всех (по номеру дня), берём первые открытые
+  let seed = (d * 2654435761) >>> 0;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const pool = TASKS.slice();
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const x = pool[i]; pool[i] = pool[j]; pool[j] = x; }
+  return pool.filter((t) => !t.un || S.un[t.un]).slice(0, 3).map((t) => ({ id: t.id, base: taskValue(S, t.src) }));
+}
+export function dayRoll(S, now) {                           // новый день — новые задания; пропущенный день режет серию вдвое
+  const d = dayNo(now), T = S.tsk;
+  if (T.day === d && T.list.length) return false;
+  if (T.day > d) return false;                              // часы перевели назад: задания остаются прежними
+  if (T.day && T.streak > 0 && T.full < d - 1) T.streak = Math.floor(T.streak / 2);
+  T.day = d; T.list = rollTasks(S, d); T.done = T.list.map(() => false); T.all = false;
+  derive(S);
+  return true;
+}
+const income = (S, sec) => {                                 // души за sec секунд дохода, но не меньше душ с полусотни труперов
+  const r = rateLg(S), min = lootBase(S.z) + soulsLg(S) + L10(50);
+  return r === NEG ? min : Math.max(min, r + L10(sec));
+};
+export function stepKeep(S, now) {                          // зовётся несколько раз в секунду и при загрузке
+  dayRoll(S, now);
+  const T = S.tsk;
+  for (let i = 0; i < T.list.length; i++) {
+    if (T.done[i]) continue;
+    const t = TASKS.find((x) => x.id === T.list[i].id);
+    if (!t || taskValue(S, t.src) - T.list[i].base < t.need) continue;
+    T.done[i] = true;
+    const l = income(S, KEEP.taskIncome);
+    gain(S, l); S.stats.tasks = (S.stats.tasks || 0) + 1;
+    ev(S, { t: "task", i, text: taskText(t), loot: l });
+  }
+  if (!T.all && T.list.length && T.done.every(Boolean)) {
+    T.all = true; T.full = T.day; T.streak += 1;
+    S.stats.streakMax = Math.max(S.stats.streakMax || 0, T.streak);
+    S.chest.day += 1;
+    derive(S);
+    ev(S, { t: "chest_in", kind: "day", streak: T.streak });
+  }
+}
+export const chestsWaiting = (S) => (S.chest.air || 0) + (S.chest.day || 0);
+export const tskinCount = (S) => { let n = 0; for (const x of TSKINS) if (S.skins.own[x.id] > 0) n += 1; return n; };
+function rollSkin(pool) {                                    // редкость по весам среди тех, что есть в pool, внутри редкости — поровну
+  let sum = 0; const rars = [];
+  for (const k in TSKIN_RAR) if (pool.some((x) => x.rar === k)) { rars.push(k); sum += TSKIN_RAR[k].w; }
+  let r = Math.random() * sum, k = rars[rars.length - 1];
+  for (const q of rars) { if (r < TSKIN_RAR[q].w) { k = q; break; } r -= TSKIN_RAR[q].w; }
+  const same = pool.filter((x) => x.rar === k);
+  return same[Math.floor(Math.random() * same.length)];
+}
+export function openChest(S, kind) {                        // kind: air | day → { kind, loot, skin, dupe, name, rar } или null
+  const c = S.chest;
+  if (kind !== "air" && kind !== "day") return null;
+  if (!(c[kind] > 0)) return null;
+  c[kind] -= 1; S.stats.chests = (S.stats.chests || 0) + 1;
+  let loot = income(S, kind === "air" ? KEEP.airIncome : KEEP.dayIncome);
+  const left = TSKINS.filter((x) => !(S.skins.own[x.id] > 0));
+  const forced = left.length > 0 && c.dry >= KEEP.pity;
+  let pick = null, dupe = false;
+  if (forced || Math.random() < (kind === "air" ? KEEP.airSkin : KEEP.daySkin)) {
+    pick = rollSkin(forced ? left : TSKINS);
+    dupe = S.skins.own[pick.id] > 0;
+    S.skins.own[pick.id] = (S.skins.own[pick.id] || 0) + 1;
+    if (dupe) loot += L10(KEEP.dupe); else S.skins.on[pick.id] = true;
+  }
+  c.dry = pick && !dupe ? 0 : c.dry + 1;
+  gain(S, loot);
+  if (kind === "air") S.buff.harvest = Math.max(S.buff.harvest || 0, 60 * S.d.durMul);   // сундук эфира ещё и даёт «Жатву» на минуту
+  const out = { t: "chest", kind, loot, skin: pick ? pick.id : null, dupe, name: pick ? pick.name : "", rar: pick ? pick.rar : "" };
+  ev(S, out);
+  return out;
+}
+export function wearSkin(S, id, on) {                       // поставить скин трупера в строй или убрать; "std" — обычный трупер
+  if (id !== "std" && !(S.skins.own[id] > 0)) return false;
+  S.skins.on[id] = !!on;
+  if (!lineSkins(S).length) S.skins.on.std = true;           // совсем без труперов нельзя
+  return true;
+}
+export const lineSkins = (S) => ["std"].concat(TSKINS.map((x) => x.id)).filter((id) => S.skins.on[id] && (id === "std" || S.skins.own[id] > 0));
+export function pickSkin(S) { const l = lineSkins(S); return l.length ? l[Math.floor(Math.random() * l.length)] : "std"; }
+// Скины героев из RPG: список приходит с сервера для вошедшего через Twitch. Возвращает, сколько новых.
+export function setRpgSkins(S, list) {
+  const next = [];
+  for (const id of Array.isArray(list) ? list : []) if (RPG_SKINS[id] && next.indexOf(id) < 0) next.push(id);
+  next.sort();
+  const had = S.rpg.skins;
+  const added = next.filter((id) => had.indexOf(id) < 0);
+  if (added.length === 0 && next.length === had.length) return 0;
+  S.rpg.skins = next;
+  derive(S);
+  if (added.length) ev(S, { t: "rpgskins", added, n: next.length });
+  return added.length;
+}
+export const rpgSkinMul = (id) => (RPG_SKINS[id] ? KEEP.rpgMul[RPG_SKINS[id][1]] : 1);
+export const hasRpgSkin = (S, id) => S.rpg.skins.indexOf(id) >= 0;
+
 // Что делать дальше: одна строка под линией. Порядок — как в PLAN.md § 17.1.
 export function nextUp(S) {
   if (S.altar > 0) return { k: "altar", text: "Жертвенник: бей быстрее — каждый удар даёт души" };
   if (S.statueOn > 0) return { k: "statue", text: "Золотая статуя на линии — разбей, пока не исчезла" };
   if (S.urnOn > 0) return { k: "urn", text: "Летит урна — бей по ней, награда растёт с каждым ударом" };
+  if (chestsWaiting(S) > 0) return { k: "chest", text: (S.chest.air > 0 ? "Сундук эфира" : "Сундук дня") + " ждёт — открой его во вкладке «Скины»" };
   for (const s of SKILLS) if (skillOpen(S, s) && S.cd[s.id] <= 0 && S.act[s.id] <= 0) return { k: "skill", text: "Готово умение «" + s.name + "»" };
   if (S.wall && canBeatBoss(S)) return { k: "boss", text: "Наёмники справятся с боссом — жми «На босса»" };
   if (S.wall && eclOpen(S) && eclWait(S) <= 0 && S.cycRb >= 3 && shardsGain(S) >= Math.max(15, 0.5 * S.shards)) return { k: "eclipse", text: "Пора в Затмение: осколков выйдет " + shardsGain(S) + ". Кнопка — во вкладке «Реликвии»" };
@@ -719,6 +866,9 @@ export function achValue(S, id) {                            // то, по че�
     case "shards": return S.shards || 0;
     case "patrons": { let n = 0; for (const k in S.pat) n += S.pat[k] || 0; return n; }
     case "chaos": return chaosStep(S);
+    case "streak": return st.streakMax || 0;
+    case "tskins": return tskinCount(S);
+    case "rpgskins": return S.rpg.skins.length;
     case "rb": return S.rb;
     case "elites": case "crates": case "altars": case "statues": case "urns": return S.album[id] || 0;
     case "wisps": return S.wisps || 0;
