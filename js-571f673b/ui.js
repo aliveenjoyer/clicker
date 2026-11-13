@@ -38,9 +38,41 @@ export function mount(state, hooks) {
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
   $("mercList").addEventListener("click", (e) => {
+    if (swipeDone) { swipeDone = false; return; }           // кнопку отпустили в конце свайпа: всё уже куплено по пути
     const b = e.target.closest(".buy"); if (!b || b.classList.contains("off")) return;
     if (C.buy(S, Number(b.dataset.i), buyMode)) slowT = 0; else sfx.deny();
   });
+  // Свайп по кнопкам покупки: зажал левую кнопку мыши на одной и повёл вверх или вниз — нажимается каждая кнопка, на
+  // которую зашёл курсор (вернулся на ту же — нажмётся ещё раз). Первая нажимается, когда курсор с неё уходит; не ушёл —
+  // это обычный щелчок. Начать можно и не с кнопки — с любого места списка. Кнопки, на которые не хватает душ,
+  // пропускаются молча. Только мышь: пальцем список листают.
+  {
+    const list = $("mercList");
+    let sw = null;                                          // { first: с какой кнопки начали, last: над какой курсор сейчас, moved: уже ушли с первой }
+    const press = (b) => {
+      if (b.classList.contains("off") || !C.buy(S, Number(b.dataset.i), buyMode)) return;
+      slowT = 0;
+      b.classList.remove("sw"); void b.offsetWidth; b.classList.add("sw");
+    };
+    const end = () => { if (sw && sw.moved) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; document.body.classList.remove("buyswipe"); };
+    list.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      const b = e.target.closest(".buy");
+      sw = { first: b, last: b, moved: false };
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!sw) return;
+      if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
+      const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .buy") : null;
+      if (b === sw.last) return;
+      if (!sw.moved) { sw.moved = true; document.body.classList.add("buyswipe"); if (sw.first) press(sw.first); }
+      if (b) press(b);
+      sw.last = b;
+    });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    list.addEventListener("dragstart", (e) => e.preventDefault());
+  }
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
   $("skillbar").addEventListener("click", (e) => { const s = e.target.closest(".skill"); if (s && !s.classList.contains("lock")) { if (!C.useSkill(S, s.dataset.id)) sfx.deny(); slowT = 0; } });
   $("relicList").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.classList.contains("off")) { if (C.buyRelic(S, b.dataset.id)) { sfx.buy(); slowT = 0; } } });
@@ -145,6 +177,7 @@ function stepHold(dt) {
 }
 
 // ---------- отряд ----------
+let swipeDone = false;                                      // свайп по кнопкам покупки только что кончился: щелчок после него не считается
 function rowHtml(i) {
   const whip = i === 0, h = whip ? null : HEROES[i - 1];
   const sid = whip ? "lesh" : h.id;                          // скин из RPG ложится на портрет; у хлыста — скин Лэша
@@ -152,7 +185,7 @@ function rowHtml(i) {
     '<div><div class="name">' + (whip ? "Хлыст Лэша" : h.name) + ' <span class="lvl"><small>ур.</small><span data-f="lv">0</span></span></div>' +
     '<div class="meta"><span class="dmg">' + (whip ? "удар" : "урон") + ' <b data-f="dmg">0</b></span></div>' +
     '<div class="ms"><i></i></div><div class="ms-cap" data-f="cap"></div></div>' +
-    '<button class="buy" data-i="' + i + '"><span class="q" data-f="q">×1</span><span class="price farm"><img alt="" src="' + art("cur-farm") + '"><b data-f="price">0</b></span></button>';
+    '<button class="buy" data-i="' + i + '" title="Зажми и веди мышью вверх или вниз — нажмутся все кнопки по пути"><span class="q" data-f="q">×1</span><span class="price farm"><img alt="" src="' + art("cur-farm") + '"><b data-f="price">0</b></span></button>';
 }
 function ensureRows() {
   const want = Math.min(HEROES.length, C.heroesShown(S)) + 1;        // Хлыст + нанятые + следующий

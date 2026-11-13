@@ -940,3 +940,10 @@ html { scrollbar-gutter: stable; }
 .rebox.au .gbar i { display: block; height: 100%; background: linear-gradient(90deg, #63e6a5, #b8f7d4); transition: width 300ms; }
 .rebox.au .autosw { margin-top: 12px; }
 .skillbar.au-on .skill:not(.lock)::before { content: "авто"; z-index: 3; position: absolute; left: 5px; top: 5px; padding: 2px 4px; border-radius: 999px; font: 900 8.5px/1 var(--ui); letter-spacing: .03em; color: #0d2a1b; background: #63e6a5; box-shadow: 0 2px 4px rgba(5,6,20,.5); pointer-events: none; }
+
+/* свайп по кнопкам покупки (зажал мышь и повёл по списку): ничего не выделяется, нажатая по пути кнопка коротко проседает */
+#mercList { user-select: none; -webkit-user-select: none; }
+body.buyswipe, body.buyswipe * { cursor: pointer !important; }
+.buy.sw { animation: buy-sw 160ms ease-out; }
+@keyframes buy-sw { 0% { transform: translateY(3px); filter: brightness(1.25); } 100% { transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { .buy.sw { animation: none; } }
