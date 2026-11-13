@@ -17,6 +17,7 @@ const ptr = { x: -999, y: -999, inside: false };
 let lastMove = 0;
 let lastPop = 0, lastHit = 0, kills = [], dieTok = 0, orbN = 0, says = [], sayUntil = 0, hpTextT = 0, comboShown = -1;
 let calm = false, small = false, tall = false;
+let autoSfxAt = 0;                                          // когда последний раз звучал предмет, взятый автовыбором
 
 export function mount(state) {
   S = state;
@@ -540,7 +541,11 @@ export function onEvent(e) {
       break;
     }
     case "star": sfx.ms(); break;
-    case "item": sfx.ms(); mood("happy", 1500); break;
+    case "item": {                                          // автовыбор может брать по несколько предметов в секунду — звук не чаще раза в полторы
+      const now = performance.now();
+      if (!e.auto || now - autoSfxAt > 1500) { sfx.ms(); if (e.auto) autoSfxAt = now; }
+      mood("happy", 1500); break;
+    }
     case "barrier": banner("Divine Barrier", "ещё одна попытка", "gold", 1300); sfx.wisp(); break;
     case "rebirth": setEnemy(); for (const o of orbs) o.el.remove(); orbs = []; break;
     case "eclipse": {

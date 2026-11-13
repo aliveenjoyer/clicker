@@ -62,6 +62,16 @@ export function mount(state, hooks) {
     if (c && C.pickItem(S, c.dataset.id)) { slowT = 0; draftKey = "?"; }
   });
   $("collGrid").addEventListener("click", (e) => { const t = e.target.closest(".ctile"); if (t) { collSel = t.dataset.id; itemsKey = ""; drawItems(); } });
+  $("autoBox").addEventListener("click", (e) => {           // автовыбор: выключатель и любимые (нажатие на любимый открывает его в коллекции)
+    const f = e.target.closest(".fav"), a = e.target.closest("[data-auto]");
+    if (f) { collSel = f.dataset.id; itemsKey = ""; drawItems(); $("collDet").scrollIntoView({ block: "nearest" }); }
+    else if (a && C.setAuto(S, !S.auto.on)) { sfx.buy(); itemsKey = ""; draftKey = "?"; slowT = 0; api.settings(); }
+  });
+  $("collDet").addEventListener("click", (e) => {           // «В любимые», «Выше», «Убрать» у выбранного предмета
+    const b = e.target.closest("[data-fav]"); if (!b || !collSel) return;
+    if (b.dataset.fav === "up") C.favUp(S, collSel); else C.favToggle(S, collSel);
+    sfx.buy(); itemsKey = ""; drawItems(); api.settings();
+  });
   $("btnSound").addEventListener("click", () => { S.set.sound = !S.set.sound; setSound(S.set.sound); drawSound(); });
   $("btnMenu").addEventListener("click", openSettings);
   $("veil").addEventListener("click", closeModal);
@@ -216,9 +226,17 @@ function drawDraft() {
 const stars = (n) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, STARS.length - n);
 function drawItems() {
   if (tab !== "items") return;
-  const key = JSON.stringify(S.items) + S.d.slots + JSON.stringify(S.col) + JSON.stringify(S.feat) + collSel + (S.un.items ? 1 : 0) + JSON.stringify(S.statues);
+  const key = JSON.stringify(S.items) + S.d.slots + JSON.stringify(S.col) + JSON.stringify(S.feat) + collSel + (S.un.items ? 1 : 0) + JSON.stringify(S.statues) + JSON.stringify(S.auto) + (C.autoOpen(S) ? 1 : 0);
   if (key === itemsKey) return;
   itemsKey = key;
+  // автовыбор: до первого возрождения — под замком с условием; дальше выключатель и любимые по порядку
+  const fav = S.auto.fav, autoOn = C.autoOpen(S);
+  $("autoBox").innerHTML = !autoOn
+    ? '<div class="autolock"><img alt="" src="' + art("lock") + '"><span>Откроется после первого возрождения: предметы после босса будут браться сами, без выбора.</span></div>'
+    : '<button type="button" class="autosw" data-auto="1" aria-pressed="' + (S.auto.on ? "true" : "false") + '"><span class="sw' + (S.auto.on ? " on" : "") + '"></span><span><b>Брать предмет после босса самому</b>' +
+      "<small>Сначала любимые по номерам, потом те, что уже в ячейках, потом самый редкий.</small></span></button>" +
+      (fav.length ? '<div class="favs">' + fav.map((id, i) => { const q = ITEMS.find((y) => y.id === id); return '<button type="button" class="fav" data-id="' + id + '" title="' + q.name + '"><i>' + (i + 1) + '</i><img alt="" src="' + art(id) + '"></button>'; }).join("") + "</div>"
+        : '<p class="note">Любимых пока нет. Нажми на предмет в коллекции ниже и выбери «В любимые».</p>');
   const own = Object.keys(S.items).filter((id) => S.items[id] > 0);
   let h = "";
   for (let i = 0; i < 12; i++) {
@@ -236,9 +254,10 @@ function drawItems() {
     }).join("") + statueNote();
   // коллекция: все предметы видны сразу; не добытые — тёмные, легендарные — под замком с условием, тайные — «?»
   $("collGrid").innerHTML = ITEMS.map((x) => {
-    const n = S.col[x.id] || 0, st = C.starsOf(S, x.id), open = !x.feat || S.feat[x.feat], secret = x.rar === "x" && !open;
+    const n = S.col[x.id] || 0, st = C.starsOf(S, x.id), open = !x.feat || S.feat[x.feat], secret = x.rar === "x" && !open, fp = C.favPos(S, x.id);
     return '<button class="ctile rar-' + x.rar + (n ? "" : " never") + (open ? "" : " shut") + (collSel === x.id ? " sel" : "") + '" data-id="' + x.id + '" style="--rc:' + RARITY[x.rar].color + '">' +
       (secret ? '<span class="q">?</span>' : '<img alt="" src="' + art(x.id) + '">') + (open ? "" : '<img class="lk" alt="" src="' + art("lock") + '">') +
+      (fp >= 0 ? '<span class="fv">' + (fp + 1) + "</span>" : "") +
       '<span class="st">' + (n ? stars(st) : "") + "</span></button>";
   }).join("");
   const x = ITEMS.find((q) => q.id === collSel) || null, det = $("collDet");
@@ -248,7 +267,16 @@ function drawItems() {
     "<p>" + (secret ? "Что он даёт — узнаешь, когда откроешь." : x.text + " за ранг, до ранга " + RANK[x.max || ITEM_MAX] + ".") + "</p>" +
     '<p class="how">' + (open ? (x.feat ? "Открыт. Выпадает после боссов, реже обычных." : x.need && !S.un[x.need] ? "Начнёт выпадать, когда откроется нужная механика." : "Выпадает после боссов.")
       : (x.rar === "x" ? "Намёк: " : "Как открыть: ") + x.how + ".") + "</p>" +
-    (n ? '<p class="stl">' + stars(st) + " · взят " + n + " " + plural(n, "раз", "раза", "раз") + (nx ? " · до следующей звезды: " + nx : " · максимум") + "</p>" : open ? '<p class="stl">ещё ни разу не взят</p>' : "");
+    (n ? '<p class="stl">' + stars(st) + " · взят " + n + " " + plural(n, "раз", "раза", "раз") + (nx ? " · до следующей звезды: " + nx : " · максимум") + "</p>" : open ? '<p class="stl">ещё ни разу не взят</p>' : "") +
+    favActs(x, open);
+}
+function favActs(x, open) {                                  // кнопки автовыбора у выбранного предмета: закрытый любимым не сделать
+  const fp = C.favPos(S, x.id);
+  if (!C.autoOpen(S) || (!open && fp < 0)) return "";
+  return '<div class="favacts">' + (fp >= 0
+    ? "<span>Любимый № " + (fp + 1) + ": автовыбор берёт его " + (fp ? "после номеров выше" : "первым") + "</span>" +
+      (fp > 0 ? '<button type="button" class="btn ghost sm" data-fav="up">Выше</button>' : "") + '<button type="button" class="btn ghost sm" data-fav="del">Убрать</button>'
+    : '<span>Автовыбор берёт любимые первыми</span><button type="button" class="btn ghost sm" data-fav="add">В любимые</button>') + "</div>";
 }
 
 function statueNote() {                                     // что дали золотые статуи в этом забеге
@@ -595,7 +623,10 @@ export function onEvent(e) {
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
   else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; }
-  else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") { slowT = 0; itemsKey = ""; }
+  else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
+    slowT = 0; itemsKey = "";
+    if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
+  }
   else if (e.t === "ach") achNew.push(e);
   else if (e.t === "chest_in") {
     note("Сундук", (e.kind === "air" ? "Выпал сундук эфира" : "Все задания дня сделаны — сундук дня твой" + (e.streak > 1 ? ", серия " + e.streak + " " + plural(e.streak, "день", "дня", "дней") : "")) + ". Открой во вкладке «Скины»", 9000);

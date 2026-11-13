@@ -19,6 +19,7 @@ export function newState() {
     wispIn: 0, wispOn: 0, wisps: 0,
     ash: NEG, ashAll: NEG, rb: 0, rel: {},
     items: {}, draft: null, drafts: 0, forgiven: 0,
+    auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
     col: {}, feat: {}, failRow: 0, idleT: 0, waveLog: [],
     seenT: 0, crate: false, crateIn: 0, altar: 0, altarIn: 0, altarPaid: NEG,
     statueIn: 20, statueOn: 0, statues: { dmg: 0, souls: 0, crit: 0, timer: 0 },
@@ -87,6 +88,8 @@ export function load(text) {
   const og = o.rpg && typeof o.rpg === "object" && Array.isArray(o.rpg.skins) ? o.rpg.skins : [];
   S.rpg = { skins: og.filter((id, i) => RPG_SKINS[id] && og.indexOf(id) === i).sort() };
   if (o.ashLife === undefined) S.ashLife = S.ashAll;
+  const oa = o.auto && typeof o.auto === "object" ? o.auto : {};
+  S.auto = { on: !!oa.on, fav: (Array.isArray(oa.fav) ? oa.fav : []).filter((id, i, a) => ITEMS.some((x) => x.id === id) && a.indexOf(id) === i) };
   S.ev = [];
   derive(S);
   return S;
@@ -588,21 +591,66 @@ function rollDraft(S) {                                     // три разны
   }
   return out.length ? out : null;
 }
+// Автовыбор (открывается первым возрождением, ключ auto в UNLOCKS): предмет после босса берётся сам, карточки не выходят.
+// Что берётся из трёх, по шагам: любимый предмет игрока (S.auto.fav — список по порядку важности) → тот, что уже лежит
+// в ячейке (ранг растёт, новая ячейка не тратится) → новый. Внутри шага — редкость выше, потом тот, что игрок брал чаще.
+const RAR_RANK = { c: 0, r: 1, l: 2, x: 2 };
+export const autoOpen = (S) => !!S.un.auto;
+export function autoChoice(S) {                             // что взял бы автовыбор из открытого выбора; null — выбора нет
+  if (!S.draft) return null;
+  let best = null, bk = null;
+  for (const id of S.draft) {
+    const x = ITEMS.find((q) => q.id === id), f = S.auto.fav.indexOf(id);
+    const k = [f < 0 ? 1 : 0, f < 0 ? 0 : f, S.items[id] ? 0 : 1, -RAR_RANK[x.rar], -(S.col[id] || 0)];
+    let c = 0;
+    for (let i = 0; bk && i < k.length && !c; i++) c = k[i] - bk[i];
+    if (!bk || c < 0) { best = id; bk = k; }
+  }
+  return best;
+}
+function openDraft(S) {                                     // выложить следующий выбор; с автовыбором — сразу взять
+  S.draft = rollDraft(S);
+  if (!S.draft) return;
+  if (S.auto.on && autoOpen(S)) take(S, autoChoice(S), true);
+  else ev(S, { t: "draft" });
+}
 function offerDraft(S) {
   if (S.draft) { S.drafts = Math.min(5, S.drafts + 1); return; }   // выбор уже открыт — этот ждёт очереди, не больше пяти
-  S.draft = rollDraft(S);
-  if (S.draft) ev(S, { t: "draft" });
+  openDraft(S);
 }
-export function pickItem(S, id) {
-  if (!S.draft || S.draft.indexOf(id) < 0) return false;
+function take(S, id, auto) {                                // предмет взят: игроком или автовыбором
   S.items[id] = (S.items[id] || 0) + 1;
   const before = starsOf(S, id);
   S.col[id] = (S.col[id] || 0) + 1;
   if (starsOf(S, id) > before && before > 0) ev(S, { t: "star", id, stars: starsOf(S, id) });
   S.draft = null;
   derive(S);
-  ev(S, { t: "item", id, rank: S.items[id] });
-  if (S.drafts > 0) { S.drafts -= 1; S.draft = rollDraft(S); if (S.draft) ev(S, { t: "draft" }); }
+  ev(S, { t: "item", id, rank: S.items[id], auto: !!auto });
+  if (S.drafts > 0) { S.drafts -= 1; openDraft(S); }
+}
+export function pickItem(S, id) {
+  if (!S.draft || S.draft.indexOf(id) < 0) return false;
+  take(S, id, false);
+  return true;
+}
+export function setAuto(S, on) {                            // включить или выключить; открытый выбор и очередь разбираются сразу
+  if (!autoOpen(S)) return false;
+  S.auto.on = !!on;
+  if (S.auto.on && S.draft) take(S, autoChoice(S), true);
+  return true;
+}
+export const favPos = (S, id) => S.auto.fav.indexOf(id);    // место в любимых с нуля; −1 — не любимый
+export function favToggle(S, id) {                          // добавить в конец списка любимых или убрать из него
+  const i = S.auto.fav.indexOf(id), x = ITEMS.find((q) => q.id === id);
+  if (i >= 0) { S.auto.fav.splice(i, 1); return false; }
+  if (!x || (x.feat && !S.feat[x.feat])) return false;      // закрытый легендарный или тайный любимым не сделать
+  S.auto.fav.push(id);
+  return true;
+}
+export function favUp(S, id) {                              // поднять любимый предмет на одно место
+  const i = S.auto.fav.indexOf(id);
+  if (i <= 0) return false;
+  S.auto.fav.splice(i - 1, 2, id, S.auto.fav[i - 1]);
   return true;
 }
 
