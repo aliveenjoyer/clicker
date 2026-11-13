@@ -118,7 +118,7 @@ async function boot() {
   window.addEventListener("keydown", (e) => {
     if (e.repeat || e.target.closest("input, textarea")) return;
     if (e.code === "Space") { e.preventDefault(); audioUnlock(); C.hit(S, "click"); }
-    else if (/^Digit[1-6]$/.test(e.code)) { const s = ["flurry", "rage", "greed", "mark", "ult", "rewind"][Number(e.code.slice(5)) - 1]; if (!C.useSkill(S, s)) sfx.deny(); }
+    else if (/^Digit[1-7]$/.test(e.code)) { const s = ["flurry", "rage", "greed", "mark", "ult", "rewind", "siege"][Number(e.code.slice(5)) - 1]; if (!C.useSkill(S, s)) sfx.deny(); }
     else if (e.code === "Escape") UI.closeModal();
   });
   document.addEventListener("visibilitychange", () => {

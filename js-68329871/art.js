@@ -16,6 +16,11 @@ const ALIAS = {
   "item-l-frenzy": "medal-gold", "item-l-cheat": "medal-gold", "item-l-echo": "medal-gold",
   "item-x-curse": "medal-violet", "item-x-carpet": "medal-violet", "item-x-weave": "medal-violet",
 };
+// Свои картинки игры (не из набора сессии визуала): значки новых бафов и умения «Натиск», лежат в game/art/fx.
+const OWN = {
+  "sk-siege": "art/fx/sk-siege.webp", "buff-help": "art/fx/buff-help.webp", "buff-gold": "art/fx/buff-gold.webp",
+  "buff-tide": "art/fx/buff-tide.webp", "buff-clock": "art/fx/buff-clock.webp", "buff-breath": C + "buff-rejuv.webp",
+};
 const DISTRICTS = ["bg-street", "bg-docks", "bg-theater", "bg-rooftops"];   // район меняется каждые 100 волн
 const ready = {};
 
@@ -33,7 +38,7 @@ export async function loadArt() {
   } catch (e) { /* манифеста нет — играем на картинках концепта */ }
 }
 export const has = (name) => !!ready[name];
-export const art = (name) => ready[name] || (ALIAS[name] && ready[ALIAS[name]]) || FALLBACK[name] || C + name + ".webp";
+export const art = (name) => ready[name] || (ALIAS[name] && ready[ALIAS[name]]) || OWN[name] || FALLBACK[name] || C + name + ".webp";
 export const heroArt = (id) => ready["hero-" + id] || "art/heroes/hero-" + id + ".webp";
 export const tskinArt = (id) => "art/troopers/" + id + ".webp";        // скин трупера (tools/cut_troopers.py)
 export const rpgSkinArt = (id) => "art/skins/skin-" + id + ".webp";     // скин героя из RPG стрима, 320×420

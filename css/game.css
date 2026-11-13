@@ -898,3 +898,15 @@ html { scrollbar-gutter: stable; }
 .livechest { margin-left: 8px; padding: 7px 12px; border-radius: 999px; font: 800 12.5px/1 var(--ui); color: var(--text-dim); background: rgba(10,10,30,.45); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; }
 .livechest.ready { color: #2a1206; background: linear-gradient(180deg, var(--farm-hi), var(--farm)); box-shadow: 0 3px 0 var(--farm-deep); }
 @media (max-width: 1100px) { .livechest { display: none; } }
+
+/* Страж Затмения: карточка над Затмением во вкладке «Реликвии» */
+.rebox.grd { margin-top: 10px; background: linear-gradient(180deg, rgba(255,90,110,.16), rgba(255,90,110,.05)); box-shadow: inset 0 0 0 2px rgba(255,90,110,.35); }
+.rebox.grd .big { color: var(--danger-soft); }
+.rebox.grd .ghead { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.rebox.grd .ghead img { width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(5,6,20,.6)); }
+.rebox.grd .gbar { height: 10px; margin: 2px 0 8px; border-radius: 5px; background: rgba(10,10,30,.55); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,90,110,.35); }
+.rebox.grd .gbar i { display: block; height: 100%; background: linear-gradient(90deg, #ff5a6e, #ffb14d); transition: width 300ms; }
+
+/* семь умений в ряду: подписи чуть мельче и плотнее, чтобы «Жадность» и «Перемотка» не обрезались */
+.skillbar { gap: 10px; }
+.skillbar .skill-cap { font-size: 10.5px; letter-spacing: -.02em; }

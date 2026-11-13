@@ -389,7 +389,8 @@ function buildChat() {                                      // чат того �
 }
 
 // ---------- умения и бафы ----------
-const BUFF_ICON = { flurry: "sk-flurry", rage: "sk-rage", greed: "sk-greed", mark: "sk-mark", ult: "sk-ult", harvest: "buff-harvest", storm: "buff-storm" };
+const BUFF_ICON = { flurry: "sk-flurry", rage: "sk-rage", greed: "sk-greed", mark: "sk-mark", ult: "sk-ult", harvest: "buff-harvest", storm: "buff-storm",
+  help: "buff-help", gold: "buff-gold", tide: "buff-tide", clock: "buff-clock" };
 function buildSkills() {
   const bar = $("skillbar");
   bar.innerHTML = SKILLS.map((s, i) => '<div class="sk"><div class="skill lock" data-id="' + s.id + '" title="' + s.name + ": " + s.text + '"><span class="key">' + (i + 1) +
@@ -407,7 +408,7 @@ function drawSkills() {
     e.root.classList.toggle("lock", !open);
     e.root.classList.toggle("on", open && on);
     e.root.classList.toggle("ready", open && !on && cd <= 0);
-    e.cap.textContent = open ? s.name : s.need ? "возрождение" : "волна " + s.wave;
+    e.cap.textContent = open ? s.name : s.need === "ecl" ? "волна 1000" : s.need ? "возрождение" : "волна " + s.wave;
     e.dur.hidden = !on; e.cd.hidden = !open || on || cd <= 0;
     if (on) { e.bar.style.setProperty("--p", Math.min(100, S.act[s.id] / s.dur * 100).toFixed(0) + "%"); e.t.textContent = clock(S.act[s.id]); }
     else if (open && cd > 0) { e.cd.style.setProperty("--p", (cd / s.cd * 100).toFixed(1) + "%"); e.t.textContent = clock(cd); }
@@ -447,8 +448,28 @@ function buildPatrons() {
     patronEls[p.id] = { b, mx: card.querySelector(".mx"), cost: b.querySelector("span"), lv: card.querySelector("[data-l]") };
   }
 }
+// Страж Затмения: карточка над Затмением. Доли здоровья: 37 %, 4,2 %, 0,35 %, «меньше 0,01».
+const pc = (f) => { const v = f * 100; return v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1).replace(".", ",") : v >= 0.01 ? v.toFixed(2).replace(".", ",") : v > 0 ? "меньше 0,01" : "0"; };
+let grdKey = "";
+function drawGuard() {
+  const open = C.grdOpen(S), g = S.grd, on = S.act.siege > 0, now = on ? C.grdNow(S) : 0, n = C.grdShards(S);
+  const key = [open, g.lv, pc(g.left), pc(g.last), on, pc(now), n, S.stats.guards || 0, S.cd.siege > 0].join("|");
+  if (key === grdKey) return;
+  grdKey = key;
+  $("grdBox").innerHTML = !open
+    ? "<div>Страж Затмения — цель между Затмениями</div><div class=\"big\">после босса 1000-й волны</div><div>Откроется вместе с Затмением. Умение <b>«Натиск»</b>: полминуты весь твой урон идёт ещё и в Стража. " +
+      "Победишь — <b>осколки сразу</b>, не дожидаясь Затмения.</div>"
+    : '<div class="ghead"><img alt="" src="' + art("boss-guardian") + '"><div><div>Страж Затмения № ' + (g.lv + 1) + '</div><div class="big">осталось ' + pc(Math.max(0, g.left - now)) + " %</div></div></div>" +
+      '<div class="gbar"><i style="width:' + Math.max(0, (g.left - now) * 100).toFixed(2) + '%"></i></div>' +
+      "<div>" + (on ? "<b>Идёт натиск:</b> уже снято " + pc(now) + " %. Бей, жми умения, лови огоньки." :
+        "Жми умение <b>«Натиск»</b> (седьмое в ряду, клавиша 7): полминуты весь твой урон идёт ещё и в Стража. Больше всего натиск снимает, когда забег упёрся в стену и горят бафы: «Ярость», «Жатва», «Подмога», «Буря».") +
+      " Здоровье не восстанавливается. Награда: <b>+" + n + " " + plural(n, "осколок", "осколка", "осколков") + " сразу</b>." +
+      (g.last > 0 && !on ? " Прошлый натиск снял " + pc(g.last) + " %." : "") +
+      (S.stats.guards ? " Стражей повержено: <b>" + group(S.stats.guards) + "</b>." : "") + "</div>";
+}
 function drawEclipse() {
   if (tab !== "relics") return;
+  drawGuard();
   if (!patronEls) buildPatrons();
   const open = C.eclOpen(S), wait = open ? C.eclWait(S) : 0, n = open ? C.shardsGain(S) : 0, free = C.shardsFree(S);
   const key = [open, Math.ceil(wait / 30), n, free, S.shards, S.ecl, C.chaosStep(S), C.chaosOpen(S), JSON.stringify(S.pat)].join("|");
@@ -606,6 +627,10 @@ function drawSlow() {
   if (S.ashAll !== NEG || S.ecl) $("ashNum").textContent = txt(S.ash);
   $("chipShard").hidden = !S.shards;
   if (S.shards) $("shardNum").textContent = group(C.shardsFree(S));
+  if (S.act.siege > 0) {                                     // идёт натиск: в плашке «Дальше» — его ход
+    achCap = "Натиск на Стража"; achUntil = performance.now() + 600;
+    achMsg = "Снято " + pc(C.grdNow(S)) + " % · осталось " + Math.ceil(S.act.siege) + " с · бей и жми умения";
+  }
   const nx = C.nextUp(S), nl = $("nextLine"), flash = performance.now() < achUntil;
   const hint = flash ? achMsg : nx ? nx.text : S.stats.clicks < 5 ? "Бей труперов и собирай души. Справа видно всё, что можно открыть" : "Всё идёт своим чередом: качай отряд и иди вперёд";
   if (nl.textContent !== hint) { nl.textContent = hint; nl.title = hint; }   // строка обрезается на двух строках — целиком видна по наведению
@@ -650,11 +675,13 @@ export function onEvent(e) {
     if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
     slowT = 0; itemsKey = "";
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
   }
+  else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
+  else if (e.t === "guard_kill") { note("Страж повержен", "+" + e.shards + " " + plural(e.shards, "осколок", "осколка", "осколков") + " сразу — потрать на покровителей во вкладке «Реликвии». Вышел страж № " + (e.n + 1), 12000); grdKey = ""; eclKey = ""; sfx.rank(); }
   else if (e.t === "ach") achNew.push(e);
   else if (e.t === "chest_in") {
     note("Сундук", (e.kind === "air" ? "Выпал сундук эфира" : "Все задания дня сделаны — сундук дня твой" + (e.streak > 1 ? ", серия " + e.streak + " " + plural(e.streak, "день", "дня", "дней") : "")) + ". Открой во вкладке «Скины»", 9000);

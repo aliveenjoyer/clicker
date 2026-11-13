@@ -21,6 +21,8 @@ export function newState() {
     ash: NEG, ashAll: NEG, rb: 0, rel: {},
     items: {}, draft: null, drafts: 0, forgiven: 0,
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
+    grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
+    wispKind: "",                                           // что принесёт огонёк, который сейчас на линии
     col: {}, feat: {}, failRow: 0, idleT: 0, waveLog: [],
     seenT: 0, crate: false, crateIn: 0, altar: 0, altarIn: 0, altarPaid: NEG,
     statueIn: 20, statueOn: 0, statues: { dmg: 0, souls: 0, crit: 0, timer: 0 },
@@ -96,6 +98,10 @@ export function load(text) {
   const op = o.pw0 && typeof o.pw0 === "object" ? o.pw0 : null;
   S.pw0 = op ? { t: Math.min(S.stats.pushT, num(op.t)), n: Math.min(S.stats.pushN, Math.floor(num(op.n))) } : { t: S.stats.pushT, n: S.stats.pushN };
   if (!Array.isArray(S.waveLog)) S.waveLog = [];
+  const og2 = o.grd && typeof o.grd === "object" ? o.grd : {};
+  const gl = Number(og2.left);
+  S.grd = { lv: N0(og2.lv, 100000), left: gl > 0 && gl <= 1 ? gl : 1, dealt: NEG, last: Math.max(0, Math.min(1, Number(og2.last) || 0)) };
+  S.wispKind = WISP.some((w) => w.id === o.wispKind) ? o.wispKind : "";
   const oa = o.auto && typeof o.auto === "object" ? o.auto : {};
   S.auto = { on: !!oa.on, fav: (Array.isArray(oa.fav) ? oa.fav : []).filter((id, i, a) => ITEMS.some((x) => x.id === id) && a.indexOf(id) === i) };
   S.ev = [];
@@ -229,7 +235,8 @@ export function comboTier(S) {
   for (let i = 0; i < CFG.combo.length; i++) if (S.combo >= CFG.combo[i][0]) t = i;
   return t;
 }
-export const dpsLg = (S) => (S.d.dps === NEG ? NEG : S.d.dps + buffLg(S, "dmg"));
+export const dpsLg = (S) => (S.d.dps === NEG ? NEG : S.d.dps + buffLg(S, "dmg") + buffLg(S, "dps"));
+const rushCap = (S) => S.d.rushCap + (S.buff.tide > 0 ? L10(3) : 0);   // баф «Прилив»: слабые волны пролетают втрое быстрее
 export function clickLg(S) {                                // lg урона одного удара, без крита
   const D = S.d;
   const base = D.dps === NEG ? D.whip : lsum(D.whip, D.dps + L10(D.share));
@@ -244,7 +251,7 @@ export function rateLg(S) {                                 // lg душ в се
   const d = dpsLg(S);
   if (d === NEG) return NEG;
   const z = isBoss(S.z) ? S.z - 1 : S.z;
-  return Math.min(d - hpLg(z), S.d.rushCap) + lootBase(z) + soulsLg(S);
+  return Math.min(d - hpLg(z), rushCap(S)) + lootBase(z) + soulsLg(S);
 }
 
 // ---------- события и открытия ----------
@@ -268,7 +275,7 @@ function startWave(S) {
   if (S.z > S.zrec) { S.zrec = S.z; S.stats.pushN = (S.stats.pushN || 0) + 1; }   // пройденная волна — новый рекорд забега
   if (S.z > S.cycBest) S.cycBest = S.z;
   if (S.z > S.best) S.best = S.z;
-  if (isBoss(S.z)) { S.bossT = S.d.bossTime; ev(S, { t: "boss_in", z: S.z, boss: bossOf(S.z) }); }
+  if (isBoss(S.z)) { S.bossT = S.d.bossTime + (S.buff.clock > 0 ? 15 : 0); ev(S, { t: "boss_in", z: S.z, boss: bossOf(S.z) }); }   // «Карманные часы»: +15 с
   else ev(S, { t: "wave", z: S.z });
   checkUnlocks(S);
 }
@@ -323,6 +330,7 @@ export function setMode(S, mode) {
 }
 
 function damage(S, dmg, src) {                              // нанести dmg (lg) текущей цели
+  if (S.act.siege > 0) S.grd.dealt = lsum(S.grd.dealt, dmg);   // идёт «Натиск»: тот же урон идёт ещё и в Стража Затмения
   const boss = isBoss(S.z);
   S.hp -= Math.pow(10, Math.min(6, dmg + (boss ? S.d.bossMul : 0) - targetHp(S)));
   if (S.hp > 0) return;
@@ -379,7 +387,7 @@ export function tick(S, dt, live) {                         // live=false — о
     if (S.idleT >= 300 && S.d.dps !== NEG) feat(S, "weave");
     for (const s of SKILLS) {
       if (S.cd[s.id] > 0) S.cd[s.id] = Math.max(0, S.cd[s.id] - dt);
-      if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) ev(S, { t: "buff_end", id: s.id }); }
+      if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) { ev(S, { t: "buff_end", id: s.id }); if (s.id === "siege") siegeEnd(S); } }
     }
     for (const id in S.buff) if (S.buff[id] > 0) { S.buff[id] = Math.max(0, S.buff[id] - dt); if (S.buff[id] === 0) ev(S, { t: "buff_end", id }); }
     if (S.un.combo && S.combo > 0) {
@@ -392,7 +400,7 @@ export function tick(S, dt, live) {                         // live=false — о
     }
     if (S.un.wisp) {
       if (S.wispOn > 0) { S.wispOn -= dt; if (S.wispOn <= 0) { S.wispOn = 0; ev(S, { t: "wisp_gone" }); scheduleWisp(S); } }
-      else { S.wispIn -= dt; if (S.wispIn <= 0) { S.wispOn = CFG.wispLife; ev(S, { t: "wisp" }); } }
+      else { S.wispIn -= dt; if (S.wispIn <= 0) { S.wispOn = CFG.wispLife; S.wispKind = rollWisp(S); ev(S, { t: "wisp", id: S.wispKind }); } }
     }
     S.seenT += dt;
     if (S.un.crate && !S.crate) { S.crateIn -= dt; if (S.crateIn <= 0) { S.crate = true; ev(S, { t: "crate_in" }); } }
@@ -414,13 +422,14 @@ export function tick(S, dt, live) {                         // live=false — о
     }
   } else if (S.altar > 0) altarEnd(S);
   const d = dpsLg(S);
+  if (S.act.siege > 0 && d !== NEG) S.grd.dealt = lsum(S.grd.dealt, d + L10(dt));   // «Натиск»: наёмники бьют и Стража
   if (isBoss(S.z)) {
     if (d !== NEG) S.hp -= Math.pow(10, Math.min(6, d + S.d.bossMul - targetHp(S))) * dt;
     S.bossT -= dt;
     if (S.hp <= 0) bossWin(S);
     else if (S.bossT <= 0) bossFail(S);
   } else if (d !== NEG) {
-    const rate = Math.pow(10, Math.min(d - targetHp(S), S.d.rushCap));
+    const rate = Math.pow(10, Math.min(d - targetHp(S), rushCap(S)));
     S.hp -= rate * dt;
     let guard = 400;
     while (S.hp <= 0 && guard-- > 0 && !isBoss(S.z)) { kill(S, "dps"); S.hp += 1; }
@@ -435,6 +444,7 @@ export function offline(S, seconds) {
   const eff = S.d.offEff;
   const t = Math.min(seconds, cap) * eff;
   const before = { souls: S.souls, z: S.z, life: S.life };
+  if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const id in S.act) S.act[id] = 0;                    // умения и бафы за время отсутствия истекли
   S.buff = {}; S.combo = 0; S.wispOn = 0; S.statueOn = 0; S.urnOn = 0; if (S.altar > 0) altarEnd(S);
   if (S.d.dps === NEG || t < 5) return null;
@@ -470,11 +480,12 @@ export function heroesShown(S) {                            // сколько с
 }
 
 // ---------- умения и огонёк ----------
-export function skillOpen(S, s) { return s.need === "rb1" ? S.rb >= 1 : S.best >= s.wave; }
+export function skillOpen(S, s) { return s.need === "rb1" ? S.rb >= 1 : s.need === "ecl" ? eclOpen(S) : S.best >= s.wave; }
 export function useSkill(S, id) {
   const s = SKILLS.find((x) => x.id === id);
   if (!s || !skillOpen(S, s) || S.cd[id] > 0) return false;
   S.cd[id] = s.cd * S.d.cdMul;
+  if (id === "siege") S.grd.dealt = NEG;                    // «Натиск»: счёт урона по Стражу с нуля
   if (id === "rewind") {
     const r = rateLg(S);
     if (r !== NEG) { const l = r + L10(3600); gain(S, l); ev(S, { t: "gift", loot: l, title: "Перемотка" }); }
@@ -497,21 +508,27 @@ function scheduleWisp(S) {                                  // следующи�
   const u = Math.pow(Math.random(), 1 / 5);
   S.wispIn = (CFG.wispMin + (CFG.wispMax - CFG.wispMin) * u) * S.d.wispMul * (S.live ? 0.5 : 1);   // в эфире огоньки вдвое чаще
 }
+function rollWisp(S) {                                       // что принесёт следующий огонёк; самый первый в игре — «Жатва»
+  if (!S.wisps) return WISP[0].id;
+  let r = Math.random();
+  for (const x of WISP) { if (r < x.p) return x.id; r -= x.p; }
+  return WISP[0].id;
+}
 export function takeWisp(S) {
   if (S.wispOn <= 0) return null;
-  S.wispOn = 0; S.wisps += 1;
+  const w = WISP.find((x) => x.id === S.wispKind) || WISP.find((x) => x.id === rollWisp(S));
+  S.wispOn = 0; S.wisps += 1; S.wispKind = "";
   if (S.wisps >= 10) feat(S, "echo");
-  let w = WISP[0];
-  if (S.wisps > 1) {
-    let r = Math.random();
-    for (const x of WISP) { if (r < x.p) { w = x; break; } r -= x.p; }
-  }
   let loot = NEG;
   if (w.id === "catch") {
     const r = rateLg(S);
     loot = r === NEG ? S.souls + L10(0.15) : Math.min(S.souls + L10(0.15), r + L10(1200));
     if (loot !== NEG) gain(S, loot);
-  } else S.buff[w.id] = w.dur * S.d.durMul;
+  } else if (w.id === "breath") { for (const s of SKILLS) S.cd[s.id] = 0; }   // «Второе дыхание»: все умения готовы
+  else {
+    S.buff[w.id] = w.dur * S.d.durMul;
+    if (w.id === "clock" && isBoss(S.z)) S.bossT += 15;     // босс уже на линии — добавка сразу
+  }
   scheduleWisp(S);
   ev(S, { t: "wisp_take", id: w.id, title: w.title, text: w.text, loot });
   return w;
@@ -671,11 +688,17 @@ function ashInt(x) {
   const v = Math.floor(Math.pow(10, x) + 1e-6);
   return v <= 0 ? NEG : L10(v);
 }
+// Пепел дают за волны, пройденные в этом забеге. Волну старта (S.runZ: реликвия «Старт», покровитель «Наследие») игрок
+// не проходил, поэтому её доля вычитается — той же формулой и с той же «Мощью», что у рекорда забега. Забег с волны
+// не дальше ashFrom получает ровно столько же, сколько раньше. Без вычета возрождение сразу после возрождения давало
+// пепел за волну старта, не пройдя ни одной: со «Стартом» — сотни пепла, с «Наследием» при низкой «Мощи» — до ×66
+// к честной игре, раз в четыре секунды (14.11.2026).
+const ashWave = (z) => (z > CFG.ashFrom ? Math.pow((z - CFG.ashFrom) / CFG.ashDiv, CFG.ashPow) : 0);
 export function ashGain(S) {                                // lg пепла, который даст возрождение сейчас
-  const z = S.zrec;
-  let base = z > CFG.ashFrom ? Math.pow((z - CFG.ashFrom) / CFG.ashDiv, CFG.ashPow) : 0;
+  const z = S.zrec, might = L10(1 + 0.15 * (S.pat.might || 0)) / 100;   // «Мощь»: пепел растёт с волной
+  let base = ashWave(z) - ashWave(S.runZ) * Math.pow(10, (S.runZ - z) * might);
   base += S.lvRun / CFG.ashLv;
-  return base < 1 ? NEG : ashInt(L10(Math.floor(base)) + S.rel.ashplus * L10(1.05) + z / 100 * L10(1 + 0.15 * (S.pat.might || 0)));   // «Мощь»: пепел растёт с волной
+  return base < 1 ? NEG : ashInt(L10(Math.floor(base)) + S.rel.ashplus * L10(1.05) + z * might);
 }
 export function rebirth(S) {
   const g = ashGain(S);
@@ -701,6 +724,7 @@ function newRun(S) {                                         // забег с н
   S.combo = 0; S.tier = -1; S.buff = {};
   S.items = {}; S.draft = null; S.drafts = 0; S.forgiven = 0;
   S.statues = { dmg: 0, souls: 0, crit: 0, timer: 0 }; S.altar = 0; S.urnOn = 0; S.statueOn = 0;
+  if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const s of SKILLS) S.act[s.id] = 0;
   derive(S);
 }
@@ -729,6 +753,41 @@ export function pace(S) {
   else if (S.mode === "farm" && !S.wall) state = "farm";
   else if (now !== null) state = now >= limit ? "stuck" : now >= limit / 2 ? "slow" : "fly";
   return { now, mine, limit, state, canRb };
+}
+
+// ---------- Страж Затмения: цель между Затмениями ----------
+// Открывается вместе с Затмением. Умение «Натиск» на полминуты включает счёт: весь урон, который игрок и наёмники наносят
+// на линии, идёт ещё и в Стража (линия при этом живёт как обычно). Здоровье стража — одно на много натисков и не
+// восстанавливается. Победа — осколки сразу (их можно тут же потратить на покровителей), дальше выходит страж толще.
+// Затмение начинает счёт стражей цикла заново.
+//
+// Здоровье меряется не числом, а долей: натиск снимает урон / (здоровье трупера РЕКОРДНОЙ волны × 10^(grdBase + grdStep·№)).
+// Так страж не становится пустяком, когда игрок растёт: у стены урон за полминуты — около десяти таких труперов, то есть
+// без бафов первый страж теряет несколько процентов за натиск, а под «Яростью», «Жатвой», «Подмогой» или «Бурей» — в разы
+// и десятки раз больше. Первая версия держала здоровье числом от рекорда на момент выхода стража: осколки за победу
+// давали сотни волн, следующий страж падал с одного натиска, и бот за 21 час ушёл на 16 000-ю волну вместо 2 400-й.
+// Поэтому же в делителе рекорд за всё время, а не волна забега: в начале забега, пока волны «пролетают», урон на порядки
+// больше здоровья тех труперов, и натиск там не должен давать ничего особенного.
+export const grdOpen = (S) => eclOpen(S);
+export const grdShards = (S) => CFG.grdShards + Math.floor(S.grd.lv / 2);   // сколько осколков дадут за нынешнего стража: 2, 2, 3, 3, 4…
+const grdNeed = (S) => hpLg(Math.max(CFG.eclWave, S.best)) + CFG.grdBase + CFG.grdStep * S.grd.lv;   // lg урона, равного всему здоровью стража сейчас
+export const grdLeft = (S) => S.grd.left;                    // какая доля здоровья осталась, 0…1
+export function grdNow(S) {                                   // доля здоровья, которую уже снял идущий натиск
+  const g = S.grd;
+  return g.dealt === NEG ? 0 : Math.min(g.left, Math.pow(10, Math.min(0, g.dealt - grdNeed(S))));
+}
+function siegeEnd(S) {                                        // натиск кончился: его урон снимается со стража
+  const g = S.grd, took = grdNow(S);
+  g.dealt = NEG; g.last = took;
+  S.stats.sieges = (S.stats.sieges || 0) + 1;
+  g.left -= took;
+  if (g.left <= 1e-6) {                                       // повержен
+    const n = grdShards(S);
+    S.shards += n; g.lv += 1; g.left = 1; g.last = 0; S.stats.guards = (S.stats.guards || 0) + 1;
+    ev(S, { t: "guard_kill", shards: n, n: g.lv });
+    return;
+  }
+  ev(S, { t: "siege_end", took, left: g.left });
 }
 
 // ---------- второй слой: Затмение, осколки, покровители ----------
@@ -773,6 +832,8 @@ export function eclipse(S, now) {
   S.ash = NEG; S.ashAll = NEG;
   for (const r of RELICS) S.rel[r.id] = 0;
   S.cycBest = 1; S.cycRb = 0;
+  if (S.act.siege > 0) siegeEnd(S);
+  S.grd.lv = 0; S.grd.left = 1; S.grd.last = 0;             // новый цикл — стражи с первого
   S.stats.rbAt = S.stats.played;
   const step = chaosOpen(S) && S.chaos < CFG.chaosMax;       // третий слой: шаг «Скупщика теней» за это Затмение
   if (step) S.chaos += 1;

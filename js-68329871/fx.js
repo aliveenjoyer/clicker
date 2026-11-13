@@ -1,6 +1,6 @@
 // Линия: всё, что двигается. Удар, числа, осколки, сферы душ, босс, огонёк, титры, сцена возрождения.
 // Тайминги и ступени силы отклика — PLAN.md § 16. Правил игры здесь нет: только картинка и звук по событиям ядра.
-import { CFG } from "./data.js";
+import { CFG, WISP } from "./data.js";
 import * as C from "./core.js";
 import { txt, lsum, L10 } from "./num.js";
 import { sfx } from "./audio.js";
@@ -492,7 +492,9 @@ export function onEvent(e) {
       pop("+" + txt(e.loot), b ? b.x - 40 : spot.px, b ? Math.max(8, b.y - b.h * 0.5) : spot.py, "soul big"); bumpBank(); sfx.wisp();
       break;
     }
+    case "guard_kill": banner("Страж повержен", "+" + e.shards + " осколка — трать во вкладке «Реликвии»", "gold", 2600); sfx.bossWin(); mood("happy", 2600); break;
     case "skill": {
+      if (e.id === "siege") banner("Натиск!", "полминуты весь урон идёт ещё и в Стража", "", 1500);
       if (e.id === "ult") { banner("Ульта Лэша", "вся волна — оземь", "gold", 1200); shake(9, 320); const b = enemyBox(); ring(b.x, b.y + b.h * 0.4, FW * 0.7, "rgba(255,197,61,.9)", 0.4); fximg("fx-shock", b.x, b.y + b.h * 0.44, small ? 300 : 460, "shock"); }
       sfx.skill();
       break;
@@ -618,6 +620,8 @@ export function frame(dt) {
 
   // огонёк виден, пока он есть в состоянии игры
   if (S.wispOn > 0 && el.wisp.hidden) {
+    const wk = WISP.find((x) => x.id === S.wispKind), wi = el.wisp.querySelector("img");   // на линии виден значок того, что выпало
+    if (wi) { const src = art(wk ? wk.icon : "wisp"); if (wi.getAttribute("src") !== src) wi.src = src; el.wisp.title = wk ? wk.title + ": " + wk.text : ""; }
     el.wisp.style.left = rnd(26, 46) + "%"; el.wisp.style.top = rnd(26, 52) + "%";
     el.wisp.hidden = false; restart(el.wisp, "in");
   } else if (S.wispOn <= 0 && !el.wisp.hidden) el.wisp.hidden = true;
