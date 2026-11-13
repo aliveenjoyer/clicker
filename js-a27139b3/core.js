@@ -22,6 +22,7 @@ export function newState() {
     ash: NEG, ashAll: NEG, rb: 0, rel: {},
     items: {}, draft: null, drafts: 0, forgiven: 0,
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
+    fig: { k: 0, left: 0 },                                 // рисунки на сетке отряда: комбо и сколько секунд осталось собрать следующий
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
     wispKind: "",                                           // что принесёт огонёк, который сейчас на линии
@@ -86,6 +87,7 @@ export function load(text) {
     : { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: !!ou.renew };
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
+  S.fig = { k: 0, left: 0 };                                // комбо рисунков перезагрузку не переживает
   if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
   // удержание: всё приводится к виду, который ждёт игра; чего в сохранении нет или что испорчено — как у нового игрока
   const N0 = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
@@ -257,7 +259,17 @@ export function clickLg(S) {                                // lg урона о�
 }
 export const critChance = (S) => Math.min(0.75, active(S, "mark") ? 0.5 + (S.d.crit - CFG.critChance) : S.d.crit);
 export const critMult = (S) => (active(S, "mark") ? 5 : CFG.critMult);
-const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0);          // эфир: души ×2
+const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + (S.fig.k > 0 ? L10(figMul(S)) : 0);   // эфир: души ×2; комбо рисунков
+// Рисунки на сетке отряда (сами рисунки и попадания по плиткам — js/ui.js): собран рисунок — комбо растёт, души идут с
+// прибавкой, пока комбо живо. Время на следующий рисунок идёт только в игре; без игрока комбо обрывается.
+export const figMul = (S) => 1 + CFG.figStep * Math.min(S.fig.k, CFG.figCap);
+export function figDone(S, cells, name) {                    // cells — сколько плиток было в рисунке
+  S.fig.k += 1; S.fig.left = CFG.figHold;
+  S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, S.fig.k);
+  const r = rateLg(S), loot = r === NEG ? NEG : r + L10(CFG.figLoot * Math.max(1, cells));
+  if (loot !== NEG) gain(S, loot);
+  ev(S, { t: "fig", k: S.fig.k, loot, cells, name: name || "" });
+}
 export function setLive(S, v) { S.live = !!v; }
 export function rateLg(S) {                                 // lg душ в секунду от наёмников на этой волне
   const d = dpsLg(S);
@@ -410,6 +422,7 @@ export function tick(S, dt, live) {                         // live=false — о
       if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) { ev(S, { t: "buff_end", id: s.id }); if (s.id === "siege") siegeEnd(S); } }
     }
     auStep(S, dt);
+    if (S.fig.k > 0) { S.fig.left -= dt; if (S.fig.left <= 0) { ev(S, { t: "fig_end", k: S.fig.k }); S.fig.k = 0; S.fig.left = 0; } }
     for (const id in S.buff) if (S.buff[id] > 0) { S.buff[id] = Math.max(0, S.buff[id] - dt); if (S.buff[id] === 0) ev(S, { t: "buff_end", id }); }
     if (S.un.combo && S.combo > 0) {
       S.comboIdle += dt;
@@ -467,6 +480,7 @@ export function offline(S, seconds) {
   const before = { souls: S.souls, z: S.z, life: S.life };
   if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const id in S.act) S.act[id] = 0;                    // умения и бафы за время отсутствия истекли
+  S.fig.k = 0; S.fig.left = 0;                              // и комбо рисунков
   S.buff = {}; S.combo = 0; S.wispOn = 0; S.statueOn = 0; S.urnOn = 0; if (S.altar > 0) altarEnd(S);
   if (S.d.dps === NEG || t < 5) return null;
   const step = 2;

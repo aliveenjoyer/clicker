@@ -45,7 +45,9 @@ export function mount(state, hooks) {
     const list = $("mercList");
     const tap = (b) => { b.classList.remove("tapfx"); void b.offsetWidth; b.classList.add("tapfx"); };   // короткий щелчок плитки
     const buyTile = (b, loud) => {
-      if (!b || b.classList.contains("hg-lock")) return false;
+      if (!b) return false;
+      figTouch(Number(b.dataset.i));                         // плитка из рисунка засчитывается, даже если купить её нельзя
+      if (b.classList.contains("hg-lock")) return false;
       hgShow = Number(b.dataset.i);
       if (b.classList.contains("hg-no") || !C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
       slowT = 0; tap(b);
@@ -141,7 +143,7 @@ export function mount(state, hooks) {
   syncRpg(true);
 }
 export function setState(state) {
-  S = state; rows = []; $("mercList").textContent = ""; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
+  S = state; rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
   itemsKey = rosterKey = roadKey = keepKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0; chestBadge = -1;
   TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
@@ -233,11 +235,93 @@ function fitGrid() {
     if (v > size + 0.01) { size = v; c = k; r = n; }
   }
   const key = [flow, c, r, Math.round(size)].join("|");
-  if (key === hgFit) return;
+  if (key === hgFit) { drawFigLines(); return; }            // размер тот же, но плитки могли сдвинуться — линия рисунка идёт за ними
   hgFit = key;
   list.classList.toggle("hg-flow", flow);
   list.style.setProperty("--hg-c", c); list.style.setProperty("--hg-r", r); list.style.setProperty("--hg-s", Math.round(size) + "px");
+  hgC = c; hgR = r;
+  spawnFig();                                               // сетка другая — рисунок ставится заново
 }
+// ---------- рисунки на сетке отряда ----------
+// Поверх сетки светится рисунок: несколько плиток отмечены кружками и соединены линией — икс, круг, зигзаг, сердце. Проведи
+// по всем отмеченным плиткам (или нажми каждую) — рисунок собран: комбо растёт, души идут с прибавкой (js/core.js, figDone),
+// и появляется следующий. Пока комбо больше нуля, идёт время: не собрал следующий — комбо обрывается, отметки гаснут.
+// Клетки — [столбец, ряд] по ходу линии; два штриха — два массива.
+const FIGS = [
+  { name: "Линия", w: 4, h: 1, s: [[[0, 0], [1, 0], [2, 0], [3, 0]]] },
+  { name: "Столб", w: 1, h: 4, s: [[[0, 0], [0, 1], [0, 2], [0, 3]]] },
+  { name: "Диагональ", w: 4, h: 4, s: [[[0, 0], [1, 1], [2, 2], [3, 3]]] },
+  { name: "Галочка", w: 4, h: 3, s: [[[0, 1], [1, 2], [2, 1], [3, 0]]] },
+  { name: "Зигзаг", w: 5, h: 2, s: [[[0, 1], [1, 0], [2, 1], [3, 0], [4, 1]]] },
+  { name: "Крыша", w: 5, h: 3, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]]] },
+  { name: "Угол", w: 3, h: 3, s: [[[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]]] },
+  { name: "Икс", w: 3, h: 3, s: [[[0, 0], [1, 1], [2, 2]], [[2, 0], [1, 1], [0, 2]]] },
+  { name: "Плюс", w: 3, h: 3, s: [[[1, 0], [1, 1], [1, 2]], [[0, 1], [1, 1], [2, 1]]] },
+  { name: "Ромб", w: 3, h: 3, s: [[[1, 0], [2, 1], [1, 2], [0, 1], [1, 0]]] },
+  { name: "Квадрат", w: 3, h: 3, s: [[[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [0, 1], [0, 0]]] },
+  { name: "Круг", w: 4, h: 4, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1], [1, 0]]] },
+  { name: "Треугольник", w: 5, h: 3, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
+  { name: "Большой икс", w: 5, h: 5, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [[4, 0], [3, 1], [2, 2], [1, 3], [0, 4]]] },
+  { name: "Сердце", w: 5, h: 5, s: [[[2, 1], [1, 0], [0, 1], [0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [4, 1], [3, 0], [2, 1]]] },
+  { name: "Большой круг", w: 5, h: 5, s: [[[1, 0], [2, 0], [3, 0], [4, 1], [4, 2], [4, 3], [3, 4], [2, 4], [1, 4], [0, 3], [0, 2], [0, 1], [1, 0]]] },
+];
+let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
+function clearFig() {
+  if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
+  fig = null;
+}
+function spawnFig() {                                       // новый рисунок там, где он целиком ложится на плитки
+  const was = fig ? fig.name : "";
+  clearFig();
+  if (figOn && rows.length === TILES && hgC) {
+    const R = Math.max(hgR, Math.ceil(TILES / hgC)), fits = FIGS.filter((f) => f.w <= hgC && f.h <= R && f.name !== was);
+    for (let t = 0; t < 80 && fits.length; t++) {
+      const f = fits[Math.floor(Math.random() * fits.length)];
+      const ox = Math.floor(Math.random() * (hgC - f.w + 1)), oy = Math.floor(Math.random() * (R - f.h + 1));
+      const segs = f.s.map((st) => st.map(([x, y]) => (oy + y) * hgC + ox + x));
+      if (segs.some((st) => st.some((i) => i >= TILES))) continue;
+      fig = { name: f.name, segs, cells: [...new Set(segs.flat())], hit: new Set() };
+      for (const i of fig.cells) { const d = document.createElement("i"); d.className = "hg-dot"; rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m"); }
+      break;
+    }
+  }
+  drawFigLines(); drawFigChip();
+}
+function drawFigLines() {                                   // линия рисунка — поверх сетки, между центрами плиток
+  const list = $("mercList");
+  let svg = list.querySelector(".hg-fig");
+  if (!fig) { if (svg) svg.remove(); return; }
+  if (!svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "hg-fig"); list.appendChild(svg); }
+  const lr = list.getBoundingClientRect();
+  const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return (r.left + r.width / 2 - lr.left + list.scrollLeft).toFixed(1) + "," + (r.top + r.height * 0.42 - lr.top + list.scrollTop).toFixed(1); };
+  svg.setAttribute("width", Math.round(lr.width)); svg.setAttribute("height", Math.round(Math.max(lr.height, list.scrollHeight)));
+  svg.innerHTML = fig.segs.map((st) => '<polyline points="' + st.map(pt).join(" ") + '"/>').join("");
+}
+function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
+  if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
+  fig.hit.add(i);
+  rows[i].root.classList.add("hg-hit");
+  sfx.orb(fig.hit.size - 1);
+  if (fig.hit.size === fig.cells.length) { const n = fig.cells.length, name = fig.name; C.figDone(S, n, name); spawnFig(); slowT = 0; }
+  else drawFigChip();
+}
+const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
+function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
+  const el = $("hgFigc"), k = S.fig.k;
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size : "";
+  if (key === figChipKey) return;
+  figChipKey = key;
+  el.hidden = !fig;
+  if (!fig) return;
+  el.className = "hg-figc" + (k ? " on" : "");
+  el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Каждый собранный подряд рисунок — плюс к комбо и +" + Math.round(CFG.figStep * 100) +
+    " % душ, до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Не собрал следующий за " + CFG.figHold + " секунд — комбо обрывается";
+  el.innerHTML = "<span>«" + fig.name + "» <b>" + fig.hit.size + "/" + fig.cells.length + "</b></span>" +
+    (k ? "<span>комбо <b>" + k + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + CFG.figHold + "s;animation-delay:-" + Math.max(0, CFG.figHold - S.fig.left).toFixed(2) + 's"></i>'
+      : '<span class="tip">собери — пойдёт комбо</span>');
+}
+export function figInfo() { return fig ? { name: fig.name, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
+export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
 function prevMs(lv) {
   let p = 0;
   for (const t of [10, 25, 50, 75, 100, 125, 150]) if (lv >= t) p = t;
@@ -277,6 +361,7 @@ function drawInfo() {
     else if (!whip && lv === 0) h = "<b>" + name + "</b><span>нанять за <b>" + txt(C.buyInfo(S, i, 1).cost) + "</b></span><span>бьёт сам, даже когда тебя нет</span>" + skin;
     else h = "<b>" + name + "</b><span>ур. <b>" + group(lv) + "</b></span><span>" + (whip ? "удар <b>" + txt(C.clickLg(S)) : "урон <b>" + txt(S.d.hero[i]) + "/с") + "</b></span><span>до вехи " + group(nm) + ": <b>×" + C.msGain(lv) + "</b></span>" + skin;
   }
+  drawFigChip();
   if (h === hgInfoKey) return;
   hgInfoKey = h;
   $("hgInfo").innerHTML = h;
@@ -799,12 +884,21 @@ export function onEvent(e) {
     if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
     slowT = 0; itemsKey = "";
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
   }
   else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
+  else if (e.t === "fig") {                                  // рисунок на сетке собран
+    sfx.wisp(); figChipKey = "?";
+    if (e.k === 1 || e.k % 5 === 0) note("Рисунок «" + e.name + "» собран", "Комбо " + e.k + ": души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время", 3400);
+  }
+  else if (e.t === "fig_end") {
+    if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }
+    figChipKey = "?";
+    note("Комбо рисунков оборвалось", "Было " + e.k + ". Собери рисунок на сетке отряда — начнётся новое", 3400);
+  }
   else if (e.t === "au_on") { note("Автозапуск включён", "Час умения включаются сами. Вернётся " + group(e.pay) + " и ещё +" + group(e.gain) + " " + plural(e.gain, "осколок", "осколка", "осколков") + " сверху", 4200); auKey = ""; eclKey = ""; }
   else if (e.t === "au_gain") { auKey = ""; eclKey = ""; }
   else if (e.t === "au_end") { note("Автозапуск закончился", "Осколки вернулись, сверху +" + group(e.gain) + " — во вкладке «Реликвии» можно включить ещё", 5200); auKey = ""; eclKey = ""; }
@@ -928,7 +1022,7 @@ const mulText = (l) => { const v = Math.pow(10, l); return "×" + (v < 1000 ? St
 const porArt = (id) => (C.hasRpgSkin(S, id) ? rpgSkinArt(id) : heroArt(id));
 const porCls = (id) => (C.hasRpgSkin(S, id) ? " skin rar-" + RPG_SKINS[id][1] : "");
 const porTip = (id) => (C.hasRpgSkin(S, id) ? ' title="Скин из RPG «' + RPG_SKINS[id][0] + "»: весь урон ×" + String(C.rpgSkinMul(id)).replace(".", ",") + '"' : "");
-function resetRows() { rows = []; $("mercList").textContent = ""; hgFit = ""; rosterKey = ""; slowT = 0; }
+function resetRows() { rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; rosterKey = ""; slowT = 0; }
 function note(cap, text, ms) { achCap = cap; achMsg = text; achUntil = performance.now() + ms; slowT = 0; }
 function airNote() {
   const c = S.chest;
