@@ -37,26 +37,25 @@ export function mount(state, hooks) {
   $("modeSeg").addEventListener("click", (e) => { const m = e.target.dataset.mode; if (m) { C.setMode(S, m); slowT = 0; } });
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
-  // Покупка героев. Мышью — сразу по нажатию кнопки и свайпом: зажал левую кнопку в списке и ведёшь вверх-вниз — каждая
-  // строка, на которую зашёл курсор, покупается (вернулся на ту же — ещё раз). Вести можно по самим героям, не только по
-  // кнопкам. Кнопки при этом не выглядят зажатыми: каждая коротко щёлкает, за курсором тянется тающий след. Начал не с
-  // кнопки — строка, с которой начал, покупается, когда курсор с неё уходит. Строки, на которые не хватает душ, свайп
-  // пропускает молча. Пальцем и с клавиатуры — обычный щелчок: пальцем список листают.
+  // Покупка героев. Отряд стоит сеткой плиток, плитка и есть кнопка. Мышью — сразу по нажатию и свайпом: зажал левую
+  // кнопку в сетке и ведёшь в любую сторону — покупается каждая плитка, на которую зашёл курсор (вернулся на ту же — ещё
+  // раз). Плитки при этом не выглядят зажатыми: каждая коротко щёлкает, за курсором тянется тающий след. Плитки, на
+  // которые не хватает душ, и закрытые свайп пропускает молча. Пальцем и с клавиатуры — обычное нажатие.
   {
     const list = $("mercList");
-    const tap = (b) => { b.classList.remove("tapfx"); void b.offsetWidth; b.classList.add("tapfx"); };   // короткий щелчок кнопки
-    const buyBtn = (b, loud) => {
-      if (!b || b.classList.contains("off")) return false;
-      if (!C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
+    const tap = (b) => { b.classList.remove("tapfx"); void b.offsetWidth; b.classList.add("tapfx"); };   // короткий щелчок плитки
+    const buyTile = (b, loud) => {
+      if (!b || b.classList.contains("hg-lock")) return false;
+      hgShow = Number(b.dataset.i);
+      if (b.classList.contains("hg-no") || !C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
       slowT = 0; tap(b);
       return true;
     };
-    const rowBtn = (row) => (row ? row.querySelector(".buy") : null);
-    let sw = null, dotAt = null;      // sw: { last: строка под курсором, first: строка, с которой начали не с кнопки (ещё не куплена), used: мышь уже что-то купила }
-    const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над списком героев
+    let sw = null, dotAt = null;      // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
+    const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над сеткой героев
       if (dotAt && Math.hypot(x - dotAt[0], y - dotAt[1]) < 5) return;
       dotAt = [x, y];
-      const r = list.parentNode.getBoundingClientRect();
+      const r = list.getBoundingClientRect();
       if (x < r.left || x > r.right || y < r.top || y > r.bottom || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const d = document.createElement("i");
       d.className = "swdot"; d.style.left = x + "px"; d.style.top = y + "px";
@@ -66,28 +65,31 @@ export function mount(state, hooks) {
     const end = () => { if (sw && sw.used) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; dotAt = null; };
     list.addEventListener("click", (e) => {
       if (swipeDone) { swipeDone = false; return; }          // мышью всё уже куплено: по нажатию или по пути свайпа
-      buyBtn(e.target.closest(".buy"), true);
+      buyTile(e.target.closest(".hg"), true);
     });
     list.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
-      const b = e.target.closest(".buy"), row = e.target.closest(".merc");
-      sw = { last: row, first: b ? null : row, used: !!b };
-      if (b) buyBtn(b, true);                                // по кнопке — покупка сразу, по нажатию
+      const b = e.target.closest(".hg");
+      sw = { last: b, used: !!b };
+      if (b) buyTile(b, true);                               // покупка сразу, по нажатию
     });
     window.addEventListener("pointermove", (e) => {
       if (!sw) return;
       if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
       trail(e.clientX, e.clientY);
-      const el = document.elementFromPoint(e.clientX, e.clientY), row = el && el.closest ? el.closest("#mercList .merc") : null;
-      if (row === sw.last) return;
-      sw.used = true;
-      if (sw.first) { buyBtn(rowBtn(sw.first), false); sw.first = null; }
-      buyBtn(rowBtn(row), false);
-      sw.last = row;
+      const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .hg") : null;
+      if (b === sw.last) return;
+      sw.used = true; sw.last = b;
+      buyTile(b, false);
     });
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
     list.addEventListener("dragstart", (e) => e.preventDefault());
+    // строка над сеткой рассказывает про героя под курсором (или про того, кого только что купили)
+    list.addEventListener("pointerover", (e) => { const b = e.target.closest(".hg"); if (b) { hgShow = Number(b.dataset.i); drawInfo(); } });
+    list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); } });
+    if (window.ResizeObserver) new ResizeObserver(() => fitGrid()).observe(list);
+    window.addEventListener("resize", fitGrid);
   }
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
   $("skillbar").addEventListener("click", (e) => { const s = e.target.closest(".skill"); if (s && !s.classList.contains("lock")) { if (!C.useSkill(S, s.dataset.id)) sfx.deny(); slowT = 0; } });
@@ -139,7 +141,7 @@ export function mount(state, hooks) {
   syncRpg(true);
 }
 export function setState(state) {
-  S = state; rows = []; $("mercList").textContent = ""; shownLg = NEG; lastK = -1; slowT = 0;
+  S = state; rows = []; $("mercList").textContent = ""; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
   itemsKey = rosterKey = roadKey = keepKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0; chestBadge = -1;
   TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
@@ -193,27 +195,48 @@ function stepHold(dt) {
 }
 
 // ---------- отряд ----------
-let swipeDone = false;                                      // свайп по кнопкам покупки только что кончился: щелчок после него не считается
-function rowHtml(i) {
+let swipeDone = false;                                      // мышь только что купила (нажатием или свайпом): щелчок после этого не считается
+let hgShow = -1, hgInfoKey = "", hgFit = "";                // про кого рассказывает строка над сеткой (-1 — подсказка); что в ней сейчас; под какой размер подобрана сетка
+const TILES = HEROES.length + 1;                            // Хлыст и все наёмники
+function rowHtml(i) {                                       // плитка героя: портрет, уровень, сколько уровней купит нажатие, полоска до вехи, цена
   const whip = i === 0, h = whip ? null : HEROES[i - 1];
   const sid = whip ? "lesh" : h.id;                          // скин из RPG ложится на портрет; у хлыста — скин Лэша
-  return '<div class="por' + porCls(sid) + '"' + porTip(sid) + '><img alt="" src="' + (whip && !C.hasRpgSkin(S, "lesh") ? art("whip") : porArt(sid)) + '">' + (whip ? "" : '<span class="tier">' + (ROMAN[h.k] || h.k) + "</span>") + "</div>" +
-    '<div><div class="name">' + (whip ? "Хлыст Лэша" : h.name) + ' <span class="lvl"><small>ур.</small><span data-f="lv">0</span></span></div>' +
-    '<div class="meta"><span class="dmg">' + (whip ? "удар" : "урон") + ' <b data-f="dmg">0</b></span></div>' +
-    '<div class="ms"><i></i></div><div class="ms-cap" data-f="cap"></div></div>' +
-    '<button class="buy" data-i="' + i + '" title="Зажми мышь и веди вверх-вниз по героям — купится каждый по пути"><span class="q" data-f="q">×1</span><span class="price farm"><img alt="" src="' + art("cur-farm") + '"><b data-f="price">0</b></span></button>';
+  return '<img class="hg-por" alt="" draggable="false" src="' + (whip && !C.hasRpgSkin(S, "lesh") ? art("whip") : porArt(sid)) + '">' +
+    '<span class="hg-lv" data-f="lv"></span><span class="hg-q" data-f="q"></span><img class="hg-lk" alt="" src="' + art("lock") + '">' +
+    '<span class="hg-foot"><i class="hg-ms"><u></u></i><span class="hg-price"><img alt="" src="' + art("cur-farm") + '"><b data-f="price"></b></span></span>';
 }
-function ensureRows() {
-  const want = Math.min(HEROES.length, C.heroesShown(S)) + 1;        // Хлыст + нанятые + следующий
+function ensureRows() {                                     // плитки ставятся все сразу: сетка не перестраивается, когда нанят новый герой
   const list = $("mercList");
-  while (rows.length < want) {
-    const i = rows.length, d = document.createElement("div");
-    d.className = "merc" + (i === 0 ? " whip" : "");
+  while (rows.length < TILES) {
+    const i = rows.length, d = document.createElement("div"), sid = i === 0 ? "lesh" : HEROES[i - 1].id;
+    d.className = "hg" + (i === 0 ? " whip" : "") + porCls(sid);
+    d.dataset.i = i;
     d.innerHTML = rowHtml(i);
     const f = {}; d.querySelectorAll("[data-f]").forEach((n) => { f[n.dataset.f] = n; });
     list.appendChild(d);
-    rows.push({ root: d, f, bar: d.querySelector(".ms"), buy: d.querySelector(".buy") });
+    rows.push({ root: d, f, bar: d.querySelector(".hg-ms u"), st: "" });
+    if (rows.length === TILES) fitGrid();
   }
+}
+// Сетка без прокрутки: сколько столбцов взять, чтобы все плитки влезли в отведённое место и вышли покрупнее. На телефоне
+// панель не имеет своей высоты — там столбцов столько, сколько помещается по ширине, а страница листается как обычно.
+function fitGrid() {
+  const list = $("mercList");
+  if (!list || !rows.length || list.offsetParent === null) return;
+  const cs = getComputedStyle(list), gap = parseFloat(cs.columnGap) || 6;
+  const W = list.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = list.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const flow = matchMedia("(max-width: 720px)").matches || H < 160;
+  let c = 0, r = 0, size = 0;
+  if (flow) { c = Math.max(4, Math.min(9, Math.round(W / 76))); r = Math.ceil(TILES / c); size = (W - gap * (c - 1)) / c; }
+  else for (let k = 4; k <= 16; k++) {
+    const n = Math.ceil(TILES / k), w = (W - gap * (k - 1)) / k, h = (H - gap * (n - 1)) / n, v = Math.min(w, h * 1.04);   // плитка чуть выше ширины — тоже годится
+    if (v > size + 0.01) { size = v; c = k; r = n; }
+  }
+  const key = [flow, c, r, Math.round(size)].join("|");
+  if (key === hgFit) return;
+  hgFit = key;
+  list.classList.toggle("hg-flow", flow);
+  list.style.setProperty("--hg-c", c); list.style.setProperty("--hg-r", r); list.style.setProperty("--hg-s", Math.round(size) + "px");
 }
 function prevMs(lv) {
   let p = 0;
@@ -223,43 +246,40 @@ function prevMs(lv) {
 }
 function drawRows() {
   ensureRows();
+  const shown = C.heroesShown(S);                            // до какого героя можно покупать: нанятые и следующий
   let hired = 0;
   for (let i = 0; i < rows.length; i++) {
-    const r = rows[i], lv = S.lv[i], b = C.buyInfo(S, i, buyMode);
+    const r = rows[i], lv = S.lv[i], lock = i > shown, b = lock ? null : C.buyInfo(S, i, buyMode);
     if (i && lv) hired++;
-    r.f.lv.textContent = group(lv);
-    r.f.dmg.textContent = i === 0 ? txt(C.clickLg(S)) : lv ? txt(S.d.hero[i]) + "/с" : "—";
-    const nm = C.nextMs(lv), prev = prevMs(lv);
-    r.bar.style.setProperty("--p", ((lv - prev) / (nm - prev) * 100).toFixed(0) + "%");
-    r.f.cap.innerHTML = lv || i === 0 ? "до вехи " + group(nm) + ": <b>×" + C.msGain(lv) + "</b>" : "бьёт сам, даже когда тебя нет";
-    r.f.q.textContent = lv === 0 && i ? "нанять" : buyMode === "ms" ? "до " + group(nm) : "×" + group(b.n);
-    r.f.price.textContent = txt(b.cost);
-    r.buy.classList.toggle("off", !b.can);
-    r.buy.classList.toggle("hot", b.can && (lv + b.n >= nm || (i > 0 && lv === 0)));
-    r.root.querySelector(".price").classList.toggle("short", !b.can);
+    const nm = C.nextMs(lv), hire = !lock && i > 0 && lv === 0;
+    const lvT = lv ? group(lv) : "", qT = lock ? "" : hire ? "нанять" : buyMode === "ms" ? "до " + group(nm) : "×" + group(b.n);
+    const priceT = lock ? (i <= shown + 3 ? txt(heroCost0(i)) : "") : txt(b.cost);
+    const st = lock ? "hg-lock" + (priceT ? "" : " hg-far") : (b.can ? "hg-can" : "hg-no") + (hire ? " hg-hire" : "") + (b.can && (lv + b.n >= nm || hire) ? " hg-hot" : "");
+    if (r.f.lv.textContent !== lvT) r.f.lv.textContent = lvT;
+    if (r.f.q.textContent !== qT) r.f.q.textContent = qT;
+    if (r.f.price.textContent !== priceT) r.f.price.textContent = priceT;
+    r.bar.style.setProperty("--p", lock || !lv ? "0%" : ((lv - prevMs(lv)) / (nm - prevMs(lv)) * 100).toFixed(0) + "%");
+    if (r.st !== st) { for (const k of ["hg-lock", "hg-far", "hg-can", "hg-no", "hg-hire", "hg-hot"]) r.root.classList.toggle(k, (" " + st + " ").indexOf(" " + k + " ") >= 0); r.st = st; }
   }
   $("footN").textContent = hired + " из " + HEROES.length;
   $("footDps").textContent = S.d.dps === NEG ? "0" : txt(C.dpsLg(S)) + "/с";
-  drawRoster();
+  drawInfo();
 }
-// Те, кого ещё не нанять: три ближайших строкой с ценой, остальные — сеткой портретов под замком.
-function drawRoster() {
-  const from = rows.length;                                          // сколько строк уже есть: Хлыст + наёмники
-  if (String(from) === rosterKey) return;
-  rosterKey = String(from);
-  const rest = HEROES.slice(from - 1);
-  if (!rest.length) { $("rosterBox").innerHTML = '<div class="note pad">Весь отряд в сборе.</div>'; return; }
-  let h = "";
-  for (const x of rest.slice(0, 3)) {
-    h += '<div class="merc soon"><div class="por' + porCls(x.id) + '"' + porTip(x.id) + '><img alt="" src="' + porArt(x.id) + '"><span class="tier">' + (ROMAN[x.k] || x.k) + '</span></div><div><div class="name">' + x.name +
-      '</div><div class="meta">откроется, когда наймёшь предыдущего</div></div><div class="price farm short"><img alt="" src="' + art("lock") + '"><b>' + txt(heroCost0(x.k)) + "</b></div></div>";
+// Строка над сеткой: про героя под курсором или про того, кого только что купили; никого — подсказка про свайп.
+function drawInfo() {
+  const i = hgShow, shown = C.heroesShown(S);
+  let h;
+  if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(hover: none)").matches ? "Нажми на героя — купишь уровень" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
+  else {
+    const whip = i === 0, name = whip ? "Хлыст Лэша" : HEROES[i - 1].name, lv = S.lv[i], nm = C.nextMs(lv);
+    const skin = C.hasRpgSkin(S, whip ? "lesh" : HEROES[i - 1].id) ? '<span>скин из RPG: урон <b>×' + String(C.rpgSkinMul(whip ? "lesh" : HEROES[i - 1].id)).replace(".", ",") + "</b></span>" : "";
+    if (i > shown) h = "<b>" + name + "</b><span>откроется, когда наймёшь предыдущего</span><span>цена <b>" + txt(heroCost0(i)) + "</b></span>";
+    else if (!whip && lv === 0) h = "<b>" + name + "</b><span>нанять за <b>" + txt(C.buyInfo(S, i, 1).cost) + "</b></span><span>бьёт сам, даже когда тебя нет</span>" + skin;
+    else h = "<b>" + name + "</b><span>ур. <b>" + group(lv) + "</b></span><span>" + (whip ? "удар <b>" + txt(C.clickLg(S)) : "урон <b>" + txt(S.d.hero[i]) + "/с") + "</b></span><span>до вехи " + group(nm) + ": <b>×" + C.msGain(lv) + "</b></span>" + skin;
   }
-  const more = rest.slice(3);
-  if (more.length) {
-    h += '<div class="eyebrow pad">Ещё ждут: ' + more.length + "</div><div class=\"roster\">" +
-      more.map((x) => '<div class="rt" title="' + x.name + " · " + txt(heroCost0(x.k)) + ' душ"><img alt="" loading="lazy" src="' + porArt(x.id) + '"><span>' + (ROMAN[x.k] || x.k) + "</span></div>").join("") + "</div>";
-  }
-  $("rosterBox").innerHTML = h;
+  if (h === hgInfoKey) return;
+  hgInfoKey = h;
+  $("hgInfo").innerHTML = h;
 }
 
 // ---------- предметы: выбор после босса, ячейки, ветки, коллекция ----------
@@ -779,7 +799,7 @@ export function onEvent(e) {
     if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
     slowT = 0; itemsKey = "";
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
@@ -908,7 +928,7 @@ const mulText = (l) => { const v = Math.pow(10, l); return "×" + (v < 1000 ? St
 const porArt = (id) => (C.hasRpgSkin(S, id) ? rpgSkinArt(id) : heroArt(id));
 const porCls = (id) => (C.hasRpgSkin(S, id) ? " skin rar-" + RPG_SKINS[id][1] : "");
 const porTip = (id) => (C.hasRpgSkin(S, id) ? ' title="Скин из RPG «' + RPG_SKINS[id][0] + "»: весь урон ×" + String(C.rpgSkinMul(id)).replace(".", ",") + '"' : "");
-function resetRows() { rows = []; $("mercList").textContent = ""; rosterKey = ""; slowT = 0; }
+function resetRows() { rows = []; $("mercList").textContent = ""; hgFit = ""; rosterKey = ""; slowT = 0; }
 function note(cap, text, ms) { achCap = cap; achMsg = text; achUntil = performance.now() + ms; slowT = 0; }
 function airNote() {
   const c = S.chest;

@@ -484,6 +484,7 @@ export function buyInfo(S, i, mode) {                       // mode: 1 | 10 | "m
   return { n, cost, can: cost <= S.souls };
 }
 export function buy(S, i, mode) {
+  if (i > heroesShown(S)) return false;                     // наёмники нанимаются по порядку: дальше следующего не купить
   const b = buyInfo(S, i, mode);
   if (!b.can) return false;
   const before = S.lv[i];

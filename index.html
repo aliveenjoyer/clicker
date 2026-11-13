@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=6618ec34">
-<link rel="stylesheet" href="css/ui.css?v=6618ec34">
-<link rel="stylesheet" href="css/game.css?v=6618ec34">
+<link rel="stylesheet" href="css/tokens.css?v=1e47605c">
+<link rel="stylesheet" href="css/ui.css?v=1e47605c">
+<link rel="stylesheet" href="css/game.css?v=1e47605c">
 </head>
 <body>
 
@@ -168,8 +168,9 @@
         <span class="eyebrow">Покупка</span>
         <div class="seg" id="buySeg"></div>
       </div>
-      <div class="list" id="mercList"></div>
-      <div class="rosterbox" id="rosterBox"></div>
+      <!-- Отряд — сеткой: все герои видны сразу, без прокрутки; плитка и есть кнопка покупки (js/ui.js, «Покупка героев») -->
+      <div class="hg-info" id="hgInfo"></div>
+      <div class="list hgrid" id="mercList"></div>
       <div class="foot"><span>Наёмников: <b id="footN">0</b></span><span>Всего урон: <b id="footDps">0</b></span></div>
     </div>
     <div class="pane scroll" id="paneItems" hidden>
@@ -202,7 +203,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-e536c68a/main.js"></script>
+<script type="module" src="js-fb8218c6/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>
