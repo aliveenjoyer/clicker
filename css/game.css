@@ -910,3 +910,14 @@ html { scrollbar-gutter: stable; }
 /* семь умений в ряду: подписи чуть мельче и плотнее, чтобы «Жадность» и «Перемотка» не обрезались */
 .skillbar { gap: 10px; }
 .skillbar .skill-cap { font-size: 10.5px; letter-spacing: -.02em; }
+
+/* узкая полоса волны и кнопка «На босса» на ней (забег упёрся): вердикт датчика не сжимается, подпись «Волна за» уходит, кнопка компактнее */
+.pace .pv { flex: none; }
+@container wavebar (min-width: 700px) and (max-width: 900px) {
+  .wavebar:has(#btnBoss:not([hidden])) .pace .eyebrow { display: none; }
+  .wavebar:has(#btnBoss:not([hidden])) .pace { min-width: 205px; }
+  .wavebar:has(#btnBoss:not([hidden])) .pips { gap: 3px; }
+  .wavebar:has(#btnBoss:not([hidden])) .pips i { width: 9px; height: 9px; }
+  .wavebar:has(#btnBoss:not([hidden])) .pips i.boss { width: 16px; }
+  #btnBoss { padding-left: 12px; padding-right: 12px; font-size: 12.5px; }
+}

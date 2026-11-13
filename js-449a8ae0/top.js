@@ -15,6 +15,10 @@ let mineEl = null;
 let paceT = null, paceN = null, paceAllNow = null;
 const pushT = () => S.stats.pushT || 0, pushN = () => S.stats.pushN || 0;
 export const paceAll = () => paceAllNow;
+// Путь до рекорда: так же уходит, сколько забегов дошло до своего рекорда с прошлого отчёта и за сколько секунд в сумме;
+// сервер отвечает средним по игрокам: {avg — секунд от возрождения до рекорда, n — игроков}.
+let reachT = null, reachN = null, reachAllNow = null;
+export const reachAll = () => reachAllNow;
 
 const soulsNow = () => (S.life === NEG || !(S.life > 0) ? 0 : S.life);       // lg душ, заработанных за всё время
 const soulsTxt = (lg) => (lg > 0 ? txt(lg) : "0");
@@ -25,10 +29,13 @@ async function send() {                                     // отправит�
   busy = true;
   const key = stateKey(), mine = soulsNow(), t1 = pushT(), n1 = pushN();
   const pt = paceT === null ? 0 : Math.max(0, t1 - paceT), pw = paceN === null ? 0 : Math.max(0, n1 - paceN);   // первый отчёт только ставит точку отсчёта
-  const d = await A.api("/score", { sid: A.sid(), wave: S.best, rb: S.rb, played: Math.round(S.stats.played), souls: +mine.toFixed(3), pt: +pt.toFixed(1), pw });
+  const rt1 = S.stats.reachT || 0, rn1 = S.stats.reachN || 0;
+  const rt = reachT === null ? 0 : Math.max(0, rt1 - reachT), rn = reachN === null ? 0 : Math.max(0, rn1 - reachN);
+  const d = await A.api("/score", { sid: A.sid(), wave: S.best, rb: S.rb, played: Math.round(S.stats.played), souls: +mine.toFixed(3), pt: +pt.toFixed(1), pw, rt: +rt.toFixed(1), rn });
   busy = false; lastSend = Date.now();
   if (d.ok) {
     paceT = t1; paceN = n1; paceAllNow = d.pace || null;
+    reachT = rt1; reachN = rn1; reachAllNow = d.reach || null;
     const first = !rank;
     err = ""; rows = d.top; total = d.total; rank = d.rank; best = d.best; got = d.souls || 0; lastLoad = Date.now();
     sentKey = d.best >= S.best && got + 0.02 >= mine ? key : "";   // сервер ещё догоняет — пришлём снова через минуту
@@ -43,7 +50,7 @@ export async function pushNow() {                           // перед обм
 async function load() {
   lastLoad = Date.now();
   const d = await A.top();
-  if (d.ok) { rows = d.top; total = d.total; err = ""; paceAllNow = d.pace || null; }
+  if (d.ok) { rows = d.top; total = d.total; err = ""; paceAllNow = d.pace || null; reachAllNow = d.reach || null; }
   else if (!rows) err = "Таблица сейчас недоступна. Попробуй позже";
   draw(true);
 }
@@ -97,7 +104,7 @@ export function mount(state, hooks) {
   box.addEventListener("click", (e) => { if (e.target.closest("[data-logout]")) A.logout(); });
   A.onChange(() => { if (!A.logged()) { rank = 0; best = 0; got = 0; sentKey = ""; } else lastSend = 0; shownKey = ""; draw(false); });
 }
-export function setState(state) { S = state; sentKey = ""; shownKey = ""; paceT = paceN = null; }
+export function setState(state) { S = state; sentKey = ""; shownKey = ""; paceT = paceN = null; reachT = reachN = null; }
 export const myRank = () => (A.logged() ? rank : 0);         // место в таблице, как его знает сервер; 0 — не в таблице
 export function open() { shownKey = ""; if (!lastLoad || Date.now() - lastLoad > 15000) load(); else draw(true); }
 export function tick(visible) {                             // зовётся из UI несколько раз в секунду

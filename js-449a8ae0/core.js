@@ -15,6 +15,7 @@ export function newState() {
     lv: new Array(N + 1).fill(0), lvRun: 0,
     z: 1, zrec: 1, best: 1, kills: 0, hp: 1, mode: "push", wall: false, bossT: 0,
     runZ: 1, pw0: { t: 0, n: 0 },                           // датчик темпа: волна, с которой начат забег, и счётчики движения вперёд на его старте
+    rr: { z: 0, hit: 0, log: [] },                          // путь до рекорда: рекорд, с которым начат забег (0 — нет), за сколько секунд до него дошли (0 — ещё нет), прошлые времена
     combo: 0, comboIdle: 0, tier: -1,
     cd: {}, act: {}, buff: {}, flAcc: 0, bucket: 40,
     wispIn: 0, wispOn: 0, wisps: 0,
@@ -98,6 +99,9 @@ export function load(text) {
   const op = o.pw0 && typeof o.pw0 === "object" ? o.pw0 : null;
   S.pw0 = op ? { t: Math.min(S.stats.pushT, num(op.t)), n: Math.min(S.stats.pushN, Math.floor(num(op.n))) } : { t: S.stats.pushT, n: S.stats.pushN };
   if (!Array.isArray(S.waveLog)) S.waveLog = [];
+  const orr = o.rr && typeof o.rr === "object" ? o.rr : {};
+  S.rr = { z: Math.floor(num(orr.z)), hit: num(orr.hit), log: (Array.isArray(orr.log) ? orr.log : []).map(Number).filter((v) => v > 0 && v < 1e7).slice(-10) };
+  S.stats.reachT = num(S.stats.reachT); S.stats.reachN = Math.floor(num(S.stats.reachN));
   const og2 = o.grd && typeof o.grd === "object" ? o.grd : {};
   const gl = Number(og2.left);
   S.grd = { lv: N0(og2.lv, 100000), left: gl > 0 && gl <= 1 ? gl : 1, dealt: NEG, last: Math.max(0, Math.min(1, Number(og2.last) || 0)) };
@@ -272,7 +276,15 @@ function startWave(S) {
   S.hp = 1; S.kills = 0;
   S.waveLog.push(S.stats.played); if (S.waveLog.length > 30) S.waveLog.shift();
   if (S.waveLog.length === 30 && S.stats.played - S.waveLog[0] <= 60) feat(S, "carpet");
-  if (S.z > S.zrec) { S.zrec = S.z; S.stats.pushN = (S.stats.pushN || 0) + 1; }   // пройденная волна — новый рекорд забега
+  if (S.z > S.zrec) {                                       // пройденная волна — новый рекорд забега
+    S.zrec = S.z; S.stats.pushN = (S.stats.pushN || 0) + 1;
+    if (S.rr.z && !S.rr.hit && S.zrec >= S.rr.z) {           // забег дошёл до рекорда, с которым начинался
+      const t = Math.max(0.1, S.stats.played - (S.stats.rbAt || 0));
+      S.rr.hit = t; S.rr.log.push(Math.round(t * 10) / 10); if (S.rr.log.length > 10) S.rr.log.shift();
+      S.stats.reachT = (S.stats.reachT || 0) + t; S.stats.reachN = (S.stats.reachN || 0) + 1;
+      ev(S, { t: "reach", sec: t, z: S.rr.z });
+    }
+  }
   if (S.z > S.cycBest) S.cycBest = S.z;
   if (S.z > S.best) S.best = S.z;
   if (isBoss(S.z)) { S.bossT = S.d.bossTime + (S.buff.clock > 0 ? 15 : 0); ev(S, { t: "boss_in", z: S.z, boss: bossOf(S.z) }); }   // «Карманные часы»: +15 с
@@ -721,6 +733,7 @@ function newRun(S) {                                         // забег с н
   if (isBoss(S.z)) S.z += 1;
   S.zrec = S.z; S.kills = 0; S.hp = 1; S.mode = "push"; S.wall = false;
   S.runZ = S.z; S.pw0 = { t: S.stats.pushT || 0, n: S.stats.pushN || 0 }; S.waveLog = [S.stats.played];   // датчик темпа меряет забег с начала
+  S.rr.z = S.cycBest > S.z ? S.cycBest : 0; S.rr.hit = 0;   // цель забега — рекорд цикла; после Затмения цикл новый, цели нет
   S.combo = 0; S.tier = -1; S.buff = {};
   S.items = {}; S.draft = null; S.drafts = 0; S.forgiven = 0;
   S.statues = { dmg: 0, souls: 0, crit: 0, timer: 0 }; S.altar = 0; S.urnOn = 0; S.statueOn = 0;
@@ -752,7 +765,14 @@ export function pace(S) {
   if (S.wall && !canBeatBoss(S)) state = "stuck";
   else if (S.mode === "farm" && !S.wall) state = "farm";
   else if (now !== null) state = now >= limit ? "stuck" : now >= limit / 2 ? "slow" : "fly";
-  return { now, mine, limit, state, canRb };
+  // Путь до рекорда: после возрождения всё начинается заново, поэтому честнее всего мерить, за сколько забег возвращается
+  // к рекорду, с которым начался. since — секунд игры с возрождения (null, пока возрождений не было); target — тот рекорд
+  // (0 — цели нет: первый забег или новый цикл); reach — за сколько до него дошли (null — ещё в пути);
+  // usual — среднее по прошлым забегам (до пяти последних, этот не в счёт).
+  const rr = S.rr, prev = rr.hit ? rr.log.slice(0, -1) : rr.log, last = prev.slice(-5);
+  const usual = last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
+  const since = S.rb > 0 || S.ecl > 0 ? Math.max(0, t - (S.stats.rbAt || 0)) : null;
+  return { now, mine, limit, state, canRb, since, target: rr.z, reach: rr.hit || null, usual };
 }
 
 // ---------- Страж Затмения: цель между Затмениями ----------

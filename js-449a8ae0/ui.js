@@ -563,14 +563,20 @@ function drawWave() {
 // своё за забег и по всем игрокам (приходит с сервером таблицы). Пишется в DOM, только когда текст изменился.
 const secs = (s) => (s < 0.1 ? "меньше 0,1 с" : s < 10 ? s.toFixed(1).replace(".", ",") + " с" : s < 100 ? Math.round(s) + " с"
   : s < 3600 ? Math.floor(s / 60) + " мин " + Math.floor(s % 60) + " с" : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин");
+const runT = (s) => (s < 60 ? Math.round(s) + " с" : s < 3600 ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин");
 const PACE_WORD = { fly: "идёшь хорошо", slow: "замедляешься", farm: "стоишь в «Фарме»" };
 let paceKey = "";
 function drawPace() {
-  const p = C.pace(S), all = TOP.paceAll();
+  const p = C.pace(S), all = TOP.reachAll(), allW = TOP.paceAll();
   const now = p.now === null ? "—" : secs(p.now);
   const word = p.state === "stuck" ? (p.canRb ? "пора возрождаться" : "упёрся: качай отряд") : PACE_WORD[p.state] || "";
   const fill = p.state === "stuck" ? 100 : p.now === null ? 0 : Math.round(Math.min(1, p.now / p.limit) * 100);
-  const sub = [p.mine === null ? "" : "среднее <b>" + secs(p.mine) + "</b>", all ? "у игроков <b>" + secs(all.avg) + "</b>" : "", "предел <b>" + secs(p.limit) + "</b>"].filter(Boolean).join(" · ");
+  // Нижняя строка — путь до рекорда: сколько прошло с возрождения, за сколько забег вернулся к рекорду, с которым начался,
+  // как обычно и как у игроков. Пока возрождений не было — прежнее: среднее время волны и предел.
+  const sub = (p.since === null ? [p.mine === null ? "" : "среднее <b>" + secs(p.mine) + "</b>", "предел <b>" + secs(p.limit) + "</b>"]
+    : p.reach !== null ? ["рекорд за <b>" + runT(p.reach) + "</b>", p.usual !== null ? "обычно <b>" + runT(p.usual) + "</b>" : "", all ? "у игроков <b>" + runT(all.avg) + "</b>" : ""]
+    : ["с возрождения <b>" + runT(p.since) + "</b>", !p.target ? "" : p.usual !== null ? "до рекорда обычно <b>" + runT(p.usual) + "</b>" : "до рекорда " + group(Math.max(0, p.target - S.zrec)) + " волн"]
+  ).filter(Boolean).join(" · ");
   const key = [now, word, p.state, fill, sub].join("|");
   if (key === paceKey) return;
   paceKey = key;
@@ -584,7 +590,11 @@ function drawPace() {
     " У босса здоровья как у целой волны, а времени на него — " + secs(p.limit) + ". Когда волна идёт дольше, босса уже не взять: ты упёрся" +
     (p.canRb ? " — пора возрождаться." : S.un.rebirth ? " — качай отряд." : " — качай отряд; возрождение откроется на 50-й волне.") +
     (p.mine === null ? "" : " В среднем за забег у тебя " + secs(p.mine) + " на волну.") +
-    (all ? " У игроков в среднем " + secs(all.avg) + " (замерено игроков: " + all.n + ", за сегодня и вчера)." : "");
+    (allW ? " У игроков в среднем " + secs(allW.avg) + " на волну." : "") +
+    (p.since === null ? "" : " С возрождения прошло " + runT(p.since) + " игры." +
+      (p.reach !== null ? " До рекорда, с которым начался забег (волна " + group(p.target) + "), ты дошёл за " + runT(p.reach) + "." : p.target ? " Рекорд, с которым начался забег, — волна " + group(p.target) + "." : "") +
+      (p.usual !== null ? " Обычно доходишь за " + runT(p.usual) + " (среднее по прошлым забегам, до пяти)." : "")) +
+    (all ? " У игроков путь до рекорда в среднем " + runT(all.avg) + " (замерено игроков: " + all.n + ", за сегодня и вчера)." : "");
 }
 
 function drawBank(dt) {
@@ -682,6 +692,10 @@ export function onEvent(e) {
   }
   else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
   else if (e.t === "guard_kill") { note("Страж повержен", "+" + e.shards + " " + plural(e.shards, "осколок", "осколка", "осколков") + " сразу — потрать на покровителей во вкладке «Реликвии». Вышел страж № " + (e.n + 1), 12000); grdKey = ""; eclKey = ""; sfx.rank(); }
+  else if (e.t === "reach") {                                // забег вернулся к рекорду, с которым начался
+    const u = C.pace(S).usual;
+    note("До рекорда", "Дошёл до прошлого рекорда за " + runT(e.sec) + (u === null ? "" : e.sec < u ? " — на " + runT(u - e.sec) + " быстрее обычного" : " — обычно " + runT(u)), 6000);
+  }
   else if (e.t === "ach") achNew.push(e);
   else if (e.t === "chest_in") {
     note("Сундук", (e.kind === "air" ? "Выпал сундук эфира" : "Все задания дня сделаны — сундук дня твой" + (e.streak > 1 ? ", серия " + e.streak + " " + plural(e.streak, "день", "дня", "дней") : "")) + ". Открой во вкладке «Скины»", 9000);
