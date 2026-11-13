@@ -22,6 +22,7 @@ export function newState() {
     ash: NEG, ashAll: NEG, rb: 0, rel: {},
     items: {}, draft: null, drafts: 0, forgiven: 0,
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
+    au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
     wispKind: "",                                           // что принесёт огонёк, который сейчас на линии
     col: {}, feat: {}, failRow: 0, idleT: 0, waveLog: [],
@@ -77,6 +78,13 @@ export function load(text) {
   S.eclAt = Math.max(0, Number(S.eclAt) || 0);
   S.pat = {};
   for (const p of PATRONS) S.pat[p.id] = Math.max(0, Math.min(p.cap || 100000, Math.floor(Number(o.pat && typeof o.pat === "object" ? o.pat[p.id] : 0) || 0)));
+  // автозапуск умений: час, который идёт, — только если числа сходятся (иначе как будто его не было: осколки свободны).
+  // Стоит до проверки покровителей: занятые часом осколки входят в счёт свободных.
+  const ou = o.au && typeof o.au === "object" ? o.au : {}, ui = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+  const up = ui(ou.pay, 1e9), ut = ui(ou.total, 2e9), ub = ui(ou.back, 2e9), ul = Math.max(0, Math.min(CFG.auHour, Number(ou.left) || 0));
+  S.au = ul > 0 && up >= 1 && ut > up && ut <= 2 * up && ub < ut ? { left: ul, pay: up, total: ut, back: ub, w: ui(ou.w, 1e9), renew: !!ou.renew }
+    : { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: !!ou.renew };
+  S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
   if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
   // удержание: всё приводится к виду, который ждёт игра; чего в сохранении нет или что испорчено — как у нового игрока
@@ -401,6 +409,7 @@ export function tick(S, dt, live) {                         // live=false — о
       if (S.cd[s.id] > 0) S.cd[s.id] = Math.max(0, S.cd[s.id] - dt);
       if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) { ev(S, { t: "buff_end", id: s.id }); if (s.id === "siege") siegeEnd(S); } }
     }
+    auStep(S, dt);
     for (const id in S.buff) if (S.buff[id] > 0) { S.buff[id] = Math.max(0, S.buff[id] - dt); if (S.buff[id] === 0) ev(S, { t: "buff_end", id }); }
     if (S.un.combo && S.combo > 0) {
       S.comboIdle += dt;
@@ -830,7 +839,48 @@ export function shardsGain(S) {                              // сколько �
 export function shardsFree(S) {                              // осколки, которые ещё не потрачены
   let spent = 0;
   for (const p of PATRONS) { const L = S.pat[p.id] || 0; spent += p.cost === "pow" ? Math.pow(2, L) - 1 : L * (L + 1) / 2; }
-  return S.shards - spent;
+  return S.shards - spent - auHeld(S);
+}
+
+// ---------- Автозапуск умений: час за осколки, и осколки возвращаются с прибавкой ----------
+// Открывается вместе с Затмением (раньше осколков нет). Игрок платит осколки — и час игры все открытые умения включаются
+// сами, как только готовы, «Натиск» тоже. Заплаченное не пропадает: за этот час осколки возвращаются по одному, все до
+// единого, и сверх того — прибавка. Цена и прибавка считаются от волны, до которой дошёл забег в момент покупки (S.zrec):
+// чем выше стоишь, когда включаешь, тем дороже час и тем больше плюс. Час идёт, только пока игра на экране: без игрока
+// (вкладка скрыта, игра закрыта) он стоит на месте и ничего не теряется.
+// В счёте осколков это выглядит так: S.shards (получено за всё время) цена не трогает — заплаченное просто «занято»
+// (auHeld) и освобождается по мере возврата; в S.shards попадает только прибавка.
+export const auOpen = (S) => eclOpen(S);
+export const auWave = (S) => Math.max(1, S.zrec);            // «волна фарма»: до какой волны дошёл этот забег
+export const auBonus = (S, w) => Math.max(1, Math.floor((w === undefined ? auWave(S) : w) / CFG.auStep));   // сколько осколков час принесёт сверх цены
+export const auPrice = (S, w) => CFG.auCost * auBonus(S, w);
+export const auOn = (S) => S.au.left > 0;
+export const auHeld = (S) => Math.max(0, S.au.pay - S.au.back);   // заплачено и ещё не вернулось
+export function auBuy(S) {
+  if (!auOpen(S) || auOn(S)) return false;
+  const w = auWave(S), p = auPrice(S, w);
+  if (p > shardsFree(S)) return false;
+  S.au.left = CFG.auHour; S.au.pay = p; S.au.total = p + auBonus(S, w); S.au.back = 0; S.au.w = w;
+  S.stats.auHours = (S.stats.auHours || 0) + 1;
+  ev(S, { t: "au_on", pay: p, gain: S.au.total - p, w });
+  return true;
+}
+export function setAuRenew(S, on) { S.au.renew = !!on; if (S.au.renew && !auOn(S)) auBuy(S); }
+function auStep(S, dt) {                                     // зовётся из tick, только когда игрок в игре
+  const a = S.au;
+  if (a.left <= 0) return;
+  for (const s of SKILLS) if (S.cd[s.id] <= 0 && skillOpen(S, s)) useSkill(S, s.id);
+  a.left = Math.max(0, a.left - dt);
+  const due = a.left <= 0 ? a.total : Math.floor(a.total * (1 - a.left / CFG.auHour) + 1e-9);
+  while (a.back < due) {
+    a.back += 1;
+    if (a.back > a.pay) { S.shards += 1; S.stats.auGain = (S.stats.auGain || 0) + 1; ev(S, { t: "au_gain" }); }
+  }
+  if (a.left <= 0) {
+    ev(S, { t: "au_end", pay: a.pay, gain: a.total - a.pay });
+    a.pay = 0; a.total = 0; a.back = 0; a.w = 0;
+    if (a.renew) auBuy(S);                                    // продление: по цене волны, на которой забег сейчас
+  }
 }
 export const patronCost = (S, p) => (p.cost === "pow" ? Math.pow(2, S.pat[p.id] || 0) : (S.pat[p.id] || 0) + 1);
 export function buyPatron(S, id) {

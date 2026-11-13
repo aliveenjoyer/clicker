@@ -932,3 +932,11 @@ html { scrollbar-gutter: stable; }
   }
 }
 .stage.narrow .wavebar:has(#btnBoss:not([hidden])) { gap: 8px; }   /* стрим рядом на небольшом экране: каждый пиксель датчику */
+
+/* автозапуск умений: карточка под Стражем и метка «авто» на умениях, пока он работает */
+.rebox.au { margin-top: 10px; background: linear-gradient(180deg, rgba(99,230,165,.14), rgba(99,230,165,.04)); box-shadow: inset 0 0 0 2px rgba(99,230,165,.32); }
+.rebox.au .big { color: #63e6a5; }
+.rebox.au .gbar { height: 10px; margin: 2px 0 8px; border-radius: 5px; background: rgba(10,10,30,.55); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(99,230,165,.3); }
+.rebox.au .gbar i { display: block; height: 100%; background: linear-gradient(90deg, #63e6a5, #b8f7d4); transition: width 300ms; }
+.rebox.au .autosw { margin-top: 12px; }
+.skillbar.au-on .skill:not(.lock)::before { content: "авто"; z-index: 3; position: absolute; left: 5px; top: 5px; padding: 2px 4px; border-radius: 999px; font: 900 8.5px/1 var(--ui); letter-spacing: .03em; color: #0d2a1b; background: #63e6a5; box-shadow: 0 2px 4px rgba(5,6,20,.5); pointer-events: none; }

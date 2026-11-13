@@ -52,6 +52,12 @@ export function mount(state, hooks) {
     slowT = 0; api.settings();
   });
   $("eclBox").addEventListener("click", (e) => { if (e.target.closest("[data-ecl]")) openEclipse(); });
+  $("auBox").addEventListener("click", (e) => {             // автозапуск умений: купить час, выключатель продления
+    if (e.target.closest("[data-au-buy]")) { if (C.auBuy(S)) sfx.buy(); else sfx.deny(); }
+    else if (e.target.closest("[data-au-renew]")) { C.setAuRenew(S, !S.au.renew); sfx.buy(); api.settings(); }
+    else return;
+    auKey = ""; eclKey = ""; slowT = 0;
+  });
   $("keepBox").addEventListener("click", keepClick); ACCT.bind($("keepBox"));
   $("liveChest").addEventListener("click", () => { tab = "skins"; drawTabs(); slowT = 0; });
   ACCT.onChange(() => { keepKey = ""; rpgAt = 0; syncRpg(true); });
@@ -369,7 +375,7 @@ function drawRoad() {
     h += '<div class="rd' + (done ? " done" : cur ? " cur" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + u.title + "</b><span>" + condText(u) + "</span><p>" + u.say + "</p></div></div>";
   }
   for (const x of ROAD_EXTRA) {
-    const done = x.key === "ecl" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : false;
+    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : false;
     h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p></div></div>";
   }
   $("roadList").innerHTML = h;
@@ -403,6 +409,7 @@ function buildSkills() {
 }
 const clock = (s) => (s >= 60 ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") : Math.ceil(s) + " с");
 function drawSkills() {
+  $("skillbar").classList.toggle("au-on", C.auOn(S));        // автозапуск работает — на умениях метка «авто»
   for (const s of SKILLS) {
     const e = skillEls[s.id], open = C.skillOpen(S, s), on = S.act[s.id] > 0, cd = S.cd[s.id];
     e.root.classList.toggle("lock", !open);
@@ -467,9 +474,37 @@ function drawGuard() {
       (g.last > 0 && !on ? " Прошлый натиск снял " + pc(g.last) + " %." : "") +
       (S.stats.guards ? " Стражей повержено: <b>" + group(S.stats.guards) + "</b>." : "") + "</div>";
 }
+// Автозапуск умений: карточка под Стражем. Пока час не куплен — цена и сколько вернётся; пока идёт — сколько осталось и
+// сколько осколков уже вернулось.
+let auKey = "";
+function drawAu() {
+  const open = C.auOpen(S), a = S.au, on = C.auOn(S), free = C.shardsFree(S);
+  const w = C.auWave(S), p = C.auPrice(S, w), g = C.auBonus(S, w), sh = (n) => group(n) + " " + plural(n, "осколок", "осколка", "осколков");
+  const key = [open, on, on ? Math.ceil(a.left) : 0, a.back, a.pay, a.total, a.renew, p, w, free >= p, S.stats.auGain || 0].join("|");
+  if (key === auKey) return;
+  auKey = key;
+  const sw = '<button type="button" class="autosw" data-au-renew="1" aria-pressed="' + (a.renew ? "true" : "false") + '"><span class="sw' + (a.renew ? " on" : "") + '"></span><span><b>Продлевать самому</b>' +
+    "<small>Час кончился — сразу берётся следующий, по цене волны, на которой забег в эту минуту.</small></span></button>";
+  const sum = S.stats.auGain ? " Всего автозапуск принёс сверх цены: <b>+" + sh(S.stats.auGain) + "</b>." : "";
+  $("auBox").innerHTML = !open
+    ? "<div>Автозапуск умений — час за осколки</div><div class=\"big\">после босса 1000-й волны</div><div>Откроется вместе с Затмением. Платишь осколки — и час все умения включаются сами, <b>«Натиск»</b> тоже. " +
+      "Осколки за этот час <b>возвращаются все, и ещё сверху</b>.</div>"
+    : on
+    ? "<div>Автозапуск умений работает</div><div class=\"big\">осталось " + clock(a.left) + "</div>" +
+      '<div class="gbar"><i style="width:' + (a.left / CFG.auHour * 100).toFixed(2) + '%"></i></div>' +
+      "<div>Умения включаются сами, как только готовы. Вернулось <b>" + group(a.back) + " из " + sh(a.total) + "</b>: " + group(a.pay) + " " + plural(a.pay, "твой", "твоих", "твоих") +
+      " и <b>+" + group(a.total - a.pay) + " сверху</b>. Час куплен на волне " + group(a.w) + " и идёт, пока игра на экране." + sum + "</div>" + sw
+    : "<div>Автозапуск умений</div><div class=\"big\">час за " + sh(p) + " → вернётся " + group(p + g) + "</div>" +
+      "<div>Час умения включаются сами, как только готовы, <b>«Натиск»</b> тоже. Осколки за этот час вернутся все и ещё <b>+" + group(g) + " сверху</b>. " +
+      "Прибавка растёт с волной забега: сейчас волна <b>" + group(w) + "</b>, каждые " + group(CFG.auStep) + " волн — ещё +1 сверху. Цена — вчетверо больше прибавки. " +
+      "Час идёт, пока игра на экране." + sum + "</div>" +
+      (free >= p ? '<button class="btn ecl" data-au-buy="1">Включить на час — ' + sh(p) + "</button>"
+        : '<button class="btn ecl off" disabled>Нужно ' + sh(p) + ", свободно " + group(Math.max(0, free)) + "</button>") + sw;
+}
 function drawEclipse() {
   if (tab !== "relics") return;
   drawGuard();
+  drawAu();
   if (!patronEls) buildPatrons();
   const open = C.eclOpen(S), wait = open ? C.eclWait(S) : 0, n = open ? C.shardsGain(S) : 0, free = C.shardsFree(S);
   const key = [open, Math.ceil(wait / 30), n, free, S.shards, S.ecl, C.chaosStep(S), C.chaosOpen(S), JSON.stringify(S.pat)].join("|");
@@ -701,6 +736,9 @@ export function onEvent(e) {
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
   }
   else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
+  else if (e.t === "au_on") { note("Автозапуск включён", "Час умения включаются сами. Вернётся " + group(e.pay) + " и ещё +" + group(e.gain) + " " + plural(e.gain, "осколок", "осколка", "осколков") + " сверху", 4200); auKey = ""; eclKey = ""; }
+  else if (e.t === "au_gain") { auKey = ""; eclKey = ""; }
+  else if (e.t === "au_end") { note("Автозапуск закончился", "Осколки вернулись, сверху +" + group(e.gain) + " — во вкладке «Реликвии» можно включить ещё", 5200); auKey = ""; eclKey = ""; }
   else if (e.t === "guard_kill") { note("Страж повержен", "+" + e.shards + " " + plural(e.shards, "осколок", "осколка", "осколков") + " сразу — потрать на покровителей во вкладке «Реликвии». Вышел страж № " + (e.n + 1), 12000); grdKey = ""; eclKey = ""; sfx.rank(); }
   else if (e.t === "reach") {                                // забег вернулся к рекорду, с которым начался
     const u = C.pace(S).usual;
