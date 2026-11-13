@@ -573,10 +573,14 @@ function drawPace() {
   const fill = p.state === "stuck" ? 100 : p.now === null ? 0 : Math.round(Math.min(1, p.now / p.limit) * 100);
   // Нижняя строка — путь до рекорда: сколько прошло с возрождения, за сколько забег вернулся к рекорду, с которым начался,
   // как обычно и как у игроков. Пока возрождений не было — прежнее: среднее время волны и предел.
-  const sub = (p.since === null ? [p.mine === null ? "" : "среднее <b>" + secs(p.mine) + "</b>", "предел <b>" + secs(p.limit) + "</b>"]
-    : p.reach !== null ? ["рекорд за <b>" + runT(p.reach) + "</b>", p.usual !== null ? "обычно <b>" + runT(p.usual) + "</b>" : "", all ? "у игроков <b>" + runT(all.avg) + "</b>" : ""]
-    : ["с возрождения <b>" + runT(p.since) + "</b>", !p.target ? "" : p.usual !== null ? "до рекорда обычно <b>" + runT(p.usual) + "</b>" : "до рекорда " + group(Math.max(0, p.target - S.zrec)) + " волн"]
-  ).filter(Boolean).join(" · ");
+  // Варианты строки от полного к короткому: в узкой полосе (стрим рядом, кнопка «На босса») берётся первый, что помещается.
+  const B = (s) => "<b>" + s + "</b>", J = (...a) => a.filter(Boolean).join(" · ");
+  const subs = p.since === null ? [J(p.mine === null ? "" : "среднее " + B(secs(p.mine)), "предел " + B(secs(p.limit))), "предел " + B(secs(p.limit))]
+    : p.reach !== null ? [J("рекорд за " + B(runT(p.reach)), p.usual !== null ? "обычно " + B(runT(p.usual)) : "", all ? "у игроков " + B(runT(all.avg)) : ""),
+      J("рекорд за " + B(runT(p.reach)), p.usual !== null ? "обычно " + B(runT(p.usual)) : ""), "рекорд за " + B(runT(p.reach))]
+    : [J("с возрождения " + B(runT(p.since)), !p.target ? "" : p.usual !== null ? "до рекорда обычно " + B(runT(p.usual)) : "до рекорда " + group(Math.max(0, p.target - S.zrec)) + " волн"),
+      J("с возрождения " + B(runT(p.since)), p.target && p.usual !== null ? "обычно " + B(runT(p.usual)) : ""), "с возрождения " + B(runT(p.since))];
+  const sub = subs[0];
   const key = [now, word, p.state, fill, sub].join("|");
   if (key === paceKey) return;
   paceKey = key;
@@ -585,7 +589,13 @@ function drawPace() {
   $("paceNow").textContent = now;
   v.hidden = !word; v.textContent = word;
   $("paceFill").style.width = fill + "%";
-  $("paceSub").innerHTML = sub;
+  const line = $("paceSub");
+  for (let i = 0; i < subs.length; i++) {
+    if (i && subs[i] === subs[i - 1]) continue;
+    line.innerHTML = "<span>" + subs[i] + "</span>";
+    const have = line.getBoundingClientRect().width;       // мерим с долями пикселя: многоточие ставится и при нехватке в полпикселя
+    if (!have || line.firstChild.getBoundingClientRect().width <= have + 0.02) break;   // помещается (или блок не виден — мерить нечего)
+  }
   box.title = (p.now === null ? "Здесь видно, сколько времени уходит на волну." : "Сейчас на волну уходит " + now + ".") +
     " У босса здоровья как у целой волны, а времени на него — " + secs(p.limit) + ". Когда волна идёт дольше, босса уже не взять: ты упёрся" +
     (p.canRb ? " — пора возрождаться." : S.un.rebirth ? " — качай отряд." : " — качай отряд; возрождение откроется на 50-й волне.") +

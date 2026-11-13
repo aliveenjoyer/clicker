@@ -13,8 +13,8 @@ const Q = new URLSearchParams(LOCAL ? location.search : "");
 const FAKEPLAY = Q.has("fakeplay");                          // считать, что плеер играет, как только картинка стрима на поле: в Chrome без окна видео Twitch не стартует
 const clean = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9_]/g, "");
 const OWN = "aliveenjoyer";
-const FRIENDS = ["sashawaify", "qissme_", "aiihosh1no", "archyyyh8"];   // по порядку: кто первый в эфире, того и показываем
-const NAMES = { aliveenjoyer: "aliveenjoyer", sashawaify: "sashawaify", qissme_: "QissMe_", aiihosh1no: "aiihosh1no", archyyyh8: "archyyyh8" };
+const FRIENDS = ["sashawaify", "qissme_", "aiihosh1no", "archyyyh8", "libez"];   // по порядку: кто первый в эфире, того и показываем
+const NAMES = { aliveenjoyer: "aliveenjoyer", sashawaify: "sashawaify", qissme_: "QissMe_", aiihosh1no: "aiihosh1no", archyyyh8: "archyyyh8", libez: "libez" };
 const LIST = clean(Q.get("channel")) ? [clean(Q.get("channel"))] : [OWN].concat(FRIENDS);   // ?channel=<имя> — проверка на чужом канале
 const DEAD_MS = 5 * 60000;                                   // плеер сказал «не в эфире» — столько канал не предлагаем: превью у Twitch запаздывает
 export let CHANNEL = LIST[0];                                // чей стрим сейчас фоном (и чей чат во вкладке); никто не в эфире — свой
