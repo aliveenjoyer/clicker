@@ -941,9 +941,16 @@ html { scrollbar-gutter: stable; }
 .rebox.au .autosw { margin-top: 12px; }
 .skillbar.au-on .skill:not(.lock)::before { content: "авто"; z-index: 3; position: absolute; left: 5px; top: 5px; padding: 2px 4px; border-radius: 999px; font: 900 8.5px/1 var(--ui); letter-spacing: .03em; color: #0d2a1b; background: #63e6a5; box-shadow: 0 2px 4px rgba(5,6,20,.5); pointer-events: none; }
 
-/* свайп по кнопкам покупки (зажал мышь и повёл по списку): ничего не выделяется, нажатая по пути кнопка коротко проседает */
+/* покупка героев свайпом (зажал мышь и ведёшь вверх-вниз по списку): ничего не выделяется, кнопки не выглядят зажатыми —
+   каждая купленная коротко щёлкает со вспышкой, за курсором тянется тающий след */
 #mercList { user-select: none; -webkit-user-select: none; }
-body.buyswipe, body.buyswipe * { cursor: pointer !important; }
-.buy.sw { animation: buy-sw 160ms ease-out; }
-@keyframes buy-sw { 0% { transform: translateY(3px); filter: brightness(1.25); } 100% { transform: none; filter: none; } }
-@media (prefers-reduced-motion: reduce) { .buy.sw { animation: none; } }
+#mercList .buy { position: relative; }
+#mercList .buy:active { transform: none; }
+.buy.tapfx { animation: buy-tap 240ms cubic-bezier(.2,.9,.3,1.4); }
+.buy.tapfx::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; pointer-events: none; box-shadow: 0 0 0 3px rgba(255,246,201,.95), 0 0 20px rgba(255,197,61,.85); animation: buy-ring 300ms ease-out forwards; }
+@keyframes buy-tap { 0% { transform: translateY(4px) scale(.95); filter: brightness(1.5); } 55% { transform: translateY(-2px) scale(1.05); filter: brightness(1.15); } 100% { transform: none; filter: none; } }
+@keyframes buy-ring { 0% { opacity: 1; transform: scale(.96); } 100% { opacity: 0; transform: scale(1.14); } }
+.swdot { position: fixed; z-index: 60; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #fffef2 0%, #ffe58f 22%, rgba(255,197,61,.85) 42%, rgba(255,150,30,.3) 62%, rgba(255,150,30,0) 74%); animation: swdot 620ms ease-out forwards; }
+@keyframes swdot { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.2); } }
+@media (prefers-reduced-motion: reduce) { .buy.tapfx, .buy.tapfx::after { animation: none; } .buy.tapfx::after { display: none; } }

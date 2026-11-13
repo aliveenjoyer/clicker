@@ -37,37 +37,53 @@ export function mount(state, hooks) {
   $("modeSeg").addEventListener("click", (e) => { const m = e.target.dataset.mode; if (m) { C.setMode(S, m); slowT = 0; } });
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
-  $("mercList").addEventListener("click", (e) => {
-    if (swipeDone) { swipeDone = false; return; }           // кнопку отпустили в конце свайпа: всё уже куплено по пути
-    const b = e.target.closest(".buy"); if (!b || b.classList.contains("off")) return;
-    if (C.buy(S, Number(b.dataset.i), buyMode)) slowT = 0; else sfx.deny();
-  });
-  // Свайп по кнопкам покупки: зажал левую кнопку мыши на одной и повёл вверх или вниз — нажимается каждая кнопка, на
-  // которую зашёл курсор (вернулся на ту же — нажмётся ещё раз). Первая нажимается, когда курсор с неё уходит; не ушёл —
-  // это обычный щелчок. Начать можно и не с кнопки — с любого места списка. Кнопки, на которые не хватает душ,
-  // пропускаются молча. Только мышь: пальцем список листают.
+  // Покупка героев. Мышью — сразу по нажатию кнопки и свайпом: зажал левую кнопку в списке и ведёшь вверх-вниз — каждая
+  // строка, на которую зашёл курсор, покупается (вернулся на ту же — ещё раз). Вести можно по самим героям, не только по
+  // кнопкам. Кнопки при этом не выглядят зажатыми: каждая коротко щёлкает, за курсором тянется тающий след. Начал не с
+  // кнопки — строка, с которой начал, покупается, когда курсор с неё уходит. Строки, на которые не хватает душ, свайп
+  // пропускает молча. Пальцем и с клавиатуры — обычный щелчок: пальцем список листают.
   {
     const list = $("mercList");
-    let sw = null;                                          // { first: с какой кнопки начали, last: над какой курсор сейчас, moved: уже ушли с первой }
-    const press = (b) => {
-      if (b.classList.contains("off") || !C.buy(S, Number(b.dataset.i), buyMode)) return;
-      slowT = 0;
-      b.classList.remove("sw"); void b.offsetWidth; b.classList.add("sw");
+    const tap = (b) => { b.classList.remove("tapfx"); void b.offsetWidth; b.classList.add("tapfx"); };   // короткий щелчок кнопки
+    const buyBtn = (b, loud) => {
+      if (!b || b.classList.contains("off")) return false;
+      if (!C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
+      slowT = 0; tap(b);
+      return true;
     };
-    const end = () => { if (sw && sw.moved) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; document.body.classList.remove("buyswipe"); };
+    const rowBtn = (row) => (row ? row.querySelector(".buy") : null);
+    let sw = null, dotAt = null;      // sw: { last: строка под курсором, first: строка, с которой начали не с кнопки (ещё не куплена), used: мышь уже что-то купила }
+    const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над списком героев
+      if (dotAt && Math.hypot(x - dotAt[0], y - dotAt[1]) < 5) return;
+      dotAt = [x, y];
+      const r = list.parentNode.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const d = document.createElement("i");
+      d.className = "swdot"; d.style.left = x + "px"; d.style.top = y + "px";
+      document.body.appendChild(d);
+      d.addEventListener("animationend", () => d.remove());
+    };
+    const end = () => { if (sw && sw.used) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; dotAt = null; };
+    list.addEventListener("click", (e) => {
+      if (swipeDone) { swipeDone = false; return; }          // мышью всё уже куплено: по нажатию или по пути свайпа
+      buyBtn(e.target.closest(".buy"), true);
+    });
     list.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
-      const b = e.target.closest(".buy");
-      sw = { first: b, last: b, moved: false };
+      const b = e.target.closest(".buy"), row = e.target.closest(".merc");
+      sw = { last: row, first: b ? null : row, used: !!b };
+      if (b) buyBtn(b, true);                                // по кнопке — покупка сразу, по нажатию
     });
     window.addEventListener("pointermove", (e) => {
       if (!sw) return;
       if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
-      const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .buy") : null;
-      if (b === sw.last) return;
-      if (!sw.moved) { sw.moved = true; document.body.classList.add("buyswipe"); if (sw.first) press(sw.first); }
-      if (b) press(b);
-      sw.last = b;
+      trail(e.clientX, e.clientY);
+      const el = document.elementFromPoint(e.clientX, e.clientY), row = el && el.closest ? el.closest("#mercList .merc") : null;
+      if (row === sw.last) return;
+      sw.used = true;
+      if (sw.first) { buyBtn(rowBtn(sw.first), false); sw.first = null; }
+      buyBtn(rowBtn(row), false);
+      sw.last = row;
     });
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
@@ -185,7 +201,7 @@ function rowHtml(i) {
     '<div><div class="name">' + (whip ? "Хлыст Лэша" : h.name) + ' <span class="lvl"><small>ур.</small><span data-f="lv">0</span></span></div>' +
     '<div class="meta"><span class="dmg">' + (whip ? "удар" : "урон") + ' <b data-f="dmg">0</b></span></div>' +
     '<div class="ms"><i></i></div><div class="ms-cap" data-f="cap"></div></div>' +
-    '<button class="buy" data-i="' + i + '" title="Зажми и веди мышью вверх или вниз — нажмутся все кнопки по пути"><span class="q" data-f="q">×1</span><span class="price farm"><img alt="" src="' + art("cur-farm") + '"><b data-f="price">0</b></span></button>';
+    '<button class="buy" data-i="' + i + '" title="Зажми мышь и веди вверх-вниз по героям — купится каждый по пути"><span class="q" data-f="q">×1</span><span class="price farm"><img alt="" src="' + art("cur-farm") + '"><b data-f="price">0</b></span></button>';
 }
 function ensureRows() {
   const want = Math.min(HEROES.length, C.heroesShown(S)) + 1;        // Хлыст + нанятые + следующий
