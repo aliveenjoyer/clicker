@@ -540,7 +540,7 @@ export function orbBonus(S, loot) { gain(S, loot + L10(CFG.orbBonus)); S.stats.o
 export const swapPriceLg = (n) => CFG.swapBase + Math.pow(n / CFG.swapK, 1 / CFG.swapP);   // lg цены n-й души RPG за день
 export function swapMax(S, took, left) {                    // на сколько душ RPG хватает банка сейчас, не больше left
   let c = NEG, m = 0;
-  while (m < left && m < 5000) {
+  while (m < left && m < 100000) {                          // потолок дня — 100 000; цикл на сотню тысяч шагов считается за миллисекунды
     c = lsum(c, swapPriceLg(took + m + 1));
     if (S.souls === NEG || c > S.souls) break;
     m++;
