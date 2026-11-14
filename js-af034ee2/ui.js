@@ -51,6 +51,7 @@ export function mount(state, hooks) {
       hgShow = Number(b.dataset.i);
       if (b.classList.contains("hg-no") || !C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
       slowT = 0; tap(b);
+      sfx.tap(tapN++); gridBuys += 1;                        // звук покупки — сразу и свой: каждая следующая плитка свайпа выше
       return true;
     };
     let sw = null, dotAt = null;      // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
@@ -64,7 +65,7 @@ export function mount(state, hooks) {
       document.body.appendChild(d);
       d.addEventListener("animationend", () => d.remove());
     };
-    const end = () => { if (sw && sw.used) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; dotAt = null; };
+    const end = () => { if (sw && sw.used) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; dotAt = null; tapN = 0; };
     list.addEventListener("click", (e) => {
       if (swipeDone) { swipeDone = false; return; }          // мышью всё уже куплено: по нажатию или по пути свайпа
       buyTile(e.target.closest(".hg"), true);
@@ -72,6 +73,7 @@ export function mount(state, hooks) {
     list.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
       const b = e.target.closest(".hg");
+      tapN = 0;
       sw = { last: b, used: !!b };
       if (b) buyTile(b, true);                               // покупка сразу, по нажатию
     });
@@ -197,6 +199,7 @@ function stepHold(dt) {
 }
 
 // ---------- отряд ----------
+let tapN = 0, gridBuys = 0;                                 // которая по счёту покупка в этом свайпе; сколько покупок с сетки ещё не отзвучало событием
 let swipeDone = false;                                      // мышь только что купила (нажатием или свайпом): щелчок после этого не считается
 let hgShow = -1, hgInfoKey = "", hgFit = "";                // про кого рассказывает строка над сеткой (-1 — подсказка); что в ней сейчас; под какой размер подобрана сетка
 const TILES = HEROES.length + 1;                            // Хлыст и все наёмники
@@ -284,6 +287,8 @@ const FIGS = [
 // разрешённых, тем чаще он выпадает.
 for (const f of FIGS) { f.n = new Set(f.s.flat().map((c) => c[0] + ":" + c[1])).size; f.t = f.n <= 5 ? 1 : f.n <= 9 ? 2 : f.n <= 13 ? 3 : 4; }
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
+const figLvl = (k) => (k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0);   // уровень вида и звука — по комбо
+let hurryAt = 0;                                            // на какой секунде уже тикнуло: время на рисунок кончается
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
 function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
@@ -325,7 +330,7 @@ function figTouch(i) {                                      // по плитке
   if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
   fig.hit.add(i);
   rows[i].root.classList.add("hg-hit");
-  sfx.orb(fig.hit.size - 1);
+  sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl(S.fig.k));
   const dot = rows[i].root.querySelector(".hg-dot");
   if (dot) { dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick"); }
   if (fig.hit.size === fig.cells.length) {
@@ -342,9 +347,10 @@ function figTouch(i) {                                      // по плитке
 // комбо, тем крупнее и горячее. Сетка коротко вздрагивает. Всё живёт внутри сетки героев и само убирается.
 function figBoom(done) {
   const list = $("mercList"), k = S.fig.k, lr = list.getBoundingClientRect();
-  const lvl = k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0;
-  sfx.tier(Math.min(9, Math.floor(k / 8)));
-  if ([10, 25, 50, 75].some((m) => k >= m && k - done.plus < m) || (k >= CFG.figCap && k - done.plus < CFG.figCap)) sfx.rank();
+  const lvl = figLvl(k);
+  sfx.boom(lvl, done.plus);
+  const step = [10, 25, 50, 75, CFG.figCap].map((m) => k >= m && k - done.plus < m).lastIndexOf(true);   // перешли рубеж комбо — фанфары
+  if (step >= 0) setTimeout(() => sfx.fanfare(step), 240);
   let cx = 0, cy = 0;
   const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), q = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += q[0]; cy += q[1]; return q; });
   cx /= pts.length; cy /= pts.length;
@@ -370,12 +376,15 @@ function figBoom(done) {
 const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
   const el = $("hgFigc"), k = S.fig.k;
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size : "";
+  const sec = k > 0 && S.fig.left <= 3 ? Math.max(1, Math.ceil(S.fig.left)) : 0;   // последние три секунды: тикает и мигает
+  if (sec && sec !== hurryAt) sfx.hurry(sec === 1);
+  hurryAt = sec;
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (sec ? 1 : 0) : "";
   if (key === figChipKey) return;
   figChipKey = key;
   el.hidden = !fig;
   if (!fig) return;
-  el.className = "hg-figc" + (k ? " on" : "");
+  el.className = "hg-figc" + (k ? " on" : "") + (sec ? " hurry" : "");
   const full = C.figTime(fig.cells.length);
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок прибавляет к комбо (простой — 1, сложные — до 4), а комбо умножает души: комбо 5 — души ×6, " +
     "и так до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Чем выше комбо, тем сложнее рисунки. Не успел собрать следующий — комбо обрывается";
@@ -945,7 +954,8 @@ export function onEvent(e) {
       r.root.classList.remove("pulse"); void r.root.offsetWidth; r.root.classList.add("pulse");
       if (e.ms) { const st = document.createElement("span"); st.className = "stampx"; st.textContent = "×" + e.gain; r.root.appendChild(st); setTimeout(() => st.remove(), 1500); }
     }
-    if (e.ms) sfx.ms(); else sfx.buy();
+    if (gridBuys > 0) { gridBuys -= 1; if (e.ms) sfx.mile(); }   // покупка с сетки: щелчок уже прозвучал при нажатии
+    else if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
   else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
@@ -961,6 +971,7 @@ export function onEvent(e) {
   else if (e.t === "fig_end") {
     if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }
     figChipKey = "?";
+    sfx.drop();
     spawnFig();                                              // сложный рисунок уходит: новое комбо начинается с простого
     const list = $("mercList");
     if (list.offsetParent !== null && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
