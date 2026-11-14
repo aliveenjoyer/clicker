@@ -38,6 +38,7 @@ export function mount(state, hooks) {
 
   $("modeSeg").addEventListener("click", (e) => { const m = e.target.dataset.mode; if (m) { C.setMode(S, m); slowT = 0; } });
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
+  $("btnFig").addEventListener("click", () => { S.set.fig = S.set.fig === false; api.settings(); slowT = 0; });   // кнопка «Комбо»: рисунки на сетке вкл/выкл
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
   // Покупка героев. Отряд стоит сеткой плиток, плитка и есть кнопка. Мышью — сразу по нажатию и свайпом: зажал левую
   // кнопку в сетке и ведёшь в любую сторону — покупается каждая плитка, на которую зашёл курсор (вернулся на ту же — ещё
@@ -279,15 +280,15 @@ const FIGS = [
   { name: "Квадрат", w: 3, h: 3, s: [[[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [0, 1], [0, 0]]] },
   { name: "Круг", w: 4, h: 4, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1], [1, 0]]] },
   { name: "Треугольник", w: 5, h: 3, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
-  { name: "Молния", w: 4, h: 5, s: [[[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4]]] },
+  { name: "Молния", fix: 1, w: 4, h: 5, s: [[[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4]]] },
   { name: "Волна", w: 7, h: 3, s: [[[0, 1], [1, 0], [2, 1], [3, 2], [4, 1], [5, 0], [6, 1]]] },
   { name: "Большой ромб", w: 5, h: 5, s: [[[2, 0], [3, 1], [4, 2], [3, 3], [2, 4], [1, 3], [0, 2], [1, 1], [2, 0]]] },
-  { name: "Стрела", w: 5, h: 5, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]], [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]]] },
+  { name: "Стрела", fix: 1, w: 5, h: 5, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]], [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]]] },
   { name: "Большой икс", w: 5, h: 5, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [[4, 0], [3, 1], [2, 2], [1, 3], [0, 4]]] },
   { name: "Двойной икс", w: 7, h: 3, s: [[[0, 0], [1, 1], [2, 2]], [[2, 0], [1, 1], [0, 2]], [[4, 0], [5, 1], [6, 2]], [[6, 0], [5, 1], [4, 2]]] },
-  { name: "Сердце", w: 5, h: 5, s: [[[2, 1], [1, 0], [0, 1], [0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [4, 1], [3, 0], [2, 1]]] },
+  { name: "Сердце", fix: 1, w: 5, h: 5, s: [[[2, 1], [1, 0], [0, 1], [0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [4, 1], [3, 0], [2, 1]]] },
   { name: "Огромный икс", w: 6, h: 6, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], [[5, 0], [4, 1], [3, 2], [2, 3], [1, 4], [0, 5]]] },
-  { name: "Корона", w: 5, h: 3, s: [[[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [4, 1], [4, 0], [3, 1], [2, 0], [1, 1], [0, 0]]] },
+  { name: "Корона", fix: 1, w: 5, h: 3, s: [[[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [4, 1], [4, 0], [3, 1], [2, 0], [1, 1], [0, 0]]] },
   { name: "Решётка", w: 4, h: 4, s: [[[1, 0], [1, 1], [1, 2], [1, 3]], [[2, 0], [2, 1], [2, 2], [2, 3]], [[0, 1], [1, 1], [2, 1], [3, 1]], [[0, 2], [1, 2], [2, 2], [3, 2]]] },
   { name: "Большой круг", w: 5, h: 5, s: [[[1, 0], [2, 0], [3, 0], [4, 1], [4, 2], [4, 3], [3, 4], [2, 4], [1, 4], [0, 3], [0, 2], [0, 1], [1, 0]]] },
   { name: "Мишень", w: 5, h: 5, s: [[[1, 0], [2, 0], [3, 0], [4, 1], [4, 2], [4, 3], [3, 4], [2, 4], [1, 4], [0, 3], [0, 2], [0, 1], [1, 0]], [[2, 2]]] },
@@ -299,39 +300,54 @@ const FIGS = [
   // ---- вторая партия (14.11): загогулины, спирали, буквы. Ширина и высота считаются сами ----
   { name: "Клин", s: [[[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]]] },
   { name: "Лесенка", s: [[[0, 3], [1, 3], [1, 2], [2, 2], [2, 1], [3, 1], [3, 0]]] },
-  { name: "Крюк", s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2]]] },
-  { name: "Чаша", s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]]] },
-  { name: "Буква Л", s: [[[0, 3], [1, 2], [1, 1], [2, 0], [3, 1], [3, 2], [4, 3]]] },
+  { name: "Крюк", fix: 1, s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2]]] },
+  { name: "Чаша", fix: 1, s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]]] },
+  { name: "Буква Л", fix: 1, s: [[[0, 3], [1, 2], [1, 1], [2, 0], [3, 1], [3, 2], [4, 3]]] },
   { name: "Гора", s: [[[0, 3], [1, 2], [2, 1], [3, 0], [4, 1], [5, 2], [6, 3]]] },
   { name: "Пила", s: [[[0, 1], [1, 0], [2, 1], [3, 0], [4, 1], [5, 0], [6, 1]]] },
   { name: "Восьмёрка", s: [[[1, 0], [2, 1], [1, 2], [0, 3], [1, 4], [2, 3], [1, 2], [0, 1], [1, 0]]] },
   { name: "Бесконечность", s: [[[1, 0], [2, 1], [3, 2], [4, 1], [3, 0], [2, 1], [1, 2], [0, 1], [1, 0]]] },
   { name: "Ромбы", s: [[[1, 0], [2, 1], [1, 2], [0, 1], [1, 0]], [[3, 0], [4, 1], [3, 2], [2, 1], [3, 0]]] },
-  { name: "Хлыст", s: [[[0, 3], [1, 2], [2, 1], [3, 0], [4, 0], [4, 1], [3, 2], [2, 2]]] },
-  { name: "Меч", s: [[[1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5]], [[0, 4], [1, 4], [2, 4]]] },
-  { name: "Рыбка", s: [[[0, 1], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 1]], [[3, 1], [4, 0], [4, 1], [4, 2], [3, 1]]] },
-  { name: "Бабочка", s: [[[0, 0], [1, 1], [2, 1], [3, 1], [4, 0], [4, 1], [4, 2], [3, 1]], [[1, 1], [0, 2], [0, 1], [0, 0]]] },
+  { name: "Хлыст", fix: 1, s: [[[0, 3], [1, 2], [2, 1], [3, 0], [4, 0], [4, 1], [3, 2], [2, 2]]] },
+  { name: "Меч", fix: 1, s: [[[1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5]], [[0, 4], [1, 4], [2, 4]]] },
+  { name: "Рыбка", fix: 1, s: [[[0, 1], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 1]], [[3, 1], [4, 0], [4, 1], [4, 2], [3, 1]]] },
+  { name: "Бабочка", fix: 1, s: [[[0, 0], [1, 1], [2, 1], [3, 1], [4, 0], [4, 1], [4, 2], [3, 1]], [[1, 1], [0, 2], [0, 1], [0, 0]]] },
   { name: "Гантеля", s: [[[0, 0], [0, 1], [0, 2]], [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1]], [[4, 0], [4, 1], [4, 2]]] },
-  { name: "Ключ", s: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]], [[1, 1], [2, 1], [3, 1], [4, 1]], [[3, 1], [3, 2]], [[4, 1], [4, 2]]] },
+  { name: "Ключ", fix: 1, s: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]], [[1, 1], [2, 1], [3, 1], [4, 1]], [[3, 1], [3, 2]], [[4, 1], [4, 2]]] },
   { name: "Большой плюс", s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]]] },
-  { name: "Пирамида", s: [[[2, 0], [1, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 1], [2, 0]], [[2, 0], [2, 1], [2, 2]]] },
-  { name: "Вилка", s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]], [[2, 0], [2, 1], [2, 2], [2, 3]]] },
-  { name: "Буква Z", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [2, 1], [1, 2], [0, 3], [1, 3], [2, 3], [3, 3]]] },
-  { name: "Буква N", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 3], [3, 2], [3, 1], [3, 0]]] },
-  { name: "Ворота", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]]] },
+  { name: "Пирамида", fix: 1, s: [[[2, 0], [1, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 1], [2, 0]], [[2, 0], [2, 1], [2, 2]]] },
+  { name: "Вилка", fix: 1, s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]], [[2, 0], [2, 1], [2, 2], [2, 3]]] },
+  { name: "Буква Z", fix: 2, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [2, 1], [1, 2], [0, 3], [1, 3], [2, 3], [3, 3]]] },
+  { name: "Буква N", fix: 2, s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 3], [3, 2], [3, 1], [3, 0]]] },
+  { name: "Ворота", fix: 1, s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]]] },
   { name: "Петля", s: [[[0, 3], [1, 3], [2, 2], [3, 1], [2, 0], [1, 0], [0, 1], [1, 2], [2, 3], [3, 3]]] },
   { name: "Шевроны", s: [[[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]], [[0, 1], [1, 2], [2, 3], [3, 2], [4, 1]]] },
-  { name: "Ракета", s: [[[1, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2], [2, 1], [1, 0]], [[0, 3], [0, 4]], [[2, 3], [2, 4]]] },
-  { name: "Буква М", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 1], [4, 0], [4, 1], [4, 2], [4, 3]]] },
-  { name: "Буква W", s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 2], [2, 1], [3, 2], [4, 3], [4, 2], [4, 1], [4, 0]]] },
-  { name: "Якорь", s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[1, 1], [2, 1], [3, 1]], [[0, 3], [1, 4], [2, 4], [3, 4], [4, 3]]] },
-  { name: "Лодка", s: [[[2, 0], [2, 1], [2, 2]], [[2, 0], [3, 1], [4, 2]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 3], [2, 3], [1, 3], [0, 2]]] },
-  { name: "Домик", s: [[[0, 4], [0, 3], [0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4]]] },
-  { name: "Кубок", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [3, 2], [2, 3], [1, 2], [0, 1], [0, 0]], [[2, 3], [2, 4]], [[1, 4], [2, 4], [3, 4]]] },
-  { name: "Большая Z", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [3, 1], [2, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]]] },
+  { name: "Ракета", fix: 1, s: [[[1, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2], [2, 1], [1, 0]], [[0, 3], [0, 4]], [[2, 3], [2, 4]]] },
+  { name: "Буква М", fix: 1, s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 1], [4, 0], [4, 1], [4, 2], [4, 3]]] },
+  { name: "Буква W", fix: 1, s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 2], [2, 1], [3, 2], [4, 3], [4, 2], [4, 1], [4, 0]]] },
+  { name: "Якорь", fix: 1, s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[1, 1], [2, 1], [3, 1]], [[0, 3], [1, 4], [2, 4], [3, 4], [4, 3]]] },
+  { name: "Лодка", fix: 1, s: [[[2, 0], [2, 1], [2, 2]], [[2, 0], [3, 1], [4, 2]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 3], [2, 3], [1, 3], [0, 2]]] },
+  { name: "Домик", fix: 1, s: [[[0, 4], [0, 3], [0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4]]] },
+  { name: "Кубок", fix: 1, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [3, 2], [2, 3], [1, 2], [0, 1], [0, 0]], [[2, 3], [2, 4]], [[1, 4], [2, 4], [3, 4]]] },
+  { name: "Большая Z", fix: 2, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [3, 1], [2, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]]] },
   { name: "Змей", s: [[[4, 0], [3, 0], [2, 0], [1, 0], [0, 0], [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
   { name: "Улитка", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1], [1, 1], [2, 1], [2, 2], [1, 2]]] },
   { name: "Конверт", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1], [0, 0]], [[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]]] },
+  // ---- третья партия (14.11): узоры в духе osu — прыжки через плитки, потоки, дуги, «туда-обратно» ----
+  { name: "Поток", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]]] },
+  { name: "Прыжки треугольником", s: [[[0, 2], [2, 0], [4, 2], [0, 2]]] },
+  { name: "Прыжки квадратом", s: [[[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]]] },
+  { name: "Ромб прыжками", s: [[[2, 0], [4, 2], [2, 4], [0, 2], [2, 0]]] },
+  { name: "Крест прыжками", s: [[[0, 0], [4, 4], [4, 0], [0, 4], [0, 0]]] },
+  { name: "Звезда прыжками", s: [[[2, 0], [3, 4], [0, 1], [4, 1], [1, 4], [2, 0]]] },
+  { name: "Пятиугольник", s: [[[2, 0], [4, 2], [3, 4], [1, 4], [0, 2], [2, 0]]] },
+  { name: "Качели", s: [[[0, 0], [2, 1], [0, 2], [2, 3], [0, 4]]] },
+  { name: "Наконечник", s: [[[0, 0], [2, 1], [4, 2], [2, 3], [0, 4]]] },
+  { name: "Дуга", s: [[[0, 3], [0, 2], [1, 1], [2, 0], [3, 0], [4, 1]]] },
+  { name: "Туда-обратно", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1]]] },
+  { name: "Очереди", s: [[[0, 0], [1, 0], [2, 0], [2, 2], [3, 2], [4, 2], [2, 4], [1, 4], [0, 4]]] },
+  { name: "Длинная змейка", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
+  { name: "Спираль наружу", s: [[[2, 1], [3, 1], [3, 2], [2, 2], [1, 2], [1, 1], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2]]] },
 ];
 // Сложность рисунка — по числу плиток: простой (до 5) прибавляет к комбо 1, дальше 2, 3 и 4. Сложные выходят не сразу:
 // пока комбо меньше 3 — только простые, с 3 — до второй ступени, с 10 — до третьей, с 25 — любые; чем сложнее из
@@ -341,10 +357,30 @@ for (const f of FIGS) {
   f.w = Math.max(...pts.map((c) => c[0])) + 1; f.h = Math.max(...pts.map((c) => c[1])) + 1;
   f.n = new Set(pts.map((c) => c[0] + ":" + c[1])).size; f.t = f.n <= 5 ? 1 : f.n <= 9 ? 2 : f.n <= 13 ? 3 : 4;
 }
+// Каждый рисунок ещё и поворачивается, отражается и идёт в обратную сторону — так их больше и есть из чего выбрать
+// продолжение цепочки. Предметы и буквы (fix: 1) только отражаются, Z и N (fix: 2) не отражаются вовсе.
+const SYM = [[1, 0, 0, 1], [-1, 0, 0, 1], [1, 0, 0, -1], [-1, 0, 0, -1], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, -1, 0], [0, -1, -1, 0]];
+const VARS = [];
+for (const f of FIGS) {
+  const seen = new Set();
+  for (const [a, b, c, d] of f.fix === 2 ? SYM.slice(0, 1) : f.fix ? SYM.slice(0, 2) : SYM) for (const rev of [false, true]) {
+    let s = f.s.map((st) => st.map(([x, y]) => [a * x + b * y, c * x + d * y]));
+    if (rev) s = s.slice().reverse().map((st) => st.slice().reverse());
+    const P = s.flat(), mx = Math.min(...P.map((p) => p[0])), my = Math.min(...P.map((p) => p[1]));
+    s = s.map((st) => st.map(([x, y]) => [x - mx, y - my]));
+    const key = JSON.stringify(s);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const Q = s.flat();
+    VARS.push({ name: f.name, t: f.t, n: f.n, s, w: Math.max(...Q.map((p) => p[0])) + 1, h: Math.max(...Q.map((p) => p[1])) + 1 });
+  }
+}
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
 const figLvl = (k) => (k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0);   // уровень вида и звука — по комбо
 let hurryAt = 0;                                            // на какой секунде уже тикнуло: время на рисунок кончается
-let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
+let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";
+let touchSpot = -1, touchPrev = -1;                         // место плитки, на которой сейчас мышь (палец), и прошлое — куда она движется
+const figWanted = () => figOn && S.set.fig !== false;       // рисунки можно выключить: кнопка «Комбо» над сеткой и настройки   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
 // Под рисунок подставляются лучшие герои. Сам рисунок и его место от героев не зависят: когда все герои уже открыты,
 // на отмеченные места встают те, чья покупка сейчас прибавит больше всего урона (в выбранном режиме покупки; веха —
 // намного ценнее; на кого душ не хватает — в конце), а прежние жильцы этих мест пересаживаются на их места.
@@ -378,26 +414,57 @@ function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
   fig = null;
 }
-function spawnFig() {                                       // новый рисунок там, где он целиком ложится на плитки
+// Цепочка: следующий рисунок начинается на соседней плитке с той, где мышь (палец) закончила прошлый, — по возможности
+// прямо по ходу движения, — и эту плитку не включает. Так рука не останавливается: собрал, повёл дальше. Без «откуда»
+// (запуск, смена размера сетки, обрыв комбо) рисунок ставится в случайное место, где целиком ложится на плитки.
+function spawnFig(from) {
   const was = fig ? fig.name : "";
   clearFig();
-  if (figOn && rows.length === TILES && hgC) {
+  if (figWanted() && rows.length === TILES && hgC) {
     const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k);
-    const fits = FIGS.filter((f) => f.w <= hgC && f.h <= R && f.t <= top && f.name !== was), bag = [];
-    for (const f of fits) for (let q = 0; q < (f.t === top ? 4 : f.t === top - 1 ? 2 : 1); q++) bag.push(f);   // сложные из разрешённых — чаще
-    for (let t = 0; t < 120 && bag.length; t++) {
-      const f = bag[Math.floor(Math.random() * bag.length)];
-      const ox = Math.floor(Math.random() * (hgC - f.w + 1)), oy = Math.floor(Math.random() * (R - f.h + 1));
-      const at = f.s.map((st) => st.map(([x, y]) => (oy + y) * hgC + ox + x));   // места на сетке
-      if (at.some((st) => st.some((i) => i >= TILES))) continue;
+    const fits = VARS.filter((v) => v.w <= hgC && v.h <= R && v.t <= top && v.name !== was);
+    const weight = (v) => (v.t === top ? 4 : v.t === top - 1 ? 2 : 1);   // сложные из разрешённых — чаще
+    const place = (v, ox, oy) => {                           // места на сетке, или null, если рисунок не ложится целиком
+      const at = v.s.map((st) => st.map(([x, y]) => [ox + x, oy + y]));
+      if (at.some((st) => st.some(([x, y]) => x < 0 || y < 0 || x >= hgC || y >= R || y * hgC + x >= TILES))) return null;
+      return at.map((st) => st.map(([x, y]) => y * hgC + x));
+    };
+    const pickW = (list) => { let sum = 0; for (const c of list) sum += c.w; let r = Math.random() * sum; for (const c of list) { r -= c.w; if (r <= 0) return c; } return list[list.length - 1]; };
+    let pick = null;
+    if (from && from.spot >= 0 && fits.length) {
+      const fx = from.spot % hgC, fy = Math.floor(from.spot / hgC), cands = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const tx = fx + dx, ty = fy + dy;
+        if (tx < 0 || ty < 0 || tx >= hgC || ty >= R) continue;
+        const on = from.dir && dx === from.dir[0] && dy === from.dir[1] ? 6 : 1;   // прямо по ходу — сильно чаще
+        for (const v of fits) {
+          const at = place(v, tx - v.s[0][0][0], ty - v.s[0][0][1]);
+          if (at && at.every((st) => st.indexOf(from.spot) < 0)) cands.push({ v, at, w: weight(v) * on });
+        }
+      }
+      if (cands.length) pick = pickW(cands);
+    }
+    if (!pick) {
+      const bag = fits.map((v) => ({ v, w: weight(v) }));
+      for (let t = 0; t < 160 && bag.length; t++) {
+        const v = pickW(bag).v, at = place(v, Math.floor(Math.random() * (hgC - v.w + 1)), Math.floor(Math.random() * (R - v.h + 1)));
+        if (at) { pick = { v, at }; break; }
+      }
+    }
+    if (pick) {
+      const { v, at } = pick;
       const who = seat([...new Set(at.flat())]);             // кто из героев стоит на этих местах (лучшие подставлены, если все открыты)
       const segs = at.map((st) => st.map((q) => who.get(q)));
-      fig = { name: f.name, plus: f.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best };
-      for (const i of fig.cells) { const d = document.createElement("i"); d.className = "hg-dot"; rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m"); }
-      break;
+      fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())] };
+      // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
+      fig.cells.forEach((i, n) => {
+        const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : ""); d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
+        rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m");
+      });
     }
-  }
-  drawFigLines(); drawFigChip();
+  } else if (!figWanted() && slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; }   // рисунки выключены — сетка в обычном порядке
+  drawFigLines(); drawFigChip(); drawFigBtn();
 }
 function drawFigLines() {                                   // линия рисунка — поверх сетки, между центрами плиток
   const list = $("mercList");
@@ -406,13 +473,23 @@ function drawFigLines() {                                   // линия рис
   if (!fig) { if (svg) svg.remove(); return; }
   if (!svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "hg-fig"); list.appendChild(svg); }
   const lr = list.getBoundingClientRect();
-  const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return (r.left + r.width / 2 - lr.left + list.scrollLeft).toFixed(1) + "," + (r.top + r.height * 0.42 - lr.top + list.scrollTop).toFixed(1); };
+  const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]; };
   svg.setAttribute("width", Math.round(lr.width)); svg.setAttribute("height", Math.round(Math.max(lr.height, list.scrollHeight)));
-  // три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама бегущая линия
-  const lines = fig.segs.map((st) => st.map(pt).join(" "));
-  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => lines.map((q) => (q.indexOf(" ") < 0 ? "" : '<polyline class="' + c + '" points="' + q + '"/>')).join("")).join("");
+  // Линия идёт от края кружка до края следующего, как в osu, и в кружки не заходит: номера в них остаются видны.
+  // Три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама линия — сплошная и неподвижная.
+  const dot = rows[fig.cells[0]].root.querySelector(".hg-dot"), rad = (dot ? dot.offsetWidth / 2 : 20) + 8;
+  const segs = [];
+  for (const st of fig.segs) for (let k = 1; k < st.length; k++) {
+    const a = pt(st[k - 1]), b = pt(st[k]), d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (d <= 2 * rad + 4) continue;                          // кружки почти касаются — линия не нужна
+    const ux = (b[0] - a[0]) / d, uy = (b[1] - a[1]) / d;
+    segs.push([a[0] + ux * rad, a[1] + uy * rad, b[0] - ux * rad, b[1] - uy * rad].map((v) => v.toFixed(1)));
+  }
+  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => segs.map((q) => '<line class="' + c + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
 }
 function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
+  const spot = slotOf ? slotOf[i] : i;                       // где на сетке эта плитка (герои могут быть пересажены)
+  if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
   if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
   fig.hit.add(i);
   rows[i].root.classList.add("hg-hit");
@@ -423,7 +500,9 @@ function figTouch(i) {                                      // по плитке
     const done = fig;
     C.figDone(S, done.cells.length, done.name, done.plus);
     figBoom(done);
-    spawnFig();
+    let dir = null;                                          // куда шла рука: следующий рисунок — по ходу
+    if (touchPrev >= 0 && hgC) { const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC)); if (dx || dy) dir = [dx, dy]; }
+    spawnFig({ spot: touchSpot, dir });
     if (fig) C.figNext(S, fig.cells.length);                 // время на следующий — по его размеру
     figChipKey = "?"; drawFigChip(); slowT = 0;
   }
@@ -460,6 +539,17 @@ function figBoom(done) {
   list.classList.remove("hg-boom"); void list.offsetWidth; list.classList.add("hg-boom");
 }
 const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
+function drawFigBtn() {                                     // кнопка «Комбо» над сеткой: рисунки включены или нет
+  const b = $("btnFig"); if (!b) return;
+  const on = S.set.fig !== false;
+  b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.title = on ? "Рисунки на сетке включены: собирай их — растёт комбо и души. Нажми, чтобы просто покупать героев" : "Рисунки выключены: сетка — просто покупка героев. Нажми, чтобы снова собирать рисунки и комбо";
+}
+function figApply() {                                       // настройку «Рисунки и комбо» переключили
+  if (S.set.fig === false) { if (fig || S.fig.k) { S.fig.k = 0; S.fig.left = 0; } if (fig || slotOf) spawnFig(); else drawFigBtn(); }
+  else if (!fig) spawnFig();
+  else drawFigBtn();
+}
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
   const el = $("hgFigc"), k = S.fig.k;
   const sec = k > 0 && S.fig.left <= 3 ? Math.max(1, Math.ceil(S.fig.left)) : 0;   // последние три секунды: тикает и мигает
@@ -500,8 +590,9 @@ export function cloudNote(was, now, first) {                // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s }));
+export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
 function prevMs(lv) {
   let p = 0;
@@ -1174,7 +1265,7 @@ let wipeT = 0;
 
 function openSettings() {
   const sw = (k, label) => '<div class="row"><span>' + label + '</span><button class="sw' + (S.set[k] ? " on" : "") + '" data-k="' + k + '" aria-label="' + label + '"></button></div>';
-  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("hit", "Звук ударов по труперу") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
+  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("hit", "Звук ударов по труперу") + sw("fig", "Рисунки и комбо на сетке героев") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
     sw("sci", "Научная запись чисел") + sw("autoBoss", "Сам идти на босса, когда наёмники справятся") +
     '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
@@ -1209,7 +1300,7 @@ function openWipe() {                                       // стирание 
   for (const n of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(n, stop);
   b.addEventListener("contextmenu", (e) => e.preventDefault());
 }
-export function applySettings() { if (S.set.hit === undefined) S.set.hit = true; setSound(S.set.sound); setHitSound(S.set.hit); setSci(S.set.sci); FX.setCalm(S.set.calm); }
+export function applySettings() { if (S.set.hit === undefined) S.set.hit = true; if (S.set.fig === undefined) S.set.fig = true; if (rows.length) figApply(); setSound(S.set.sound); setHitSound(S.set.hit); setSci(S.set.sci); FX.setCalm(S.set.calm); }
 
 // ---------- вкладка «Скины»: сундуки, задания дня, скины труперов, скины героев из RPG ----------
 // Правила — core.js, раздел «удержание». Вкладка строится заново, только когда поменялось что-то по существу
