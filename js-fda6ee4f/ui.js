@@ -411,8 +411,18 @@ function seat(spots) {                                      // Map: место �
   return who;
 }
 function clearFig() {
-  if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
+  if (fig) for (const i of fig.cells) { const r = rows[i]; if (r) r.root.classList.remove("hg-m", "hg-hit"); }
+  if (fig && fig.dots) for (const d of fig.dots.values()) d.remove();
   fig = null;
+}
+// Кружки и линия рисунка живут в отдельном слое поверх всей сетки (а не внутри плиток): плитки их не обрезают и не
+// перекрывают. У слоя свой слой отрисовки (translateZ): на iPhone (Safari) плитки с анимацией и фильтрами иначе рисовались
+// поверх линии и кружков. Слой не ловит касания — мышь и палец попадают в плитки под ним.
+function figLayer() {
+  const list = $("mercList");
+  let lay = list.querySelector(".hg-fig");
+  if (!lay) { lay = document.createElement("div"); lay.className = "hg-fig"; lay.innerHTML = '<svg class="hg-figl" xmlns="http://www.w3.org/2000/svg"></svg>'; list.appendChild(lay); }
+  return lay;
 }
 // Цепочка: следующий рисунок начинается на соседней плитке с той, где мышь (палец) закончила прошлый, — по возможности
 // прямо по ходу движения, — и эту плитку не включает. Так рука не останавливается: собрал, повёл дальше. Без «откуда»
@@ -458,26 +468,29 @@ function spawnFig(from) {
       const segs = at.map((st) => st.map((q) => who.get(q)));
       fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())] };
       // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
+      const lay = figLayer();
+      fig.dots = new Map();
       fig.cells.forEach((i, n) => {
-        const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : ""); d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
-        rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m");
+        const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : ""); d.dataset.i = i; d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
+        lay.appendChild(d); fig.dots.set(i, d); rows[i].root.classList.add("hg-m");
       });
     }
   } else if (!figWanted() && slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; }   // рисунки выключены — сетка в обычном порядке
   drawFigLines(); drawFigChip(); drawFigBtn();
 }
-function drawFigLines() {                                   // линия рисунка — поверх сетки, между центрами плиток
+function drawFigLines() {                                   // слой рисунка поверх сетки: кружки на центрах плиток и линия между ними
   const list = $("mercList");
-  let svg = list.querySelector(".hg-fig");
   list.classList.toggle("hg-has", !!fig);                    // рисунок есть — остальные плитки чуть приглушены
-  if (!fig) { if (svg) svg.remove(); return; }
-  if (!svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "hg-fig"); list.appendChild(svg); }
-  const lr = list.getBoundingClientRect();
+  if (!fig) { const old = list.querySelector(".hg-fig"); if (old) old.remove(); return; }
+  const lay = figLayer(), svg = lay.querySelector("svg");
+  const lr = list.getBoundingClientRect(), W = Math.round(lr.width), H = Math.round(Math.max(lr.height, list.scrollHeight));
+  lay.style.width = W + "px"; lay.style.height = H + "px";
   const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]; };
-  svg.setAttribute("width", Math.round(lr.width)); svg.setAttribute("height", Math.round(Math.max(lr.height, list.scrollHeight)));
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  for (const [i, d] of fig.dots) { const p = pt(i); d.style.left = p[0].toFixed(1) + "px"; d.style.top = p[1].toFixed(1) + "px"; }
   // Линия идёт от края кружка до края следующего, как в osu, и в кружки не заходит: номера в них остаются видны.
   // Три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама линия — сплошная и неподвижная.
-  const dot = rows[fig.cells[0]].root.querySelector(".hg-dot"), rad = (dot ? dot.offsetWidth / 2 : 20) + 8;
+  const dot = fig.dots.get(fig.cells[0]), rad = (dot ? dot.offsetWidth / 2 : 20) + 8;
   const segs = [];
   for (const st of fig.segs) for (let k = 1; k < st.length; k++) {
     const a = pt(st[k - 1]), b = pt(st[k]), d = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -494,8 +507,8 @@ function figTouch(i) {                                      // по плитке
   fig.hit.add(i);
   rows[i].root.classList.add("hg-hit");
   sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl(S.fig.k));
-  const dot = rows[i].root.querySelector(".hg-dot");
-  if (dot) { dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick"); }
+  const dot = fig.dots.get(i);
+  if (dot) { dot.classList.add("hit"); dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick"); }
   if (fig.hit.size === fig.cells.length) {
     const done = fig;
     C.figDone(S, done.cells.length, done.name, done.plus);
