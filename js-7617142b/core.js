@@ -28,7 +28,7 @@ export function newState() {
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
     gift: 0,                                                // подарок за вход через Twitch уже получен
     gen: 0,                                                 // сколько раз прогресс стирали: по нему стирание доходит до всех устройств аккаунта
-    fig: { k: 0, left: 0 },                                 // рисунки на сетке отряда: комбо и сколько секунд осталось собрать следующий
+    fig: { k: 0, idle: 0, peak: 0 },                        // рисунки на сетке отряда: жар комбо (дробный), секунд без отметки, высший жар этого комбо
     tire: { r: 0, n: 0, on: false },                        // усталость руки: средний темп попыток ударить (в секунду), попытки с прошлого шага, устала ли
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
@@ -118,7 +118,7 @@ export function load(text) {
     : { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: !!ou.renew };
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
-  S.fig = { k: 0, left: 0 };                                // комбо рисунков перезагрузку не переживает
+  S.fig = { k: 0, idle: 0, peak: 0 };                       // комбо рисунков перезагрузку не переживает
   // усталость руки перезагрузку переживает (иначе её сбрасывали бы обновлением страницы), но за время между
   // сохранением и загрузкой рука отдыхает
   const otr = o.tire && typeof o.tire === "object" ? Math.max(0, Math.min(1000, Number(o.tire.r) || 0)) : 0;
@@ -302,16 +302,25 @@ export const critChance = (S) => Math.min(0.75, active(S, "mark") ? 0.5 + (S.d.c
 export const critMult = (S) => (active(S, "mark") ? 5 : CFG.critMult);
 const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + loudLg(S) + (S.fig.k > 0 ? L10(figMul(S)) : 0);   // эфир: души ×2; стрим со звуком: ещё ×2; комбо рисунков
 // Рисунки на сетке отряда (сами рисунки и попадания по плиткам — js/ui.js): собран рисунок — комбо растёт, души идут с
-// прибавкой, пока комбо живо. Время на следующий рисунок идёт только в игре; без игрока комбо обрывается.
-export const figMul = (S) => 1 + CFG.figStep * Math.min(S.fig.k, CFG.figCap);
-export const figTime = (cells) => CFG.figHold + CFG.figPer * Math.max(1, cells);   // сколько секунд даётся на рисунок из стольких плиток
-export function figNext(S, cells) { if (S.fig.k > 0) S.fig.left = figTime(cells); }   // появился следующий рисунок: время — по его размеру
-export function figDone(S, cells, name, plus) {              // cells — сколько плиток было в рисунке; plus — сколько он прибавляет к комбо
-  S.fig.k += Math.max(1, Math.floor(plus || 1)); S.fig.left = figTime(cells);
-  S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, S.fig.k);
+// прибавкой, пока комбо живо. Комбо остывает только в игре; без игрока (offline) оно кончается.
+// Комбо рисунков — это «жар» (S.fig.k, дробное число). Собранный рисунок его подогревает, а сам он всё время остывает —
+// тем быстрее, чем он выше. Рисунок греет на figGain · плитки^figPow, умноженное на точность (лишние плитки по пути её
+// срезают, не ниже figAccMin) и на figClean, если отметки взяты строго по номерам. Нет отметок дольше figIdleAt секунд —
+// остывание разгоняется: бросил играть — жар уходит за полминуты, а не разом. Души идут ×(1 + целая часть жара), до ×100.
+// Жар дошёл до нуля — комбо кончилось (событие fig_end). Числа — CFG.fig* в data.js, подбор — tools/fig_heat_sim.mjs.
+export const figMul = (S) => 1 + CFG.figStep * Math.min(Math.floor(S.fig.k), CFG.figCap);
+export const figDrain = (S) => (S.fig.k > 0 ? (CFG.figDrain0 + CFG.figDrainK * S.fig.k) * (1 + CFG.figIdleUp * Math.max(0, S.fig.idle - CFG.figIdleAt)) : 0);   // жара в секунду уходит сейчас
+export const figGain = (cells, acc, clean) => CFG.figGain * Math.pow(Math.max(1, cells), CFG.figPow) * Math.max(CFG.figAccMin, Math.min(1, acc === undefined ? 1 : acc)) * (clean ? CFG.figClean : 1);
+export function figMark(S) { S.fig.idle = 0; }               // взята отметка рисунка: игрок в деле
+export function figDone(S, cells, name, acc, clean) {       // рисунок собран; acc — точность 0…1, clean — отметки взяты по номерам
+  const g = figGain(cells, acc, clean);
+  S.fig.k = Math.min(CFG.figCap + CFG.figOver, S.fig.k + g); S.fig.idle = 0; S.fig.peak = Math.max(S.fig.peak, S.fig.k);
+  S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, Math.floor(S.fig.k));
+  if (clean) S.stats.figClean = (S.stats.figClean || 0) + 1;
   const r = rateLg(S), loot = r === NEG ? NEG : r + L10(CFG.figLoot * Math.max(1, cells));
   if (loot !== NEG) gain(S, loot);
-  ev(S, { t: "fig", k: S.fig.k, loot, cells, name: name || "" });
+  ev(S, { t: "fig", k: S.fig.k, gain: g, loot, cells, name: name || "" });
+  return g;
 }
 export function setLive(S, v) { S.live = !!v; }
 export function rateLg(S) {                                 // lg душ в секунду от наёмников на этой волне
@@ -481,7 +490,10 @@ export function tick(S, dt, live) {                         // live=false — о
       if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) { ev(S, { t: "buff_end", id: s.id }); if (s.id === "siege") siegeEnd(S); } }
     }
     auStep(S, dt);
-    if (S.fig.k > 0) { S.fig.left -= dt; if (S.fig.left <= 0) { ev(S, { t: "fig_end", k: S.fig.k }); S.fig.k = 0; S.fig.left = 0; } }
+    if (S.fig.k > 0) {                                        // жар комбо остывает; дошёл до нуля — комбо кончилось
+      S.fig.idle += dt; S.fig.k -= figDrain(S) * dt;
+      if (S.fig.k <= 0) { ev(S, { t: "fig_end", k: S.fig.peak }); S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0; }
+    }
     for (const id in S.buff) if (S.buff[id] > 0) { S.buff[id] = Math.max(0, S.buff[id] - dt); if (S.buff[id] === 0) ev(S, { t: "buff_end", id }); }
     if (S.un.combo && S.combo > 0) {
       S.comboIdle += dt;
@@ -540,7 +552,7 @@ export function offline(S, seconds) {
   const before = { souls: S.souls, z: S.z, life: S.life };
   if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const id in S.act) S.act[id] = 0;                    // умения и бафы за время отсутствия истекли
-  S.fig.k = 0; S.fig.left = 0;                              // и комбо рисунков
+  S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0;              // и комбо рисунков
   S.buff = {}; S.combo = 0; S.wispOn = 0; S.statueOn = 0; S.urnOn = 0; if (S.altar > 0) altarEnd(S);
   if (S.d.dps === NEG || t < 5) return null;
   const step = 2;
@@ -935,7 +947,7 @@ export function shardsFree(S) {                              // осколки, 
 
 // ---------- Автозапуск умений: час за осколки, и осколки возвращаются с прибавкой ----------
 // Открывается вместе с Затмением (раньше осколков нет). Игрок платит осколки — и час игры все открытые умения включаются
-// сами, как только готовы, «Натиск» тоже. Заплаченное не пропадает: за этот час осколки возвращаются по одному, все до
+// сами (с 15.11 — с умом, залпами: см. auCast ниже), «Натиск» тоже. Заплаченное не пропадает: за этот час осколки возвращаются по одному, все до
 // единого, и сверх того — прибавка. Цена и прибавка считаются от волны, до которой дошёл забег в момент покупки (S.zrec):
 // чем выше стоишь, когда включаешь, тем дороже час и тем больше плюс. Час идёт, только пока игра на экране: без игрока
 // (вкладка скрыта, игра закрыта) он стоит на месте и ничего не теряется.
@@ -957,10 +969,40 @@ export function auBuy(S) {
   return true;
 }
 export function setAuRenew(S, on) { S.au.renew = !!on; if (S.au.renew && !auOn(S)) auBuy(S); }
+// Автозапуск жмёт умения с умом (15.11). Раньше — каждое, как только готово: «Натиск» (перезарядка 3 минуты) уходил без
+// бафов, а когда включались «Ярость» и остальные (10–30 минут), он стоял на перезарядке — Стража почти не били.
+//   — Умения урона («Ярость», «Шквал», «Метка», «Ульта») идут залпом, вместе с «Натиском». Залп даётся, когда готово
+//     ведущее — первое открытое из них, обычно «Ярость». Если «Натиску» осталось до готовности не больше AU_WAIT секунд,
+//     залп его дожидается.
+//   — Умение урона, готовое между залпами, ждёт залпа, если ждать не дольше половины его перезарядки; иначе идёт сразу.
+//   — «Натиск» между залпами включается, только если успеет перезарядиться к следующему, — или если прямо сейчас горит
+//     сильный баф (умение урона, «Жатва», «Буря», «Подмога»): такой случай не упускается.
+//   — «Жадность» и «Перемотка» на урон не влияют и идут, как только готовы.
+const AU_BURST = ["rage", "flurry", "mark", "ult"], AU_WAIT = 30;
+const AU_HOT = ["harvest", "storm", "help"];                 // бафы огоньков и сундука, под которые «Натиск» стоит дать сразу
+function auCast(S) {
+  const sk = (id) => SKILLS.find((x) => x.id === id), open = (id) => skillOpen(S, sk(id)), ready = (id) => open(id) && S.cd[id] <= 0;
+  for (const id of ["greed", "rewind"]) if (ready(id)) useSkill(S, id);
+  const siege = open("siege"), lead = AU_BURST.find(open);
+  if (!lead) { if (siege && ready("siege")) useSkill(S, "siege"); return; }
+  const volley = S.cd[lead] <= 0 && (!siege || S.cd.siege <= 0 || S.cd.siege > AU_WAIT);
+  if (volley) {
+    for (const id of AU_BURST) if (ready(id)) useSkill(S, id);
+    if (siege && ready("siege")) useSkill(S, "siege");
+    return;
+  }
+  const wait = S.cd[lead] <= 0 ? S.cd.siege : S.cd[lead];    // сколько до залпа
+  for (const id of AU_BURST) if (id !== lead && ready(id) && wait > 0.5 * sk(id).cd * S.d.cdMul) useSkill(S, id);
+  if (siege && ready("siege")) {
+    const hot = AU_BURST.some((id) => S.act[id] > 3) || AU_HOT.some((id) => S.buff[id] > 3);
+    if (hot || wait >= sk("siege").cd * S.d.cdMul) useSkill(S, "siege");
+  }
+}
+export const auHolds = (S, id) => auOn(S) && S.cd[id] <= 0 && skillOpen(S, SKILLS.find((x) => x.id === id)) && (id === "siege" || AU_BURST.indexOf(id) >= 0);   // готово, но автозапуск придерживает его до залпа
 function auStep(S, dt) {                                     // зовётся из tick, только когда игрок в игре
   const a = S.au;
   if (a.left <= 0) return;
-  for (const s of SKILLS) if (S.cd[s.id] <= 0 && skillOpen(S, s)) useSkill(S, s.id);
+  auCast(S);
   a.left = Math.max(0, a.left - dt);
   const due = a.left <= 0 ? a.total : Math.floor(a.total * (1 - a.left / CFG.auHour) + 1e-9);
   while (a.back < due) {

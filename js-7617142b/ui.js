@@ -65,7 +65,7 @@ export function mount(state, hooks) {
       const r = list.getBoundingClientRect();
       if (x < r.left || x > r.right || y < r.top || y > r.bottom || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const d = document.createElement("i");
-      const tr = figWanted() ? figRank(S.fig.k) : -1;         // идёт комбо — след цвета ранга, на высоких рангах переливается
+      const tr = figWanted() ? rankIdx : -1;                  // идёт комбо — след цвета ранга, на высоких рангах переливается
       d.className = "swdot" + (tr >= 0 ? " rk-" + FIG_RANKS[tr].id : ""); d.style.left = x + "px"; d.style.top = y + "px";
       if (tr >= 6) d.style.setProperty("--h", ((trailN = (trailN + 1) % 15) * 24) + "deg");
       document.body.appendChild(d);
@@ -266,7 +266,7 @@ function fitGrid() {
 // ---------- рисунки на сетке отряда ----------
 // Поверх сетки светится рисунок: несколько плиток отмечены кружками и соединены линией — икс, круг, зигзаг, сердце. Проведи
 // по всем отмеченным плиткам (или нажми каждую) — рисунок собран: комбо растёт, души идут с прибавкой (js/core.js, figDone),
-// и появляется следующий. Пока комбо больше нуля, идёт время: не собрал следующий — комбо обрывается, отметки гаснут.
+// и появляется следующий. Комбо — «жар»: всё время остывает, рисунки его греют (точность и порядок отметок — figTouch).
 // Клетки — [столбец, ряд] по ходу линии; два штриха — два массива.
 const FIGS = [
   { name: "Линия", w: 4, h: 1, s: [[[0, 0], [1, 0], [2, 0], [3, 0]]] },
@@ -378,10 +378,10 @@ for (const f of FIGS) {
   }
 }
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
-// Ранги комбо: буква, слово и с какого комбо. Вместе с рангом разгоняется всё вокруг: шкала справа от сетки, рамка сетки,
-// цвет искр и следа за курсором, размер «вылетов». Слова идут по нарастающей — от «вяло» до названия игры на потолке.
+// Ранги комбо: буква, слово и с какого жара (S.fig.k). Вместе с рангом разгоняется всё вокруг: шкала справа от сетки, рамка
+// сетки, цвет искр и следа за курсором, размер «вылетов». Слова идут по нарастающей — от «вяло» до названия игры на потолке.
 const FIG_RANKS = [
-  { k: 1, id: "d", mark: "D", word: "Вяло" },
+  { k: 0, id: "d", mark: "D", word: "Вяло" },               // с первого рисунка
   { k: 3, id: "c", mark: "C", word: "Сойдёт" },
   { k: 10, id: "b", mark: "B", word: "Хорошо" },
   { k: 25, id: "a", mark: "A", word: "Красиво" },
@@ -390,21 +390,39 @@ const FIG_RANKS = [
   { k: 80, id: "sss", mark: "SSS", word: "Зверюга" },
   { k: CFG.figCap, id: "max", mark: "MAX", word: "Хлыстопад" },
 ];
-const figRank = (k) => { let r = -1; for (let i = 0; i < FIG_RANKS.length; i++) if (k >= FIG_RANKS[i].k) r = i; return r; };
-// Сколько шкалы залито, 0…1: ранги стоят на шкале через равные промежутки, внутри ранга — ровно. Первые ранги пролетают
-// быстро, дальше каждый даётся труднее.
+const figRank = (k) => { if (!(k > 0)) return -1; let r = 0; for (let i = 1; i < FIG_RANKS.length; i++) if (k >= FIG_RANKS[i].k) r = i; return r; };   // ранг по жару, без оглядки на прошлое
+// Ранг, который игрок держит сейчас. Вверх — как только жар дошёл до порога; вниз — когда остыл заметно ниже него (на 5 %,
+// не меньше 0,6): на самом пороге ранг иначе мигал бы туда-сюда. rankPeak — высший ранг этого комбо: буква нового ранга
+// вылетает только за него, а не каждый раз, когда ранг возвращён.
+let rankIdx = -1, rankPeak = -1;
+function rankSync() {                                       // отдаёт, на сколько ступеней ранг изменился
+  const k = figWanted() ? S.fig.k : 0;
+  let r = rankIdx;
+  if (!(k > 0)) r = -1;
+  else {
+    if (r < 0) r = 0;
+    while (r + 1 < FIG_RANKS.length && k >= FIG_RANKS[r + 1].k) r++;
+    while (r > 0 && k < FIG_RANKS[r].k - Math.max(0.6, FIG_RANKS[r].k * 0.05)) r--;
+  }
+  const d = r - rankIdx;
+  rankIdx = r;
+  if (r < 0) rankPeak = -1;
+  return d;
+}
+// Сколько шкалы залито, 0…1: секция на ранг, внутри ранга — ровно; верхняя секция — запас жара сверх потолка. Первые ранги
+// короткие и пролетают быстро, дальше каждый длиннее, а жар остывает быстрее.
 const figLevel = (k) => {
-  let lo = 0;
-  for (let i = 0; i < FIG_RANKS.length; i++) { if (k < FIG_RANKS[i].k) return (i + (k - lo) / (FIG_RANKS[i].k - lo)) / FIG_RANKS.length; lo = FIG_RANKS[i].k; }
-  return 1;
+  const N = FIG_RANKS.length;
+  if (!(k > 0)) return 0;
+  for (let i = 1; i < N; i++) if (k < FIG_RANKS[i].k) return (i - 1 + (k - FIG_RANKS[i - 1].k) / (FIG_RANKS[i].k - FIG_RANKS[i - 1].k)) / N;
+  return (N - 1 + Math.min(1, (k - CFG.figCap) / CFG.figOver)) / N;
 };
-const figLvl = (k) => [0, 0, 0, 1, 2, 3, 4, 4, 4][figRank(k) + 1];   // уровень звука и размера «вылета» — по рангу
+const figLvl = () => [0, 0, 0, 1, 2, 3, 4, 4, 4][rankIdx + 1];   // уровень звука и размера «вылета» — по рангу
 function rankSound(r) {                                     // новый ранг: чем выше, тем длиннее фанфары
   if (r === 1) sfx.mile();
   else if (r >= 2) sfx.fanfare(r === FIG_RANKS.length - 1 ? 4 : Math.min(3, r - 2));
   if (r === 6) setTimeout(() => sfx.rank(), 520);
 }
-let hurryAt = 0;                                            // на какой секунде уже тикнуло: время на рисунок кончается
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";
 let touchSpot = -1, touchPrev = -1;                         // место плитки, на которой сейчас мышь (палец), и прошлое — куда она движется
 const figWanted = () => figOn && S.set.fig !== false;       // рисунки можно выключить: кнопка «Комбо» над сеткой и настройки   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
@@ -451,6 +469,13 @@ function figLayer() {
   if (!lay) { lay = document.createElement("div"); lay.className = "hg-fig"; lay.innerHTML = '<svg class="hg-figl" xmlns="http://www.w3.org/2000/svg"></svg>'; list.appendChild(lay); }
   return lay;
 }
+// Сколько «лишних» плиток рисунок прощает: дорога через плитки в прыжках и между штрихами, плюс запас на неточность руки.
+function figAllow(at) {
+  const xy = (q) => [q % hgC, Math.floor(q / hgC)], gap = (a, b) => { const A = xy(a), B = xy(b); return Math.max(0, Math.max(Math.abs(A[0] - B[0]), Math.abs(A[1] - B[1])) - 1); };
+  let n = 0;
+  at.forEach((st, i) => { for (let k = 1; k < st.length; k++) n += gap(st[k - 1], st[k]); if (i) n += gap(at[i - 1][at[i - 1].length - 1], st[0]); });
+  return 1 + 1.5 * n + 0.2 * new Set(at.flat()).size;
+}
 // Цепочка: следующий рисунок начинается на соседней плитке с той, где мышь (палец) закончила прошлый, — по возможности
 // прямо по ходу движения, — и эту плитку не включает. Так рука не останавливается: собрал, повёл дальше. Без «откуда»
 // (запуск, смена размера сетки, обрыв комбо) рисунок ставится в случайное место, где целиком ложится на плитки.
@@ -493,7 +518,8 @@ function spawnFig(from) {
       const { v, at } = pick;
       const who = seat([...new Set(at.flat())]);             // кто из героев стоит на этих местах (лучшие подставлены, если все открыты)
       const segs = at.map((st) => st.map((q) => who.get(q)));
-      fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())] };
+      fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())], miss: 0, clean: true, allow: figAllow(at) };
+      figLayer().classList.remove("hg-messy");
       // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
       const lay = figLayer();
       fig.dots = new Map();
@@ -549,41 +575,66 @@ const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Слева буквы рангов (загораются по мере взятия), справа — слово нынешнего. Наверху буква ранга в кольце:
 // кольцо убывает, пока идёт время на следующий рисунок. Внизу — комбо и во сколько раз больше душ. Рисунки выключены —
 // шкалы нет, и сетка занимает её место.
-let meterKey = "?", ringShown = -1, hurryOn = false, ticksDone = false;
-function drawMeter() {
+let meterKey = "?", ringShown = -1, hurryOn = false, ticksDone = false, lvShown = -1, chipBar = null;
+function drawMeter() {                                      // то, что меняется редко: виден ли, ранг, слово, комбо числом
   const m = $("hgMeter"), wrap = $("hgWrap");
   if (!m) return;
-  const on = figWanted(), k = on ? S.fig.k : 0, key = (on ? 1 : 0) + "|" + k;
+  const on = figWanted();
+  if (!on) { rankIdx = -1; rankPeak = -1; }
+  const k = on ? Math.floor(S.fig.k) : 0, key = (on ? 1 : 0) + "|" + k + "|" + rankIdx;
   if (key === meterKey) return;
   meterKey = key;
   m.hidden = !on;
-  const r = figRank(k), Rk = r >= 0 ? FIG_RANKS[r] : null;
+  const Rk = rankIdx >= 0 ? FIG_RANKS[rankIdx] : null;
   if (Rk) wrap.dataset.rank = Rk.id; else delete wrap.dataset.rank;
   if (!on) return;
   const N = FIG_RANKS.length, tube = $("hgMTube");
-  if (!ticksDone) {                                          // секция j ведёт к рангу j и окрашена в цвет ранга, который игрок держит, пока идёт по ней
+  if (!ticksDone) {                                          // секция — на ранг, своего цвета; буква ранга стоит у её низа
     ticksDone = true;
-    $("hgMTicks").innerHTML = FIG_RANKS.map((x, i) => '<span class="tc-' + x.id + '" style="bottom:' + (100 * (i + 1) / N).toFixed(2) + '%">' + (x.id === "max" ? "★" : x.mark) + "</span>").join("");
-    for (let j = 0; j < N; j++) { const sg = document.createElement("u"); sg.className = "hg-mseg sg-" + (j ? FIG_RANKS[j - 1].id : "n") + (j === 0 ? " sg-bot" : j === N - 1 ? " sg-top" : ""); sg.innerHTML = "<i></i>"; tube.insertBefore(sg, tube.firstChild); }
+    $("hgMTicks").innerHTML = FIG_RANKS.map((x, i) => '<span class="tc-' + x.id + '" style="bottom:' + (100 * i / N).toFixed(2) + '%">' + (x.id === "max" ? "★" : x.mark) + "</span>").join("");
+    for (let j = 0; j < N; j++) { const sg = document.createElement("u"); sg.className = "hg-mseg sg-" + FIG_RANKS[j].id + (j === 0 ? " sg-bot" : j === N - 1 ? " sg-top" : ""); sg.innerHTML = "<i></i>"; tube.insertBefore(sg, tube.firstChild); }
   }
-  [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i <= r));
-  const lv = figLevel(k), segs = tube.querySelectorAll(".hg-mseg");   // в разметке секции идут сверху вниз
-  segs.forEach((sg, n) => { const j = N - 1 - n; sg.style.setProperty("--f", Math.max(0, Math.min(1, lv * N - j)).toFixed(3)); });
-  tube.style.setProperty("--lv", lv.toFixed(4));
+  [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i <= rankIdx));
   const mk = $("hgMMark");
   mk.textContent = Rk ? Rk.mark : ""; mk.dataset.n = Rk ? Rk.mark.length : 0;
   $("hgMWord").textContent = Rk ? Rk.word : "";
   $("hgMNum").textContent = group(k);
   $("hgMMul").textContent = k ? "×" + mulT(C.figMul(S)) : "";
-  m.title = "Шкала комбо. Собирай рисунки подряд — растёт ранг: от D «" + FIG_RANKS[0].word + "» до MAX «" + FIG_RANKS[FIG_RANKS.length - 1].word + "», а с ним и души" + (k ? " (сейчас ×" + mulT(C.figMul(S)) + ")" : "") +
-    ". Кольцо вокруг буквы — время на следующий рисунок";
+  m.title = "Шкала комбо — жар. Собранный рисунок греет: больше плиток, меньше лишних по пути и отметки по номерам — сильнее. Жар всё время остывает, на высоких рангах быстрее; ранги — от D «" + FIG_RANKS[0].word +
+    "» до MAX «" + FIG_RANKS[N - 1].word + "». Души идут ×(1 + комбо)" + (k ? ", сейчас ×" + mulT(C.figMul(S)) : "") + ". Кольцо вокруг буквы — сколько осталось до быстрого остывания, если не брать отметки";
 }
-function stepMeter() {                                      // каждый кадр: кольцо времени и «время кончается»
+function drawFill() {                                       // заливка лесенки — по дробному жару: видно, как он остывает
+  const lv = figLevel(figWanted() ? S.fig.k : 0);
+  if (Math.abs(lv - lvShown) < 0.0012) return;
+  lvShown = lv;
+  const N = FIG_RANKS.length, tube = $("hgMTube");
+  tube.querySelectorAll(".hg-mseg").forEach((sg, n) => {      // в разметке секции идут сверху вниз
+    const f = Math.max(0, Math.min(1, lv * N - (N - 1 - n))).toFixed(3);
+    if (sg.dataset.f !== f) { sg.dataset.f = f; sg.style.setProperty("--f", f); }
+  });
+  tube.style.setProperty("--lv", lv.toFixed(4));
+}
+function dropLetter(mark) {                                 // буква ранга выпадает из кольца: ранг потерян
+  const box = $("hgMRank");
+  if (!mark || box.offsetParent === null || still()) return;
+  const f = document.createElement("b"); f.className = "hg-mfall"; f.textContent = mark; f.dataset.n = mark.length;
+  box.appendChild(f); setTimeout(() => f.remove(), 700);
+}
+function stepMeter() {                                      // каждый кадр: ранг, заливка, кольцо и «жар уходит»
   if (meterKey.charAt(0) !== "1") return;
-  const k = S.fig.k, f = k > 0 && fig ? Math.max(0, Math.min(1, S.fig.left / C.figTime(fig.cells.length))) : 1, v = Math.round(f * 240);
-  if (v !== ringShown) { ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1); }
-  const h = k > 0 && S.fig.left <= 3;
-  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); }
+  const was = rankIdx, d = rankSync();
+  if (d < 0 && rankIdx >= 0) { dropLetter(FIG_RANKS[was].mark); sfx.down(); }   // остыл на ступень (до нуля — событие fig_end)
+  if (d > 0) rankPeak = Math.max(rankPeak, rankIdx);
+  if (d) { drawMeter(); figChipKey = "?"; }
+  if (ticksDone) drawFill();
+  // кольцо: сколько осталось до быстрого остывания, если не брать отметки
+  const k = S.fig.k, f = k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240);
+  if (v !== ringShown) {
+    ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1);
+    if (chipBar && chipBar.isConnected) chipBar.style.transform = "scaleX(" + f.toFixed(3) + ")";
+  }
+  const h = k > 0 && S.fig.idle >= CFG.figIdleAt;
+  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); if (h) sfx.hurry(false); figChipKey = "?"; }
 }
 // Новый ранг: буква врезается в сетку (в ту её половину, где нет следующего рисунка), под ней слово; потом буква улетает
 // в шкалу и встаёт там в кольцо. На потолке по сетке ещё и хлещет хлыст.
@@ -603,7 +654,7 @@ function rankUp(r) {
   const el = document.createElement("div");
   el.className = "hg-rankup"; el.style.setProperty("--rs", size + "px");
   el.style.left = bx.toFixed(1) + "px"; el.style.top = by.toFixed(1) + "px";
-  el.innerHTML = '<i class="hg-rrays"></i><b class="hg-rmark" data-m="' + Rk.mark + '">' + Rk.mark + '</b><span class="hg-rword">' + Rk.word + '</span><span class="hg-rsub">комбо ' + group(S.fig.k) + " · души ×" + mulT(C.figMul(S)) + "</span>";
+  el.innerHTML = '<i class="hg-rrays"></i><b class="hg-rmark" data-m="' + Rk.mark + '">' + Rk.mark + '</b><span class="hg-rword">' + Rk.word + '</span><span class="hg-rsub">комбо ' + group(Math.floor(S.fig.k)) + " · души ×" + mulT(C.figMul(S)) + "</span>";
   wrap.appendChild(el);
   const half = el.offsetWidth / 2 + 6;                      // на узкой сетке надпись не должна уезжать за край
   if (W > 2 * half) el.style.left = Math.max(half, Math.min(W - half, bx)).toFixed(1) + "px";
@@ -622,50 +673,63 @@ function rankUp(r) {
     { duration: 340, easing: "cubic-bezier(.6,0,.9,.5)", fill: "forwards" }).onfinish = land;
   }, max ? 1500 : 800);
 }
-function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
+function figTouch(i) {                                      // по плитке провели или нажали: отметка рисунка, лишняя плитка или ничего
   const spot = slotOf ? slotOf[i] : i;                       // где на сетке эта плитка (герои могут быть пересажены)
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
-  if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
+  if (!fig) return;
+  const at = fig.cells.indexOf(i);
+  if (at < 0) { if (fig.hit.size) fig.miss += 1; return; }   // лишняя плитка по пути (дорога к первой отметке не в счёт)
+  if (fig.hit.has(i)) return;                                // по уже взятой отметке ходить можно
+  if (at !== fig.hit.size && fig.clean) {                    // взята не по номерам: прибавки «по номерам» за этот рисунок не будет
+    fig.clean = false; figLayer().classList.add("hg-messy");
+    for (const d of fig.dots.values()) d.classList.remove("hg-go");
+  }
   fig.hit.add(i);
+  C.figMark(S);
   rows[i].root.classList.add("hg-hit");
-  sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl(S.fig.k));
+  sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl());
   const dot = fig.dots.get(i);
   if (dot) {
-    dot.classList.add("hit"); dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick");
+    dot.classList.remove("hg-go"); dot.classList.add("hit"); dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick");
     if (!still()) fxAdd("hg-hitr", parseFloat(dot.style.left) || 0, parseFloat(dot.style.top) || 0, 380);   // кольцо от отметки, как от попадания в osu
   }
+  if (fig.clean && fig.hit.size < fig.cells.length) { const nx = fig.dots.get(fig.cells[fig.hit.size]); if (nx) nx.classList.add("hg-go"); }   // сходящееся кольцо — на следующем номере
   if (fig.hit.size === fig.cells.length) {
-    const done = fig, r0 = figRank(S.fig.k);
-    C.figDone(S, done.cells.length, done.name, done.plus);
-    const up = figBoom(done, r0);
+    const done = fig, n = done.cells.length, acc = 1 / (1 + Math.max(0, done.miss - done.allow) / n), peak0 = rankPeak;
+    done.clean = done.clean && acc >= 0.5;                   // «по номерам» засчитывается, только если рисунок не собран мимо всего
+    const g = C.figDone(S, n, done.name, acc, done.clean);
+    const d = rankSync(), up = rankIdx > peak0 && rankIdx >= 1;   // буква вылетает за новый высший ранг этого комбо, начиная с C
+    rankPeak = Math.max(rankPeak, rankIdx);
+    figBoom(done, { g, acc, clean: done.clean, up, back: d > 0 && !up });
     let dir = null;                                          // куда шла рука: следующий рисунок — по ходу
     if (touchPrev >= 0 && hgC) { const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC)); if (dx || dy) dir = [dx, dy]; }
     spawnFig({ spot: touchSpot, dir });
-    if (fig) C.figNext(S, fig.cells.length);                 // время на следующий — по его размеру
-    if (up) rankUp(figRank(S.fig.k));                         // после нового рисунка: надпись встаёт так, чтобы его не закрыть
+    if (up) rankUp(rankIdx);                                 // после нового рисунка: надпись встаёт так, чтобы его не закрыть
     figChipKey = "?"; drawFigChip(); slowT = 0;
   }
   else drawFigChip();
 }
 // Рисунок собран: плитки вспыхивают, из них летят искры цвета ранга, сам рисунок расходится «эхом» и тает, поверх вылетает
-// надпись с названием и множителем — чем выше ранг, тем крупнее. Сетка коротко вздрагивает. Если комбо перешло в новый
-// ранг (C и выше), вместо надписи рисунка вылетает буква ранга (rankUp) — отдаёт true. Всё само убирается.
-function figBoom(done, r0) {
-  const list = $("mercList"), k = S.fig.k, lr = list.getBoundingClientRect();
-  const lvl = figLvl(k), r1 = figRank(k), up = r1 > r0 && r1 >= 1;
+// надпись: название, как собрано (идеально, по номерам, точно, небрежно, мимо) и на сколько вырос жар. Чем выше ранг, тем
+// крупнее. Если комбо взяло новый высший ранг (q.up), вместо надписи рисунка вылетает буква ранга (rankUp).
+// как собран рисунок: много лишних плиток — «мимо», как бы ни шёл; иначе по номерам лучше, чем вразнобой
+const figGrade = (q) => (q.acc < 0.5 ? ["мимо", "g0"] : q.acc < 0.9 ? (q.clean ? ["по номерам", "g2"] : ["небрежно", "g1"]) : q.clean ? ["идеально", "g3"] : ["точно", "g2"]);
+function figBoom(done, q) {
+  const list = $("mercList"), k = Math.floor(S.fig.k), lr = list.getBoundingClientRect();
+  const lvl = figLvl();
   sfx.boom(lvl, done.plus);
-  if (up) setTimeout(() => rankSound(r1), 240);
+  if (q.up) setTimeout(() => rankSound(rankIdx), 240); else if (q.back) setTimeout(() => sfx.mile(), 200);
   let cx = 0, cy = 0;
-  const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), q = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += q[0]; cy += q[1]; return q; });
+  const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), p = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += p[0]; cy += p[1]; return p; });
   cx /= pts.length; cy /= pts.length;
   for (const i of done.cells) { const t = rows[i].root; t.classList.remove("hg-win"); void t.offsetWidth; t.classList.add("hg-win"); }
-  drawMeter();                                               // шкала и цвет ранга — сразу: искры ниже уже нового цвета
+  drawMeter(); if (ticksDone) drawFill();                    // шкала и цвет ранга — сразу: искры ниже уже нового цвета
   const num = $("hgMNum");
   if (num) { num.classList.remove("hg-mbump"); void num.offsetWidth; num.classList.add("hg-mbump"); }
-  if (still()) return up;
+  if (still()) return;
   const per = Math.max(2, Math.min(5, Math.floor((26 + lvl * 8) / pts.length)));
-  for (const q of pts) for (let j = 0; j < per; j++) {
-    const a = Math.random() * 6.283, d = 34 + Math.random() * (60 + lvl * 22), n = fxAdd("hg-sp l" + lvl, q[0], q[1], 800);
+  for (const p of pts) for (let j = 0; j < per; j++) {
+    const a = Math.random() * 6.283, d = 34 + Math.random() * (60 + lvl * 22), n = fxAdd("hg-sp l" + lvl, p[0], p[1], 800);
     n.style.setProperty("--dx", (Math.cos(a) * d).toFixed(1) + "px"); n.style.setProperty("--dy", (Math.sin(a) * d).toFixed(1) + "px");
     n.style.animationDelay = (Math.random() * 60).toFixed(0) + "ms";
   }
@@ -677,15 +741,14 @@ function figBoom(done, r0) {
     g.querySelectorAll(".hg-dot").forEach((d) => { d.className = "hg-gd"; d.removeAttribute("data-i"); d.textContent = ""; });
     fxLayer().appendChild(g); setTimeout(() => g.remove(), 480);
   }
-  if (!up) {
-    const W = list.clientWidth, H = Math.max(list.clientHeight, 120);
+  if (!q.up) {
+    const W = list.clientWidth, H = Math.max(list.clientHeight, 120), gr = figGrade(q);
     const pop = fxAdd("hg-pop l" + lvl, Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)), 1500,
-      "<b>" + done.name + "!</b><span>комбо " + group(k) + (done.plus > 1 ? " <i>+" + done.plus + "</i>" : "") + " · души ×" + mulT(C.figMul(S)) + "</span>");
+      "<b>" + done.name + "!</b><span><i class=\"hg-q " + gr[1] + "\">" + gr[0] + " +" + (Math.round(q.g * 10) / 10).toFixed(1).replace(".", ",") + "</i> · комбо " + group(k) + " · души ×" + mulT(C.figMul(S)) + "</span>");
     const half = Math.max(pop.firstChild.offsetWidth, pop.lastChild.offsetWidth) / 2 + 14;   // длинное название не должно уезжать за край сетки
     pop.style.left = Math.max(half, Math.min(W - half, cx)).toFixed(1) + "px";
   }
   list.classList.remove("hg-boom"); void list.offsetWidth; list.classList.add("hg-boom");
-  return up;
 }
 const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
 function drawFigBtn() {                                     // кнопка «Комбо» над сеткой: рисунки включены или нет
@@ -695,28 +758,25 @@ function drawFigBtn() {                                     // кнопка «К
   b.title = on ? "Рисунки на сетке включены: собирай их — растёт комбо и души. Нажми, чтобы просто покупать героев" : "Рисунки выключены: сетка — просто покупка героев. Нажми, чтобы снова собирать рисунки и комбо";
 }
 function figApply() {                                       // настройку «Рисунки и комбо» переключили
-  if (S.set.fig === false) { if (fig || S.fig.k) { S.fig.k = 0; S.fig.left = 0; } if (fig || slotOf) spawnFig(); else drawFigBtn(); }
+  if (S.set.fig === false) { if (fig || S.fig.k) { S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0; } if (fig || slotOf) spawnFig(); else drawFigBtn(); }
   else if (!fig) spawnFig();
   else drawFigBtn();
 }
-function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
+function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, ранг, комбо и прибавка к душам
   drawMeter();
-  const el = $("hgFigc"), k = S.fig.k;
-  const sec = k > 0 && S.fig.left <= 3 ? Math.max(1, Math.ceil(S.fig.left)) : 0;   // последние три секунды: тикает и мигает
-  if (sec && sec !== hurryAt) sfx.hurry(sec === 1);
-  hurryAt = sec;
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (sec ? 1 : 0) : "";
+  const el = $("hgFigc"), k = Math.floor(S.fig.k), hot = S.fig.k > 0;
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) : "";
   if (key === figChipKey) return;
   figChipKey = key;
   el.hidden = !fig;
-  if (!fig) return;
-  el.className = "hg-figc" + (k ? " on" : "") + (sec ? " hurry" : "");
-  const full = C.figTime(fig.cells.length);
-  el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок прибавляет к комбо (простой — 1, сложные — до 4), а комбо умножает души: комбо 5 — души ×6, " +
-    "и так до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Чем выше комбо, тем сложнее рисунки. Не успел собрать следующий — комбо обрывается";
-  el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b>" + (fig.plus > 1 ? " <i>+" + fig.plus + "</i>" : "") + "</span>" +
-    (k ? '<span><em class="hg-frk">' + FIG_RANKS[Math.max(0, figRank(k))].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
+  if (!fig) { chipBar = null; return; }
+  el.className = "hg-figc" + (hot ? " on" : "") + (hurryOn ? " hurry" : "");
+  el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок греет комбо: чем он больше, чем меньше лишних плиток по пути и если брать отметки по номерам — тем сильнее. " +
+    "Комбо умножает души — до ×" + mulT(1 + CFG.figStep * CFG.figCap) + " — и всё время остывает: на высоких рангах быстрее, а без отметок дольше " + CFG.figIdleAt + " секунд — совсем быстро";
+  el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b></span>" +
+    (hot ? '<span><em class="hg-frk">' + FIG_RANKS[Math.max(0, rankIdx)].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
+  chipBar = el.querySelector(".hg-figt"); ringShown = -1;
 }
 // Телефон: кнопка в углу водит между боем (верх страницы) и отрядом — сетка занимает экран целиком и сама страницу не листает.
 function drawJump() {
@@ -741,7 +801,7 @@ export function cloudNote(was, now, first, meta) {          // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s }));
 export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
@@ -992,6 +1052,8 @@ function drawSkills() {
     e.root.classList.toggle("lock", !open);
     e.root.classList.toggle("on", open && on);
     e.root.classList.toggle("ready", open && !on && cd <= 0);
+    const hold = open && !on && C.auHolds(S, s.id);          // автозапуск придерживает готовое умение до залпа с «Натиском»
+    if (e.root.classList.contains("au-hold") !== hold) { e.root.classList.toggle("au-hold", hold); e.root.title = s.name + ": " + s.text + (hold ? ". Автозапуск придерживает его: умения урона включаются залпом вместе с «Натиском»" : ""); }
     e.cap.textContent = open ? s.name : s.need === "ecl" ? "волна 1000" : s.need ? "возрождение" : "волна " + s.wave;
     e.dur.hidden = !on; e.cd.hidden = !open || on || cd <= 0;
     if (on) { e.bar.style.setProperty("--p", Math.min(100, S.act[s.id] / s.dur * 100).toFixed(0) + "%"); e.t.textContent = clock(S.act[s.id]); }
@@ -1069,10 +1131,10 @@ function drawAu() {
     : on
     ? "<div>Автозапуск умений работает</div><div class=\"big\">осталось " + clock(a.left) + "</div>" +
       '<div class="gbar"><i style="width:' + (a.left / CFG.auHour * 100).toFixed(2) + '%"></i></div>' +
-      "<div>Умения включаются сами, как только готовы. Вернулось <b>" + group(a.back) + " из " + sh(a.total) + "</b>: " + group(a.pay) + " " + plural(a.pay, "твой", "твоих", "твоих") +
+      "<div>Умения включаются сами: умения урона — залпом вместе с «Натиском», чтобы по Стражу били под бафами. Вернулось <b>" + group(a.back) + " из " + sh(a.total) + "</b>: " + group(a.pay) + " " + plural(a.pay, "твой", "твоих", "твоих") +
       " и <b>+" + group(a.total - a.pay) + " сверху</b>. Час куплен на волне " + group(a.w) + " и идёт, пока игра на экране." + sum + "</div>" + sw
     : "<div>Автозапуск умений</div><div class=\"big\">час за " + sh(p) + " → вернётся " + group(p + g) + "</div>" +
-      "<div>Час умения включаются сами, как только готовы, <b>«Натиск»</b> тоже. Осколки за этот час вернутся все и ещё <b>+" + group(g) + " сверху</b>. " +
+      "<div>Час умения включаются сами. Умения урона идут залпом вместе с <b>«Натиском»</b>, чтобы Стража били под бафами. Осколки за этот час вернутся все и ещё <b>+" + group(g) + " сверху</b>. " +
       "Прибавка растёт с волной забега: сейчас волна <b>" + group(w) + "</b>, каждые " + group(CFG.auStep) + " волн — ещё +1 сверху. Цена — вчетверо больше прибавки. " +
       "Час идёт, пока игра на экране." + sum + "</div>" +
       (free >= p ? '<button class="btn ecl" data-au-buy="1">Включить на час — ' + sh(p) + "</button>"
@@ -1330,27 +1392,22 @@ export function onEvent(e) {
   }
   else if (e.t === "fig") {                                  // рисунок на сетке собран
     figChipKey = "?";
-    if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время, — множитель вырастет", 4200);
+    if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: оно умножает души и всё время остывает. Собирай рисунки дальше — по номерам и без лишних плиток греет сильнее", 9000);
   }
   else if (e.t === "tired") {                               // усталость руки: объясняем один раз за 10 минут
     if (performance.now() - tiredAt > 600000) { tiredAt = performance.now(); note("Рука устала", "Удары чаще 6 в секунду дольше двух минут подряд — теперь проходит до 4 в секунду, как при удержании мыши. Передохни — за минуту-две пройдёт", 10000); }
   }
-  else if (e.t === "fig_end") {
-    if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }
+  else if (e.t === "fig_end") {                              // жар комбо остыл до нуля
     figChipKey = "?";
-    sfx.drop();
-    const list = $("mercList"), wrap = $("hgWrap"), mk = $("hgMMark"), live = list.offsetParent !== null && !still();
-    if (live && mk.textContent && $("hgMRank").offsetParent !== null) {   // буква ранга выпадает из кольца
-      const f = document.createElement("b"); f.className = "hg-mfall"; f.textContent = mk.textContent; f.dataset.n = mk.dataset.n;
-      $("hgMRank").appendChild(f); setTimeout(() => f.remove(), 700);
-    }
+    const was = rankIdx, list = $("mercList"), wrap = $("hgWrap"), big = e.k >= FIG_RANKS[1].k;   // дошёл хотя бы до C — есть что терять
+    rankSync();
+    if (was >= 0) dropLetter(FIG_RANKS[was].mark);
     wrap.classList.remove("hg-mbreak"); void wrap.offsetWidth; wrap.classList.add("hg-mbreak"); setTimeout(() => wrap.classList.remove("hg-mbreak"), 700);
-    spawnFig();                                              // сложный рисунок уходит: новое комбо начинается с простого
-    if (live) {
-      const er = FIG_RANKS[Math.max(0, figRank(e.k))];
-      fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight / 2), 1500, "<b>Комбо оборвалось</b><span>было " + group(e.k) + " · ранг " + er.mark + "</span>");
-    }
-    if (e.k >= 5) note("Комбо рисунков оборвалось", "Было " + group(e.k) + ". Собери рисунок на сетке отряда — начнётся новое", 3400);
+    if (big) sfx.drop();
+    if (fig && fig.hit.size === 0) spawnFig();               // сложный рисунок уходит: новое комбо начинается с простого (начатый — остаётся)
+    if (big && list.offsetParent !== null && !still())
+      fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight / 2), 1500, "<b>Комбо остыло</b><span>было " + group(Math.floor(e.k)) + " · ранг " + FIG_RANKS[Math.max(0, figRank(e.k))].mark + "</span>");
+    if (e.k >= 10) note("Комбо рисунков остыло", "Было " + group(Math.floor(e.k)) + ". Жар уходит, когда рисунки не собираются. Собери рисунок — пойдёт снова", 3400);
   }
   else if (e.t === "au_on") { note("Автозапуск включён", "Час умения включаются сами. Вернётся " + group(e.pay) + " и ещё +" + group(e.gain) + " " + plural(e.gain, "осколок", "осколка", "осколков") + " сверху", 4200); auKey = ""; eclKey = ""; }
   else if (e.t === "au_gain") { auKey = ""; eclKey = ""; }
