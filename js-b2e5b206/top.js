@@ -66,10 +66,22 @@ function draw(force) {
   shownKey = key; mineEl = null;
   box.textContent = "";
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
-  if (!name) A.card(box, "Войди — и попадёшь в таблицу под своим ником с Twitch: место даётся за души, заработанные за всё время. Прогресс при этом остаётся в этом браузере.");
+  if (!name) A.card(box, (S.gift ? "" : "Войди через Twitch — и в отряд сразу придут три наёмника десятого уровня: подарок, они тут же начнут фармить. ") +
+    "Войдя, попадёшь в таблицу под своим ником с Twitch: место даётся за души, заработанные за всё время. Прогресс станет общим на аккаунт: зайдёшь с телефона или другого компьютера — он там же.");
   if (err) box.appendChild(el("p", "note err pad", err));
   if (!rows) { if (!err) box.appendChild(el("p", "note pad", "Загружаю таблицу…")); return; }
   if (!rows.length) box.appendChild(el("p", "note pad", "Таблица пока пустая. Стань первым."));
+  // Скорость роста: сколько волн рекорда игрок прибавил за последний час и столбики по часам за восемь часов (считает сервер).
+  // Столбики у всех в одном масштабе — видно, кто сейчас летит, а кто стоит. Самый быстрый подсвечен.
+  const peak = Math.max(1, ...rows.map((r) => Math.max(0, ...(r.sp || [0]))));
+  const fast = rows.reduce((a, r) => ((r.g || 0) > (a ? a.g || 0 : 0) ? r : a), null);
+  if (fast && fast.g > 0) {
+    const head = el("div", "tfast");
+    head.appendChild(el("span", "", "Быстрее всех сейчас"));
+    head.appendChild(el("b", "", fast.n));
+    head.appendChild(el("em", "", "+" + group(fast.g) + " " + (fast.g % 10 === 1 && fast.g % 100 !== 11 ? "волна" : fast.g % 10 >= 2 && fast.g % 10 <= 4 && (fast.g % 100 < 12 || fast.g % 100 > 14) ? "волны" : "волн") + " за час"));
+    box.appendChild(head);
+  }
   let mine = false;
   for (const r of rows) {
     const me = !!name && r.n === name;
@@ -82,7 +94,13 @@ function draw(force) {
     ico.src = art("cur-farm"); ico.alt = "";
     val.appendChild(ico); val.appendChild(document.createTextNode(soulsTxt(r.s)));
     val.title = "Душ заработано за всё время";
-    row.appendChild(pos); row.appendChild(who); row.appendChild(val);
+    const g = r.g || 0, grow = el("div", "tgrow" + (g > 0 ? " up" : "") + (r.on ? " on" : "") + (fast && fast.g > 0 && r === fast ? " hot" : ""));
+    const bars = el("div", "tbars");
+    (r.sp || []).forEach((v, i, a) => { const u = el("u", i === a.length - 1 ? "now" : ""); u.style.height = Math.max(v > 0 ? 14 : 6, Math.round(100 * v / peak)) + "%"; bars.appendChild(u); });
+    grow.appendChild(bars);
+    grow.appendChild(el("em", "", g > 0 ? "+" + group(g) + " за час" : r.on ? "в игре" : "не в игре"));
+    grow.title = "Рост рекорда: столбики — сколько волн прибавлено за каждый из последних восьми часов, справа самый свежий" + (g > 0 ? ". За последний час: +" + group(g) : "");
+    row.appendChild(pos); row.appendChild(who); row.appendChild(grow); row.appendChild(val);
     box.appendChild(row);
   }
   const foot = el("div", "topfoot");

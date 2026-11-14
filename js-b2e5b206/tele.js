@@ -66,5 +66,6 @@ export function mount(hooks) {                              // hooks: { state() 
     window.addEventListener("pagehide", () => { if (act >= 3 && act !== sentAt) send(true); });
   } catch (e) { get = null; }
 }
+export function deviceId() { if (!did) did = device(); return did; }   // случайный номер этого браузера (им же помечается облачное сохранение)
 export const info = () => ({ did, sess, build: BUILD, act: Math.round(act), queued: errs.length });   // для проверки (?dev=1)
 export const beatNow = () => send(false);                    // для проверки: отправить сводку сейчас

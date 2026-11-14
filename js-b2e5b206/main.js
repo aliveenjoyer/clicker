@@ -9,6 +9,7 @@ import { loadArt } from "./art.js";
 import { txt, lg } from "./num.js";
 import * as TW from "./stream.js";
 import * as TELE from "./tele.js";
+import * as CLOUD from "./cloud.js";
 
 const KEY = "hlystopad.save.v1";
 const STEP = 1 / 60;
@@ -16,8 +17,10 @@ const Q = new URLSearchParams(location.search);
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // свой компьютер: только тут работают ?reset и ?dev
 let S = null, last = 0, acc = 0, saveT = 0, down = false, downT = 0, holdAcc = 0, hiddenAt = 0;
 
-// Прогресс хранится только в этом браузере. Загрузить его извне нельзя намеренно: ни текстом, ни ссылкой, ни из копий —
-// любая такая дверь стала бы способом накрутить рекорд.
+// Прогресс хранится в этом браузере, а у вошедших через Twitch — ещё и на сервере, один на аккаунт (js/cloud.js): так
+// компьютер и телефон видят одну игру. Загрузить прогресс текстом, ссылкой или из копий по-прежнему нельзя намеренно:
+// такая дверь стала бы способом накрутить рекорд. Сохранение аккаунта этой дверью не становится: таблица и обменник
+// верят только рекорду, который сервер принял сам.
 function store() { try { localStorage.setItem(KEY, C.save(S)); } catch (e) { /* хранилище недоступно — играем без сохранения */ } }
 function restore() {
   try { localStorage.removeItem("hlystopad.backups.v1"); localStorage.removeItem(KEY + ".rescue"); localStorage.removeItem("hlystopad.id"); localStorage.removeItem("hlystopad.name"); } catch (e) { /* следы прежней версии с копиями */ }
@@ -46,9 +49,24 @@ const hooks = {
   settings() { UI.applySettings(); store(); },
   reset() {                                                 // стереть прогресс насовсем; настройки остаются
     const N = C.newState(); Object.assign(N.set, S.set);
+    N.gen = (S.gen || 0) + 1;                               // стирание — новое «поколение» игры: на остальных устройствах аккаунта старое тоже уйдёт
     S = N;
     FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
     document.getElementById("hint").hidden = false;
+    CLOUD.syncNow();
+  },
+  adopt(save, meta, first) {                                // игра аккаунта продолжается с другого устройства: берём её оттуда
+    let N = null;
+    try { N = C.load(JSON.stringify(save)); } catch (e) { return; }
+    const was = { w: S.best, p: S.stats.played || 0, gen: S.gen || 0 };
+    N.set = S.set;                                          // настройки у каждого устройства свои
+    // сколько игра простояла — по часам сервера (когда он её сохранил и сколько на нём сейчас), а не по часам двух разных устройств
+    const gone = meta && meta.now && meta.t ? Math.max(0, meta.now - meta.t) : Math.max(0, (Date.now() - (N.at || Date.now())) / 1000);
+    S = N;
+    FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S);
+    if (gone > 5) away(gone);
+    store();
+    UI.cloudNote(was, S, first);
   },
   defaults() { Object.assign(S.set, { sound: true, hit: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
 };
@@ -92,6 +110,7 @@ async function boot() {
   const gone = (Date.now() - (S.at || Date.now())) / 1000;
   UI.mount(S, hooks); FX.mount(S); UI.applySettings();
   TELE.mount({ state: () => S, tab: UI.curTab, watching: TW.watching });   // наблюдение: обезличенная сводка раз в минуту
+  CLOUD.mount({ state: () => S, adopt: hooks.adopt, device: TELE.deviceId, settled: UI.tryGift });   // прогресс один на аккаунт Twitch; подарок за вход — когда ясно, чья игра главная
   document.getElementById("hint").hidden = S.stats.clicks > 0;
   if (gone > 5) away(gone);
   C.checkUnlocks(S);
@@ -131,7 +150,7 @@ async function boot() {
 
   if (LOCAL && Q.has("dev")) {                                       // ?dev=1 — ручки для проверки: __dev.give(30), __dev.wave(49)
     window.__dev = {
-      S: () => S, C, UI, TW, TELE,
+      S: () => S, C, UI, TW, TELE, CLOUD, wipe: hooks.reset,
       give(x) { S.souls = x; S.life = Math.max(S.life, x); },
       wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.cycBest = Math.max(S.cycBest, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); C.derive(S); FX.setState(S); },
       ecl() { S.eclAt = 0; },                                // Затмение доступно сразу, без суток ожидания

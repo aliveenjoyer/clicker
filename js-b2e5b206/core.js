@@ -22,6 +22,8 @@ export function newState() {
     ash: NEG, ashAll: NEG, rb: 0, rel: {},
     items: {}, draft: null, drafts: 0, forgiven: 0,
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
+    gift: 0,                                                // подарок за вход через Twitch уже получен
+    gen: 0,                                                 // сколько раз прогресс стирали: по нему стирание доходит до всех устройств аккаунта
     fig: { k: 0, left: 0 },                                 // рисунки на сетке отряда: комбо и сколько секунд осталось собрать следующий
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
@@ -54,7 +56,7 @@ export function newState() {
 
 export function save(S) {
   const o = {};
-  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "sess" && k !== "achT") o[k] = S[k];
+  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "loud" && k !== "sess" && k !== "achT") o[k] = S[k];
   o.at = Date.now();
   return JSON.stringify(o, (k, v) => (v === -Infinity ? null : v));
 }
@@ -88,6 +90,7 @@ export function load(text) {
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
   S.fig = { k: 0, left: 0 };                                // комбо рисунков перезагрузку не переживает
+  S.gen = ui(S.gen, 1e6); S.gift = S.gift ? 1 : 0;
   if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
   // удержание: всё приводится к виду, который ждёт игра; чего в сохранении нет или что испорчено — как у нового игрока
   const N0 = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
@@ -249,17 +252,20 @@ export function comboTier(S) {
   for (let i = 0; i < CFG.combo.length; i++) if (S.combo >= CFG.combo[i][0]) t = i;
   return t;
 }
-export const dpsLg = (S) => (S.d.dps === NEG ? NEG : S.d.dps + buffLg(S, "dmg") + buffLg(S, "dps"));
+// Свой стрим идёт фоном со звуком (S.loud — js/stream.js): всё ×2 — урон наёмников, урон удара и души.
+export function setLoud(S, v) { S.loud = !!v; }
+const loudLg = (S) => (S.loud ? L2 : 0);
+export const dpsLg = (S) => (S.d.dps === NEG ? NEG : S.d.dps + buffLg(S, "dmg") + buffLg(S, "dps") + loudLg(S));
 const rushCap = (S) => S.d.rushCap + (S.buff.tide > 0 ? L10(3) : 0);   // баф «Прилив»: слабые волны пролетают втрое быстрее
 export function clickLg(S) {                                // lg урона одного удара, без крита
   const D = S.d;
   const base = D.dps === NEG ? D.whip : lsum(D.whip, D.dps + L10(D.share));
   const t = S.un.combo ? comboTier(S) : -1;
-  return base + buffLg(S, "dmg") + buffLg(S, "click") + (t >= 0 ? L10(CFG.combo[t][1]) : 0);
+  return base + buffLg(S, "dmg") + buffLg(S, "click") + (t >= 0 ? L10(CFG.combo[t][1]) : 0) + loudLg(S);
 }
 export const critChance = (S) => Math.min(0.75, active(S, "mark") ? 0.5 + (S.d.crit - CFG.critChance) : S.d.crit);
 export const critMult = (S) => (active(S, "mark") ? 5 : CFG.critMult);
-const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + (S.fig.k > 0 ? L10(figMul(S)) : 0);   // эфир: души ×2; комбо рисунков
+const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + loudLg(S) + (S.fig.k > 0 ? L10(figMul(S)) : 0);   // эфир: души ×2; стрим со звуком: ещё ×2; комбо рисунков
 // Рисунки на сетке отряда (сами рисунки и попадания по плиткам — js/ui.js): собран рисунок — комбо растёт, души идут с
 // прибавкой, пока комбо живо. Время на следующий рисунок идёт только в игре; без игрока комбо обрывается.
 export const figMul = (S) => 1 + CFG.figStep * Math.min(S.fig.k, CFG.figCap);
@@ -510,6 +516,22 @@ export function buy(S, i, mode) {
   const ms = nextMs(before) <= S.lv[i];
   ev(S, { t: "buy", i, n: b.n, first: before === 0, ms, gain: ms ? msGain(before) : 0 });
   return true;
+}
+// Подарок за вход через Twitch (зовёт js/ui.js, когда игрок вошёл): один раз на сохранение. Случайные наёмники из
+// ближайших ещё не нанятых приходят сразу десятого уровня и начинают фармить; если нанимать уже некого — случайные из
+// отряда получают уровни. Возвращает номера героев или null, если подарок уже был.
+export function loginGift(S, rnd) {
+  if (S.gift) return null;
+  const r = rnd || Math.random, free = [];
+  for (let i = 1; i <= N && free.length < CFG.giftFrom; i++) if (!S.lv[i]) free.push(i);
+  const fresh = free.length > 0, pool = fresh ? free : Array.from({ length: N }, (_, k) => k + 1), got = [];
+  while (got.length < CFG.giftHeroes && pool.length) got.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
+  got.sort((a, b) => a - b);
+  for (const i of got) S.lv[i] += fresh ? CFG.giftLv : CFG.giftMore;
+  S.gift = 1;
+  derive(S);
+  ev(S, { t: "gift_login", heroes: got, fresh, lv: fresh ? CFG.giftLv : CFG.giftMore });
+  return got;
 }
 export function heroesShown(S) {                            // сколько строк показывать: нанятые + следующий
   let n = 0;

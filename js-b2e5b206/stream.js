@@ -148,14 +148,22 @@ function setChannel(ch) {
   }
   sync();
 }
-function drawLive() {                                        // плашка наверху: свой эфир — фарм ×2; чужой — просто чей стрим на фоне
-  const el = $("live");
+let liveKey = "?";
+function drawLive() {                                        // плашка наверху: свой эфир — души ×2, со звуком — всё ×2; чужой — просто чей стрим на фоне
+  const el = $("live"), on = loud(), can = live && !on && fits();   // can — бонус за звук можно включить нажатием
+  const key = [cur, live, on, can].join("|");
+  if (key === liveKey) return;
+  liveKey = key;
   el.hidden = !cur;
   if (!cur) return;
   el.textContent = "";
+  el.classList.toggle("loud", on); el.classList.toggle("offer", can);
+  el.title = on ? "Стрим идёт фоном со звуком: урон и души ×2" : can ? "Включи стрим фоном со звуком — урон и души пойдут ×2. Нажми, и он включится" : "";
   const dot = document.createElement("span"); dot.className = "dot"; el.appendChild(dot);
-  el.appendChild(document.createTextNode(live ? "Стрим идёт — фарм " : cur === LOFI ? "На фоне " : "На фоне стрим "));
-  const b = document.createElement("b"); b.textContent = live ? "×2" : nice(cur); el.appendChild(b);
+  const add = (text, bold) => { el.appendChild(document.createTextNode(text)); const b = document.createElement("b"); b.textContent = bold; el.appendChild(b); };
+  if (on) add("Стрим со звуком — всё ", "×2");
+  else if (live) { add("Стрим идёт — души ", "×2"); if (can) add(" · со звуком всё ", "×2"); }
+  else add(cur === LOFI ? "На фоне " : "На фоне стрим ", nice(cur));
 }
 async function check() {
   clearTimeout(probeT);
@@ -199,6 +207,7 @@ export function sync() {                                     // показать
   draw();
 }
 export function draw() {
+  drawLive();
   const b = $("btnStream"), ok = fits();
   b.hidden = !ok;
   b.classList.toggle("on", !!S.set.stream && !!cur);
@@ -213,7 +222,9 @@ export function draw() {
     const on = sound(), sb = $("btnStreamSound"), sl = $("twVol");
     sb.innerHTML = on ? ICON_ON : ICON_OFF;
     sb.classList.toggle("on", on);
-    sb.title = on ? "Выключить звук стрима" : "Включить звук стрима";
+    const offer = !on && live && ownShown();               // свой стрим без звука: звук даёт ×2 на всё
+    sb.classList.toggle("offer", offer);
+    sb.title = on ? "Выключить звук стрима" : offer ? "Включи звук стрима — урон и души пойдут ×2" : "Включить звук стрима";
     const v = String(on ? vol() : 0);
     if (document.activeElement !== sl && sl.value !== v) sl.value = v;
     sl.style.setProperty("--v", (on ? vol() : 0) + "%");
@@ -249,6 +260,11 @@ export function mount(state, h) {
   $("btnStream").addEventListener("click", () => {
     if (S.set.stream && !cur) { S.set.twPick = "lofi"; hooks.changed(); setChannel(LOFI); check(); return; }   // никто не в эфире — включаем LoFi-музыку
     S.set.stream = !S.set.stream; hooks.changed(); sync();
+  });
+  $("live").addEventListener("click", () => {                // предложение в плашке наверху: включить свой стрим фоном со звуком
+    if (!live || loud() || !fits()) return;
+    S.set.stream = true; S.set.twPick = "auto"; S.set.twSound = true; if (vol() === 0) S.set.twVol = 50;
+    hooks.changed(); setChannel(LIST[0]); sync(); applySound(); draw();
   });
   $("twSrc").addEventListener("click", (e) => {               // выбор: рекомендуемый канал или LoFi-музыка
     const b = e.target.closest("button[data-src]"); if (!b || b.disabled) return;
@@ -296,6 +312,13 @@ export function setState(state) { S = state; if (S.set.stream === undefined) S.s
 export const isLive = () => live;
 export const ownShown = () => !!cur && cur === LIST[0];      // фоном стоит именно свой канал: сундук эфира копится только так
 export const watching = () => shown && (playing || FAKEPLAY);              // стрим сейчас идёт фоном линии
+// Свой стрим идёт фоном именно со звуком: за это всё ×2 (js/core.js, setLoud). Смотрим и настройку, и сам плеер.
+function heard() {
+  if (!sound()) return false;
+  if (FAKEPLAY) return true;
+  try { return !!player && player !== "loading" && !player.getMuted() && player.getVolume() > 0; } catch (e) { return false; }
+}
+export const loud = () => watching() && live && ownShown() && heard();
 export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
   const on = player && player !== "loading";
   let q = null, list = [];

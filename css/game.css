@@ -1175,3 +1175,42 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
     background: linear-gradient(180deg, #e4dbff, #a78bfa); box-shadow: 0 4px 0 #5b3fc4, 0 8px 16px rgba(20,10,60,.5); }
   .jump[hidden] { display: none; }
 }
+
+/* ---------- стрим со звуком — всё ×2 (14.11) ----------
+   Плашка наверху: бонус идёт — золотая; свой стрим в эфире, а звука нет — она же кнопка-предложение. Значок звука в пилюле
+   под картинкой в это время пульсирует. */
+.live.loud { color: #3d1f00; background: linear-gradient(180deg, #ffe58f, #ffb52e); box-shadow: 0 0 18px rgba(255,197,61,.65); }
+.live.loud b { color: #3d1f00; }
+.live.loud .dot { background: #c2410c; }
+.live.offer { cursor: pointer; box-shadow: inset 0 0 0 2px rgba(255,214,102,.75), 0 0 14px rgba(255,197,61,.35); }
+.live.offer:hover { filter: brightness(1.15); }
+.twsnd.offer { animation: tw-offer 900ms ease-in-out infinite alternate; }
+@keyframes tw-offer { from { box-shadow: inset 0 0 0 2px rgba(145,70,255,.6); } to { box-shadow: inset 0 0 0 2px #ffd666, 0 0 14px rgba(255,197,61,.9); color: #fff; } }
+@media (prefers-reduced-motion: reduce) { .twsnd.offer { animation: none; box-shadow: inset 0 0 0 2px #ffd666; } }
+
+/* ---------- топ: кто с какой скоростью растёт (14.11) ----------
+   В строке — столбики прироста рекорда по часам и «+N за час»; самый быстрый подсвечен, над таблицей — он же строкой. */
+.trow { grid-template-columns: 30px minmax(0, 1fr) auto auto; }
+.tgrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tgrow .tbars { display: flex; align-items: flex-end; gap: 2px; height: 26px; flex: none; }
+.tgrow .tbars u { display: block; width: 5px; min-height: 2px; border-radius: 2px; background: rgba(169,155,255,.35); text-decoration: none; }
+.tgrow.up .tbars u { background: linear-gradient(180deg, #7dffbf, #2fb37a); }
+.tgrow.up .tbars u.now { background: linear-gradient(180deg, #fff, #7dffbf); box-shadow: 0 0 8px rgba(125,255,191,.9); }
+.tgrow em { font: 800 12px/1 var(--ui); font-style: normal; white-space: nowrap; color: var(--text-mute); min-width: 74px; text-align: right; }
+.tgrow.on em { color: var(--text-dim); }
+.tgrow.up em { color: #7dffbf; }
+.tgrow.hot .tbars u { background: linear-gradient(180deg, #ffe58f, #ff8a3d); }
+.tgrow.hot .tbars u.now { background: linear-gradient(180deg, #fff, #ffc53d); box-shadow: 0 0 10px rgba(255,197,61,.95); animation: tg-now 700ms ease-in-out infinite alternate; }
+.tgrow.hot em { color: #ffc53d; font-weight: 900; }
+@keyframes tg-now { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+.tfast { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 9px 12px; border-radius: 12px; background: linear-gradient(90deg, rgba(255,197,61,.2), rgba(255,138,61,.06)); box-shadow: inset 0 0 0 1px rgba(255,197,61,.45); }
+.tfast span { font: 800 11px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
+.tfast b { font: 900 15px/1 var(--display); color: var(--text); }
+.tfast em { font: 900 13px/1 var(--ui); font-style: normal; color: #ffc53d; margin-left: auto; }
+@media (max-width: 720px) { .tgrow .tbars { display: none; } .tgrow em { min-width: 0; } }
+@media (min-width: 721px) and (max-width: 1500px) { .tgrow .tbars u { width: 4px; } .tgrow em { min-width: 66px; font-size: 11.5px; } }
+@media (prefers-reduced-motion: reduce) { .tgrow.hot .tbars u.now { animation: none; } }
+/* герой пересел под рисунок (или с него): плитка коротко «вспухает» на новом месте */
+.hg.hg-swap { animation: hg-swap 300ms cubic-bezier(.2,1.4,.3,1); }
+@keyframes hg-swap { 0% { transform: scale(.55) rotate(-8deg); opacity: .2; } 100% { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .hg.hg-swap { animation: none; } }

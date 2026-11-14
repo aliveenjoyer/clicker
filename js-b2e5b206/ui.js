@@ -157,7 +157,7 @@ export function mount(state, hooks) {
   syncRpg(true);
 }
 export function setState(state) {
-  S = state; rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
+  S = state; rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
   itemsKey = rosterKey = roadKey = keepKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0; chestBadge = -1;
   TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
@@ -293,15 +293,84 @@ const FIGS = [
   { name: "Рамка", w: 5, h: 5, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4], [0, 3], [0, 2], [0, 1], [0, 0]]] },
   { name: "Спираль", w: 5, h: 5, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4], [0, 3], [0, 2], [1, 2], [2, 2]]] },
   { name: "Звезда", w: 5, h: 5, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [[4, 0], [3, 1], [2, 2], [1, 3], [0, 4]], [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]]] },
+  // ---- вторая партия (14.11): загогулины, спирали, буквы. Ширина и высота считаются сами ----
+  { name: "Клин", s: [[[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]]] },
+  { name: "Лесенка", s: [[[0, 3], [1, 3], [1, 2], [2, 2], [2, 1], [3, 1], [3, 0]]] },
+  { name: "Крюк", s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2]]] },
+  { name: "Чаша", s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]]] },
+  { name: "Буква Л", s: [[[0, 3], [1, 2], [1, 1], [2, 0], [3, 1], [3, 2], [4, 3]]] },
+  { name: "Гора", s: [[[0, 3], [1, 2], [2, 1], [3, 0], [4, 1], [5, 2], [6, 3]]] },
+  { name: "Пила", s: [[[0, 1], [1, 0], [2, 1], [3, 0], [4, 1], [5, 0], [6, 1]]] },
+  { name: "Восьмёрка", s: [[[1, 0], [2, 1], [1, 2], [0, 3], [1, 4], [2, 3], [1, 2], [0, 1], [1, 0]]] },
+  { name: "Бесконечность", s: [[[1, 0], [2, 1], [3, 2], [4, 1], [3, 0], [2, 1], [1, 2], [0, 1], [1, 0]]] },
+  { name: "Ромбы", s: [[[1, 0], [2, 1], [1, 2], [0, 1], [1, 0]], [[3, 0], [4, 1], [3, 2], [2, 1], [3, 0]]] },
+  { name: "Хлыст", s: [[[0, 3], [1, 2], [2, 1], [3, 0], [4, 0], [4, 1], [3, 2], [2, 2]]] },
+  { name: "Меч", s: [[[1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5]], [[0, 4], [1, 4], [2, 4]]] },
+  { name: "Рыбка", s: [[[0, 1], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 1]], [[3, 1], [4, 0], [4, 1], [4, 2], [3, 1]]] },
+  { name: "Бабочка", s: [[[0, 0], [1, 1], [2, 1], [3, 1], [4, 0], [4, 1], [4, 2], [3, 1]], [[1, 1], [0, 2], [0, 1], [0, 0]]] },
+  { name: "Гантеля", s: [[[0, 0], [0, 1], [0, 2]], [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1]], [[4, 0], [4, 1], [4, 2]]] },
+  { name: "Ключ", s: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]], [[1, 1], [2, 1], [3, 1], [4, 1]], [[3, 1], [3, 2]], [[4, 1], [4, 2]]] },
+  { name: "Большой плюс", s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]]] },
+  { name: "Пирамида", s: [[[2, 0], [1, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 1], [2, 0]], [[2, 0], [2, 1], [2, 2]]] },
+  { name: "Вилка", s: [[[0, 0], [0, 1], [1, 2], [2, 2], [3, 2], [4, 1], [4, 0]], [[2, 0], [2, 1], [2, 2], [2, 3]]] },
+  { name: "Буква Z", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [2, 1], [1, 2], [0, 3], [1, 3], [2, 3], [3, 3]]] },
+  { name: "Буква N", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 3], [3, 2], [3, 1], [3, 0]]] },
+  { name: "Ворота", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]]] },
+  { name: "Петля", s: [[[0, 3], [1, 3], [2, 2], [3, 1], [2, 0], [1, 0], [0, 1], [1, 2], [2, 3], [3, 3]]] },
+  { name: "Шевроны", s: [[[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]], [[0, 1], [1, 2], [2, 3], [3, 2], [4, 1]]] },
+  { name: "Ракета", s: [[[1, 0], [0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [2, 2], [2, 1], [1, 0]], [[0, 3], [0, 4]], [[2, 3], [2, 4]]] },
+  { name: "Буква М", s: [[[0, 3], [0, 2], [0, 1], [0, 0], [1, 1], [2, 2], [3, 1], [4, 0], [4, 1], [4, 2], [4, 3]]] },
+  { name: "Буква W", s: [[[0, 0], [0, 1], [0, 2], [0, 3], [1, 2], [2, 1], [3, 2], [4, 3], [4, 2], [4, 1], [4, 0]]] },
+  { name: "Якорь", s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[1, 1], [2, 1], [3, 1]], [[0, 3], [1, 4], [2, 4], [3, 4], [4, 3]]] },
+  { name: "Лодка", s: [[[2, 0], [2, 1], [2, 2]], [[2, 0], [3, 1], [4, 2]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [3, 3], [2, 3], [1, 3], [0, 2]]] },
+  { name: "Домик", s: [[[0, 4], [0, 3], [0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4]]] },
+  { name: "Кубок", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [3, 2], [2, 3], [1, 2], [0, 1], [0, 0]], [[2, 3], [2, 4]], [[1, 4], [2, 4], [3, 4]]] },
+  { name: "Большая Z", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [3, 1], [2, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]]] },
+  { name: "Змей", s: [[[4, 0], [3, 0], [2, 0], [1, 0], [0, 0], [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
+  { name: "Улитка", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1], [1, 1], [2, 1], [2, 2], [1, 2]]] },
+  { name: "Конверт", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1], [0, 0]], [[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]]] },
 ];
 // Сложность рисунка — по числу плиток: простой (до 5) прибавляет к комбо 1, дальше 2, 3 и 4. Сложные выходят не сразу:
 // пока комбо меньше 3 — только простые, с 3 — до второй ступени, с 10 — до третьей, с 25 — любые; чем сложнее из
 // разрешённых, тем чаще он выпадает.
-for (const f of FIGS) { f.n = new Set(f.s.flat().map((c) => c[0] + ":" + c[1])).size; f.t = f.n <= 5 ? 1 : f.n <= 9 ? 2 : f.n <= 13 ? 3 : 4; }
+for (const f of FIGS) {
+  const pts = f.s.flat();
+  f.w = Math.max(...pts.map((c) => c[0])) + 1; f.h = Math.max(...pts.map((c) => c[1])) + 1;
+  f.n = new Set(pts.map((c) => c[0] + ":" + c[1])).size; f.t = f.n <= 5 ? 1 : f.n <= 9 ? 2 : f.n <= 13 ? 3 : 4;
+}
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
 const figLvl = (k) => (k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0);   // уровень вида и звука — по комбо
 let hurryAt = 0;                                            // на какой секунде уже тикнуло: время на рисунок кончается
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
+// Под рисунок подставляются лучшие герои. Сам рисунок и его место от героев не зависят: когда все герои уже открыты,
+// на отмеченные места встают те, чья покупка сейчас прибавит больше всего урона (в выбранном режиме покупки; веха —
+// намного ценнее; на кого душ не хватает — в конце), а прежние жильцы этих мест пересаживаются на их места.
+// Пока кто-то закрыт — сетка в обычном порядке. Порядок плиток — свойством order, сами плитки на месте.
+let slotOf = null;                                          // slotOf[герой] — место на сетке; null — обычный порядок
+function seat(spots) {                                      // Map: место → герой; .best — сколько лучших героев подставлено
+  const who = new Map(); who.best = 0;
+  let allOpen = true; for (let i = 1; i < TILES; i++) if (!S.lv[i]) { allOpen = false; break; }
+  if (!allOpen) { if (slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; } for (const q of spots) who.set(q, q); return who; }
+  if (!slotOf) { slotOf = Array.from({ length: TILES }, (_, i) => i); rows.forEach((r, h) => { r.root.style.order = h; }); }   // порядок задаём всем плиткам сразу: иначе плитки без него встали бы первыми
+  const heroAt = []; slotOf.forEach((q, h) => { heroAt[q] = h; });
+  const worth = (i) => {
+    const b = C.buyInfo(S, i, buyMode); if (!b.can) return -Infinity;
+    const lv = S.lv[i], dmg = i === 0 ? C.clickLg(S) : S.d.hero[i];
+    return dmg + Math.log10(b.n / Math.max(1, lv)) + (lv + b.n >= C.nextMs(lv) ? Math.log10(C.msGain(lv)) + 2 : 0);   // сколько урона прибавит покупка
+  };
+  const rank = Array.from({ length: TILES }, (_, i) => [i, worth(i)]).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const want = rank.slice(0, spots.length).map((x) => x[0]), wantSet = new Set(want), spotSet = new Set(spots);
+  who.best = rank.slice(0, spots.length).filter((x) => x[1] > -Infinity).length;
+  const incoming = want.filter((h) => !spotSet.has(slotOf[h])), outgoing = spots.filter((q) => !wantSet.has(heroAt[q]));
+  const moved = [];
+  for (let k = 0; k < incoming.length && k < outgoing.length; k++) {
+    const A = incoming[k], a = slotOf[A], b = outgoing[k], B = heroAt[b];
+    slotOf[A] = b; slotOf[B] = a; heroAt[b] = A; heroAt[a] = B; moved.push(A, B);
+  }
+  for (const h of moved) { const t = rows[h].root; t.style.order = slotOf[h]; t.classList.remove("hg-swap"); void t.offsetWidth; t.classList.add("hg-swap"); }
+  for (const q of spots) who.set(q, heroAt[q]);
+  return who;
+}
 function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
   fig = null;
@@ -316,9 +385,11 @@ function spawnFig() {                                       // новый рис
     for (let t = 0; t < 120 && bag.length; t++) {
       const f = bag[Math.floor(Math.random() * bag.length)];
       const ox = Math.floor(Math.random() * (hgC - f.w + 1)), oy = Math.floor(Math.random() * (R - f.h + 1));
-      const segs = f.s.map((st) => st.map(([x, y]) => (oy + y) * hgC + ox + x));
-      if (segs.some((st) => st.some((i) => i >= TILES))) continue;
-      fig = { name: f.name, plus: f.t, segs, cells: [...new Set(segs.flat())], hit: new Set() };
+      const at = f.s.map((st) => st.map(([x, y]) => (oy + y) * hgC + ox + x));   // места на сетке
+      if (at.some((st) => st.some((i) => i >= TILES))) continue;
+      const who = seat([...new Set(at.flat())]);             // кто из героев стоит на этих местах (лучшие подставлены, если все открыты)
+      const segs = at.map((st) => st.map((q) => who.get(q)));
+      fig = { name: f.name, plus: f.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best };
       for (const i of fig.cells) { const d = document.createElement("i"); d.className = "hg-dot"; rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m"); }
       break;
     }
@@ -413,9 +484,20 @@ function drawJump() {
   if (b.hidden !== !show) b.hidden = !show;
   if (show) { const t = down ? "Отряд ↓" : "Бой ↑"; if (b.textContent !== t) b.textContent = t; b.dataset.to = down ? "side" : "top"; }
 }
+// Подарок за вход через Twitch — один раз на игру. Зовётся, когда обмен с сервером закончился: если у аккаунта уже есть
+// игра с другого устройства, сначала приходит она (подарок в ней уже получен), и новичку-устройству второй не выдаётся.
+export function tryGift() { if (ACCT.logged() && !S.gift && C.loginGift(S)) api.settings(); }
+let cloudAt = 0;
+export function cloudNote(was, now, first) {                // игра продолжила прогресс аккаунта с другого устройства
+  slowT = 0;
+  if (!first && Date.now() - cloudAt < 600000) return;      // вкладка, идущая следом за другим устройством, не шлёт подсказку каждую минуту
+  cloudAt = Date.now();
+  if ((now.gen || 0) > was.gen) { note("Прогресс стёрт на всех устройствах", "Его стёрли с другого устройства этого аккаунта Twitch. Игра начата заново", 9000); return; }
+  note("Прогресс аккаунта подхвачен", "С другого устройства: волна " + group(now.best) + (was.w > 1 && was.w !== now.best ? ". Здесь была волна " + group(was.w) : "") + ". Прогресс один на аккаунт Twitch", 9000);
+}
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
-export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t }));
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null } : null; }   // для проверки
+export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s }));
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
 function prevMs(lv) {
   let p = 0;
@@ -963,6 +1045,7 @@ function stepDraft() {                                       // карточки
 export function frame(dt) {
   if (TW.watching()) C.achNote(S, "tw", dt);                // ачивка «Кино и клики»: время игры со стримом на фоне
   C.setWatch(S, TW.watching() && TW.isLive() && TW.ownShown());              // сундук эфира копится, пока свой стрим идёт фоном
+  C.setLoud(S, TW.loud());                                   // свой стрим фоном со звуком — всё ×2
   drawBank(dt);
   stepHold(dt);
   stepDraft();
@@ -981,12 +1064,17 @@ export function onEvent(e) {
     else if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
     slowT = 0; itemsKey = "";
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»
   }
   else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
+  else if (e.t === "gift_login") {                           // подарок за вход через Twitch
+    const names = e.heroes.map((i) => HEROES[i - 1].name).join(", ");
+    note("Подарок за вход через Twitch", e.fresh ? "В отряд пришли " + names + " — сразу " + e.lv + "-го уровня, уже фармят" : names + " получили по " + e.lv + " уровней", 9000);
+    sfx.rank(); slowT = 0;
+  }
   else if (e.t === "fig") {                                  // рисунок на сетке собран
     figChipKey = "?";
     if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время, — множитель вырастет", 4200);
@@ -1048,7 +1136,7 @@ function drawWho() {
 }
 function whoClick() {
   if (!ACCT.logged()) { tab = "top"; drawTabs(); ACCT.login(); slowT = 0; return; }   // вкладка «Топ» покажет код входа
-  openModal("<h2>" + esc(ACCT.who()) + "</h2><p>Ты вошёл через Twitch. Вход нужен для таблицы рекордов и обмена на души RPG. Прогресс игры хранится в этом браузере и к аккаунту не привязан.</p>" +
+  openModal("<h2>" + esc(ACCT.who()) + "</h2><p>Ты вошёл через Twitch. Вход нужен для таблицы рекордов и обмена на души RPG. Прогресс один на аккаунт: зайдёшь с телефона или другого компьютера — он там же. Главным считается то устройство, где сыграно больше.</p>" +
     '<div class="acts split"><button class="btn ghost sm" data-out>Выйти</button><button class="btn" data-x>Готово</button></div>',
   (e) => { const t = e.target.closest("button"); if (!t) return; if (t.dataset.out !== undefined) ACCT.logout(); closeModal(); });
 }
@@ -1101,6 +1189,7 @@ function openSettings() {
 function openWipe() {                                       // стирание — только удержанием: случайный или двойной клик ничего не сотрёт
   openModal("<h2>Стереть весь прогресс?</h2><p>Пропадёт всё, что накоплено: волна " + group(S.best) + ", " + mins(S.stats.played) +
     " игры, наёмники, пепел, реликвии, предметы и их звёзды. Игра начнётся с первой волны.</p>" +
+    (ACCT.logged() ? "<p>Ты вошёл через Twitch, прогресс у аккаунта один — <b>он сотрётся на всех твоих устройствах</b>.</p>" : "") +
     "<p><b>Вернуть стёртое будет нельзя.</b> Настройки это не трогает: для них есть отдельная кнопка «Сбросить настройки».</p>" +
     '<div class="acts split"><button class="btn danger hold" data-wipe-go><span class="fill"></span><span class="lbl">Стереть: держи 3 секунды</span></button><button class="btn gold" data-x>Не стирать</button></div>',
   (e) => { if (e.target.closest("[data-x]")) openSettings(); });
@@ -1127,7 +1216,7 @@ const mulText = (l) => { const v = Math.pow(10, l); return "×" + (v < 1000 ? St
 const porArt = (id) => (C.hasRpgSkin(S, id) ? rpgSkinArt(id) : heroArt(id));
 const porCls = (id) => (C.hasRpgSkin(S, id) ? " skin rar-" + RPG_SKINS[id][1] : "");
 const porTip = (id) => (C.hasRpgSkin(S, id) ? ' title="Скин из RPG «' + RPG_SKINS[id][0] + "»: весь урон ×" + String(C.rpgSkinMul(id)).replace(".", ",") + '"' : "");
-function resetRows() { rows = []; $("mercList").textContent = ""; fig = null; hgFit = ""; rosterKey = ""; slowT = 0; }
+function resetRows() { rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; rosterKey = ""; slowT = 0; }
 function note(cap, text, ms) { achCap = cap; achMsg = text; achUntil = performance.now() + ms; slowT = 0; }
 function airNote() {
   const c = S.chest;
