@@ -577,7 +577,7 @@ function drawFigChip() {                                    // справа в �
   const full = C.figTime(fig.cells.length);
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок прибавляет к комбо (простой — 1, сложные — до 4), а комбо умножает души: комбо 5 — души ×6, " +
     "и так до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Чем выше комбо, тем сложнее рисунки. Не успел собрать следующий — комбо обрывается";
-  el.innerHTML = "<span>«" + fig.name + "» <b>" + fig.hit.size + "/" + fig.cells.length + "</b>" + (fig.plus > 1 ? " <i>+" + fig.plus + "</i>" : "") + "</span>" +
+  el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b>" + (fig.plus > 1 ? " <i>+" + fig.plus + "</i>" : "") + "</span>" +
     (k ? "<span>комбо <b>" + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
 }
@@ -593,9 +593,10 @@ function drawJump() {
 // Подарок за вход через Twitch — один раз на игру. Зовётся, когда обмен с сервером закончился: если у аккаунта уже есть
 // игра с другого устройства, сначала приходит она (подарок в ней уже получен), и новичку-устройству второй не выдаётся.
 export function tryGift() { if (ACCT.logged() && !S.gift && C.loginGift(S)) api.settings(); }
-let cloudAt = 0;
-export function cloudNote(was, now, first) {                // игра продолжила прогресс аккаунта с другого устройства
+let cloudAt = 0, tiredAt = -1e9;
+export function cloudNote(was, now, first, meta) {          // игра продолжила прогресс аккаунта с другого устройства
   slowT = 0;
+  if (meta && meta.fix) { cloudAt = Date.now(); note("Прогресс поправлен", String(meta.fix).slice(0, 300), 15000); return; }   // поправлено вручную (например, после автокликера)
   if (!first && Date.now() - cloudAt < 600000) return;      // вкладка, идущая следом за другим устройством, не шлёт подсказку каждую минуту
   cloudAt = Date.now();
   if ((now.gen || 0) > was.gen) { note("Прогресс стёрт на всех устройствах", "Его стёрли с другого устройства этого аккаунта Twitch. Игра начата заново", 9000); return; }
@@ -1108,6 +1109,11 @@ function drawSlow() {
   const r = C.rateLg(S);
   $("bankRate").innerHTML = r === NEG ? "бей труперов — души твои" : "<b>+" + txt(r) + "</b> в секунду";
   $("stClick").textContent = txt(C.clickLg(S));
+  const tired = C.tireF(S) > 0, sc = $("stClick").parentNode;
+  if (sc.classList.contains("hit-tired") !== tired) {
+    sc.classList.toggle("hit-tired", tired);
+    sc.title = tired ? "Рука устала: удары чаще 6 в секунду дольше двух минут подряд. Сейчас проходит до " + Math.round(C.hitCap(S)) + " ударов в секунду. Передохни — за минуту-две пройдёт" : "";
+  }
   $("stDpsBox").hidden = S.d.dps === NEG;
   if (S.d.dps !== NEG) $("stDps").textContent = txt(C.dpsLg(S)) + "/с";
   $("stCrit").textContent = Math.round(C.critChance(S) * 100) + " %";
@@ -1187,6 +1193,9 @@ export function onEvent(e) {
   else if (e.t === "fig") {                                  // рисунок на сетке собран
     figChipKey = "?";
     if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время, — множитель вырастет", 4200);
+  }
+  else if (e.t === "tired") {                               // усталость руки: объясняем один раз за 10 минут
+    if (performance.now() - tiredAt > 600000) { tiredAt = performance.now(); note("Рука устала", "Удары чаще 6 в секунду дольше двух минут подряд — теперь проходит до 4 в секунду, как при удержании мыши. Передохни — за минуту-две пройдёт", 10000); }
   }
   else if (e.t === "fig_end") {
     if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }

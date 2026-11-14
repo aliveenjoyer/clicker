@@ -71,7 +71,7 @@ const hooks = {
     FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S);
     if (gone > 5) away(gone);
     store();
-    UI.cloudNote(was, S, first);
+    UI.cloudNote(was, S, first, meta);
   },
   defaults() { Object.assign(S.set, { sound: true, hit: true, fig: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
 };

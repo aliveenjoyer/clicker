@@ -78,6 +78,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 .field .stats { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; gap: 26px; align-items: center; justify-content: flex-end; padding: 12px 22px; background: linear-gradient(0deg, rgba(14,13,40,.92), rgba(14,13,40,0)); font-size: 12px; color: var(--text-dim); pointer-events: none; }
 .field .stats b { font: 900 15px var(--ui); color: var(--text); margin-left: 5px; }
+.stats .hit-tired, .stats .hit-tired b { color: #ff8a6b; }   /* рука устала: удар подсвечен, подробности — в подсказке */
 
 .lash { inset: 0; width: 100%; height: 100%; z-index: 5; opacity: 0; }
 .lash.go { animation: lash 150ms ease-out; }
@@ -673,7 +674,7 @@ body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh 
    js/fx.js по ширине поля) — цифры урона уходят на вторую строку. */
 .dock { position: relative; z-index: 0; margin-top: -12px; display: flex; align-items: center; gap: 8px 12px; min-height: 66px; padding: 8px 14px 8px 12px;
   border: 1px solid rgba(169,155,255,.16); border-top: 0; border-radius: 0 0 var(--r-4) var(--r-4); background: linear-gradient(180deg, #23264f, #1b1e42); box-shadow: 0 12px 30px rgba(5,6,20,.45); }
-.dock .dushka { position: relative; left: auto; bottom: auto; z-index: auto; display: block; flex: none; }
+.dock .dushka { position: relative; left: auto; bottom: auto; z-index: auto; display: block; flex: none; height: 48px; }   /* постоянная высота: кадры Душки разной высоты дёргали полосу */
 .dock .dushka img { display: block; width: 34px; }
 .dock .say { position: absolute; left: 0; bottom: calc(100% + 20px); margin: 0; width: max-content; max-width: min(340px, 62vw); }
 .dock .bankwrap { position: relative; z-index: 0; flex: none; min-width: 190px; transform-origin: 0 50%; pointer-events: none; }
@@ -1077,6 +1078,10 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 .hg.hg-hit { --rc: #7dffbf; box-shadow: 0 0 0 2px #2fe07f, 0 0 16px 3px rgba(47,224,127,.8); }
 .hg-figc { flex: none; position: relative; display: flex; align-items: center; gap: 10px; height: 26px; padding: 0 10px; border-radius: 8px; overflow: hidden; font-weight: 800; color: #ffe9a8; background: rgba(255,197,61,.2); box-shadow: inset 0 0 0 2px rgba(255,214,102,.75); }
 .hg-figc[hidden] { display: none; }
+/* длинное название рисунка («Прыжки треугольником») сокращается многоточием, комбо и множитель всегда видны */
+.hg-figc > span { flex: none; }
+.hg-figc > .hg-fw { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.hg-fn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; }
 .hg-figc.on { color: #3d1f00; background: linear-gradient(180deg, #ffe58f, #ffb52e); box-shadow: 0 0 14px rgba(255,197,61,.7); }
 .hg-figc.on b { color: #3d1f00; }
 .hg-figc b { color: #fff; font-weight: 900; }

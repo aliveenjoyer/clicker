@@ -13,6 +13,10 @@ export const CFG = {
   costG: 1.07, whipCost: 5,
   // удар
   clickOfDps: 0.02, critChance: 0.05, critMult: 3, holdRate: 4, clickCap: 15,
+  // усталость руки (15.11, против автокликера): средний темп попыток ударить за ~2 минуты (tireTau — постоянная времени)
+  // выше tireFrom в секунду — потолок ударов плавно опускается и с tireFull доходит до tireCap (как удержание мыши);
+  // темп упал ниже tireFrom − 0,5 — рука отдохнула
+  tireTau: 120, tireFrom: 6, tireFull: 9, tireCap: 4,
   // комбо: порог → множитель удара
   combo: [[10, 1.2, "Разогрев"], [25, 1.5, "Раж"], [50, 2, "Ярость"], [100, 3, "Буйство"], [250, 4, "Легенда"]],
   comboHold: 2.0, comboDrain: 10, groundStrike: 5,

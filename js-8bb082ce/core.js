@@ -29,6 +29,7 @@ export function newState() {
     gift: 0,                                                // подарок за вход через Twitch уже получен
     gen: 0,                                                 // сколько раз прогресс стирали: по нему стирание доходит до всех устройств аккаунта
     fig: { k: 0, left: 0 },                                 // рисунки на сетке отряда: комбо и сколько секунд осталось собрать следующий
+    tire: { r: 0, n: 0, on: false },                        // усталость руки: средний темп попыток ударить (в секунду), попытки с прошлого шага, устала ли
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
     wispKind: "",                                           // что принесёт огонёк, который сейчас на линии
@@ -118,6 +119,12 @@ export function load(text) {
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
   S.fig = { k: 0, left: 0 };                                // комбо рисунков перезагрузку не переживает
+  // усталость руки перезагрузку переживает (иначе её сбрасывали бы обновлением страницы), но за время между
+  // сохранением и загрузкой рука отдыхает
+  const otr = o.tire && typeof o.tire === "object" ? Math.max(0, Math.min(1000, Number(o.tire.r) || 0)) : 0;
+  const rest = Math.max(0, (clock() - (Number(o.at) || clock())) / 1000);
+  S.tire = { r: otr * Math.exp(-rest / CFG.tireTau), n: 0, on: false };
+  S.tire.on = S.tire.r > CFG.tireFrom;
   S.gen = ui(S.gen, 1e6); S.gift = S.gift ? 1 : 0;
   if (o.cycBest === undefined) { S.cycBest = S.best; S.cycRb = S.rb; }      // сохранение до второго слоя: весь прежний путь — первый цикл
   // удержание: всё приводится к виду, который ждёт игра; чего в сохранении нет или что испорчено — как у нового игрока
@@ -409,9 +416,24 @@ function damage(S, dmg, src) {                              // нанести dm
 }
 
 // ---------- удар ----------
+// Усталость руки (15.11). Живой игрок частит секунды, автокликер — часами. Игра считает средний темп попыток ударить
+// за последние пару минут (каждый клик и пробел, даже не прошедший): дольше двух минут подряд чаще 6 в секунду — потолок
+// ударов плавно опускается с 15 до 4 в секунду, как при удержании мыши. Передохнул — за минуту-две проходит.
+// Попытки, а не прошедшие удары: иначе потолок сам сбивал бы темп, и рука то уставала, то отдыхала.
+export const tireF = (S) => Math.max(0, Math.min(1, (S.tire.r - CFG.tireFrom) / (CFG.tireFull - CFG.tireFrom)));
+export const hitCap = (S) => CFG.clickCap - (CFG.clickCap - CFG.tireCap) * tireF(S);
+function stepTire(S, dt) {
+  const T = S.tire;
+  T.r += (T.n / dt - T.r) * (1 - Math.exp(-dt / CFG.tireTau)); T.n = 0;
+  if (!(T.r >= 0) || T.r > 1000) T.r = 0;
+  if (!T.on && T.r > CFG.tireFrom) { T.on = true; ev(S, { t: "tired" }); }
+  else if (T.on && T.r < CFG.tireFrom - 0.5) { T.on = false; ev(S, { t: "rested" }); }
+  if (tireF(S) > 0.5) S.stats.tiredT = (S.stats.tiredT || 0) + dt;   // сколько игрок пробыл уставшим (видно в сохранении)
+}
 export function hit(S, src, weak) {                         // src: click | hold | flurry; weak — попал в слабое место босса
   if (src !== "flurry") {
-    if (S.bucket < 1) return false;                         // не больше 15 ударов в секунду, запас 40
+    S.tire.n += 1;                                          // попытка ударить — для усталости руки
+    if (S.bucket < 1) return false;                         // не больше 15 ударов в секунду (уставшая рука — до 4), запас 40
     S.bucket -= 1; S.stats.clicks += 1; S.idleT = 0;
   }
   if (S.un.combo) {
@@ -449,7 +471,8 @@ export function tick(S, dt, live) {                         // live=false — о
       if (S.chest.airT >= KEEP.airEvery) { S.chest.airT -= KEEP.airEvery; S.chest.air += 1; ev(S, { t: "chest_in", kind: "air" }); }
     }
   }
-  S.bucket = Math.min(40, S.bucket + CFG.clickCap * dt);
+  stepTire(S, dt);
+  S.bucket = Math.min(40, S.bucket + hitCap(S) * dt);
   if (live) {
     S.idleT += dt;
     if (S.idleT >= 300 && S.d.dps !== NEG) feat(S, "weave");
@@ -510,6 +533,7 @@ export function tick(S, dt, live) {                         // live=false — о
 
 // Офлайн: только наёмники, CFG.offEff скорости, не дольше окна. Возвращает, что набежало.
 export function offline(S, seconds) {
+  S.tire.r *= Math.exp(-seconds / CFG.tireTau); S.tire.n = 0;   // пока игрока не было, рука отдыхала
   const cap = CFG.offCap + 3600 * S.rel.urn;
   const eff = S.d.offEff;
   const t = Math.min(seconds, cap) * eff;
