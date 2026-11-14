@@ -261,10 +261,29 @@ const FIGS = [
   { name: "Квадрат", w: 3, h: 3, s: [[[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [0, 1], [0, 0]]] },
   { name: "Круг", w: 4, h: 4, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1], [1, 0]]] },
   { name: "Треугольник", w: 5, h: 3, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
+  { name: "Молния", w: 4, h: 5, s: [[[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4]]] },
+  { name: "Волна", w: 7, h: 3, s: [[[0, 1], [1, 0], [2, 1], [3, 2], [4, 1], [5, 0], [6, 1]]] },
+  { name: "Большой ромб", w: 5, h: 5, s: [[[2, 0], [3, 1], [4, 2], [3, 3], [2, 4], [1, 3], [0, 2], [1, 1], [2, 0]]] },
+  { name: "Стрела", w: 5, h: 5, s: [[[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]], [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]]] },
   { name: "Большой икс", w: 5, h: 5, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [[4, 0], [3, 1], [2, 2], [1, 3], [0, 4]]] },
+  { name: "Двойной икс", w: 7, h: 3, s: [[[0, 0], [1, 1], [2, 2]], [[2, 0], [1, 1], [0, 2]], [[4, 0], [5, 1], [6, 2]], [[6, 0], [5, 1], [4, 2]]] },
   { name: "Сердце", w: 5, h: 5, s: [[[2, 1], [1, 0], [0, 1], [0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [4, 1], [3, 0], [2, 1]]] },
+  { name: "Огромный икс", w: 6, h: 6, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], [[5, 0], [4, 1], [3, 2], [2, 3], [1, 4], [0, 5]]] },
+  { name: "Корона", w: 5, h: 3, s: [[[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [4, 1], [4, 0], [3, 1], [2, 0], [1, 1], [0, 0]]] },
+  { name: "Решётка", w: 4, h: 4, s: [[[1, 0], [1, 1], [1, 2], [1, 3]], [[2, 0], [2, 1], [2, 2], [2, 3]], [[0, 1], [1, 1], [2, 1], [3, 1]], [[0, 2], [1, 2], [2, 2], [3, 2]]] },
   { name: "Большой круг", w: 5, h: 5, s: [[[1, 0], [2, 0], [3, 0], [4, 1], [4, 2], [4, 3], [3, 4], [2, 4], [1, 4], [0, 3], [0, 2], [0, 1], [1, 0]]] },
+  { name: "Мишень", w: 5, h: 5, s: [[[1, 0], [2, 0], [3, 0], [4, 1], [4, 2], [4, 3], [3, 4], [2, 4], [1, 4], [0, 3], [0, 2], [0, 1], [1, 0]], [[2, 2]]] },
+  { name: "Змейка", w: 4, h: 5, s: [[[3, 0], [2, 0], [1, 0], [0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [3, 2], [3, 3], [3, 4], [2, 4], [1, 4], [0, 4]]] },
+  { name: "Песочные часы", w: 5, h: 5, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [3, 1], [2, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [3, 3], [2, 2], [1, 1], [0, 0]]] },
+  { name: "Рамка", w: 5, h: 5, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4], [0, 3], [0, 2], [0, 1], [0, 0]]] },
+  { name: "Спираль", w: 5, h: 5, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4], [0, 3], [0, 2], [1, 2], [2, 2]]] },
+  { name: "Звезда", w: 5, h: 5, s: [[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [[4, 0], [3, 1], [2, 2], [1, 3], [0, 4]], [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]]] },
 ];
+// Сложность рисунка — по числу плиток: простой (до 5) прибавляет к комбо 1, дальше 2, 3 и 4. Сложные выходят не сразу:
+// пока комбо меньше 3 — только простые, с 3 — до второй ступени, с 10 — до третьей, с 25 — любые; чем сложнее из
+// разрешённых, тем чаще он выпадает.
+for (const f of FIGS) { f.n = new Set(f.s.flat().map((c) => c[0] + ":" + c[1])).size; f.t = f.n <= 5 ? 1 : f.n <= 9 ? 2 : f.n <= 13 ? 3 : 4; }
+const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
 function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (!r) continue; r.root.classList.remove("hg-m", "hg-hit"); const d = r.root.querySelector(".hg-dot"); if (d) d.remove(); }
@@ -274,13 +293,15 @@ function spawnFig() {                                       // новый рис
   const was = fig ? fig.name : "";
   clearFig();
   if (figOn && rows.length === TILES && hgC) {
-    const R = Math.max(hgR, Math.ceil(TILES / hgC)), fits = FIGS.filter((f) => f.w <= hgC && f.h <= R && f.name !== was);
-    for (let t = 0; t < 80 && fits.length; t++) {
-      const f = fits[Math.floor(Math.random() * fits.length)];
+    const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k);
+    const fits = FIGS.filter((f) => f.w <= hgC && f.h <= R && f.t <= top && f.name !== was), bag = [];
+    for (const f of fits) for (let q = 0; q < (f.t === top ? 4 : f.t === top - 1 ? 2 : 1); q++) bag.push(f);   // сложные из разрешённых — чаще
+    for (let t = 0; t < 120 && bag.length; t++) {
+      const f = bag[Math.floor(Math.random() * bag.length)];
       const ox = Math.floor(Math.random() * (hgC - f.w + 1)), oy = Math.floor(Math.random() * (R - f.h + 1));
       const segs = f.s.map((st) => st.map(([x, y]) => (oy + y) * hgC + ox + x));
       if (segs.some((st) => st.some((i) => i >= TILES))) continue;
-      fig = { name: f.name, segs, cells: [...new Set(segs.flat())], hit: new Set() };
+      fig = { name: f.name, plus: f.t, segs, cells: [...new Set(segs.flat())], hit: new Set() };
       for (const i of fig.cells) { const d = document.createElement("i"); d.className = "hg-dot"; rows[i].root.appendChild(d); rows[i].root.classList.add("hg-m"); }
       break;
     }
@@ -298,15 +319,53 @@ function drawFigLines() {                                   // линия рис
   svg.setAttribute("width", Math.round(lr.width)); svg.setAttribute("height", Math.round(Math.max(lr.height, list.scrollHeight)));
   // три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама бегущая линия
   const lines = fig.segs.map((st) => st.map(pt).join(" "));
-  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => lines.map((q) => '<polyline class="' + c + '" points="' + q + '"/>').join("")).join("");
+  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => lines.map((q) => (q.indexOf(" ") < 0 ? "" : '<polyline class="' + c + '" points="' + q + '"/>')).join("")).join("");
 }
 function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
   if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
   fig.hit.add(i);
   rows[i].root.classList.add("hg-hit");
   sfx.orb(fig.hit.size - 1);
-  if (fig.hit.size === fig.cells.length) { const n = fig.cells.length, name = fig.name; C.figDone(S, n, name); spawnFig(); slowT = 0; }
+  const dot = rows[i].root.querySelector(".hg-dot");
+  if (dot) { dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick"); }
+  if (fig.hit.size === fig.cells.length) {
+    const done = fig;
+    C.figDone(S, done.cells.length, done.name, done.plus);
+    figBoom(done);
+    spawnFig();
+    if (fig) C.figNext(S, fig.cells.length);                 // время на следующий — по его размеру
+    figChipKey = "?"; drawFigChip(); slowT = 0;
+  }
   else drawFigChip();
+}
+// Рисунок собран: плитки вспыхивают, из них летят искры, поверх вылетает надпись с названием и множителем — чем выше
+// комбо, тем крупнее и горячее. Сетка коротко вздрагивает. Всё живёт внутри сетки героев и само убирается.
+function figBoom(done) {
+  const list = $("mercList"), k = S.fig.k, lr = list.getBoundingClientRect();
+  const lvl = k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0;
+  sfx.tier(Math.min(9, Math.floor(k / 8)));
+  if ([10, 25, 50, 75].some((m) => k >= m && k - done.plus < m) || (k >= CFG.figCap && k - done.plus < CFG.figCap)) sfx.rank();
+  let cx = 0, cy = 0;
+  const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), q = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += q[0]; cy += q[1]; return q; });
+  cx /= pts.length; cy /= pts.length;
+  for (const i of done.cells) { const t = rows[i].root; t.classList.remove("hg-win"); void t.offsetWidth; t.classList.add("hg-win"); }
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const add = (cls, x, y, html) => { const n = document.createElement("div"); n.className = cls; n.style.left = x.toFixed(1) + "px"; n.style.top = y.toFixed(1) + "px"; if (html) n.innerHTML = html; list.appendChild(n); return n; };
+  const per = Math.max(2, Math.min(5, Math.floor((26 + lvl * 8) / pts.length)));
+  for (const q of pts) for (let j = 0; j < per; j++) {
+    const a = Math.random() * 6.283, d = 34 + Math.random() * (60 + lvl * 22), n = add("hg-sp l" + lvl, q[0], q[1]);
+    n.style.setProperty("--dx", (Math.cos(a) * d).toFixed(1) + "px"); n.style.setProperty("--dy", (Math.sin(a) * d).toFixed(1) + "px");
+    n.style.animationDelay = (Math.random() * 60).toFixed(0) + "ms";
+    setTimeout(() => n.remove(), 800);
+  }
+  const ring = add("hg-ring l" + lvl, cx, cy); setTimeout(() => ring.remove(), 700);
+  const W = list.clientWidth, H = Math.max(list.clientHeight, 120);
+  const pop = add("hg-pop l" + lvl, Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)),
+    "<b>" + done.name + "!</b><span>комбо " + group(k) + (done.plus > 1 ? " <i>+" + done.plus + "</i>" : "") + " · души ×" + mulT(C.figMul(S)) + "</span>");
+  const half = Math.max(pop.firstChild.offsetWidth, pop.lastChild.offsetWidth) / 2 + 14;   // длинное название не должно уезжать за край сетки
+  pop.style.left = Math.max(half, Math.min(W - half, cx)).toFixed(1) + "px";
+  setTimeout(() => pop.remove(), 1500);
+  list.classList.remove("hg-boom"); void list.offsetWidth; list.classList.add("hg-boom");
 }
 const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
@@ -317,13 +376,15 @@ function drawFigChip() {                                    // справа в �
   el.hidden = !fig;
   if (!fig) return;
   el.className = "hg-figc" + (k ? " on" : "");
-  el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Каждый собранный подряд рисунок — плюс к комбо и +" + Math.round(CFG.figStep * 100) +
-    " % душ, до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Не собрал следующий за " + CFG.figHold + " секунд — комбо обрывается";
-  el.innerHTML = "<span>«" + fig.name + "» <b>" + fig.hit.size + "/" + fig.cells.length + "</b></span>" +
-    (k ? "<span>комбо <b>" + k + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + CFG.figHold + "s;animation-delay:-" + Math.max(0, CFG.figHold - S.fig.left).toFixed(2) + 's"></i>'
+  const full = C.figTime(fig.cells.length);
+  el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок прибавляет к комбо (простой — 1, сложные — до 4), а комбо умножает души: комбо 5 — души ×6, " +
+    "и так до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Чем выше комбо, тем сложнее рисунки. Не успел собрать следующий — комбо обрывается";
+  el.innerHTML = "<span>«" + fig.name + "» <b>" + fig.hit.size + "/" + fig.cells.length + "</b>" + (fig.plus > 1 ? " <i>+" + fig.plus + "</i>" : "") + "</span>" +
+    (k ? "<span>комбо <b>" + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
 }
-export function figInfo() { return fig ? { name: fig.name, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
+export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t }));
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
 function prevMs(lv) {
   let p = 0;
@@ -894,13 +955,19 @@ export function onEvent(e) {
   }
   else if (e.t === "siege_end") { note("Страж Затмения", e.took > 0 ? "Натиск снял " + pc(e.took) + " %, у Стража осталось " + pc(e.left) + " %" : "Натиск не пробил Стража: бей его, когда забег упёрся в стену и горят бафы", 7000); grdKey = ""; }
   else if (e.t === "fig") {                                  // рисунок на сетке собран
-    sfx.wisp(); figChipKey = "?";
-    if (e.k === 1 || e.k % 5 === 0) note("Рисунок «" + e.name + "» собран", "Комбо " + e.k + ": души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время", 3400);
+    figChipKey = "?";
+    if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: души ×" + mulT(C.figMul(S)) + ". Собери следующий, пока идёт время, — множитель вырастет", 4200);
   }
   else if (e.t === "fig_end") {
     if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }
     figChipKey = "?";
-    note("Комбо рисунков оборвалось", "Было " + e.k + ". Собери рисунок на сетке отряда — начнётся новое", 3400);
+    spawnFig();                                              // сложный рисунок уходит: новое комбо начинается с простого
+    const list = $("mercList");
+    if (list.offsetParent !== null && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const n = document.createElement("div"); n.className = "hg-pop lose"; n.style.left = (list.clientWidth / 2) + "px"; n.style.top = Math.max(60, list.clientHeight / 2) + "px";
+      n.innerHTML = "<b>Комбо оборвалось</b><span>было " + group(e.k) + "</span>"; list.appendChild(n); setTimeout(() => n.remove(), 1500);
+    }
+    if (e.k >= 5) note("Комбо рисунков оборвалось", "Было " + group(e.k) + ". Собери рисунок на сетке отряда — начнётся новое", 3400);
   }
   else if (e.t === "au_on") { note("Автозапуск включён", "Час умения включаются сами. Вернётся " + group(e.pay) + " и ещё +" + group(e.gain) + " " + plural(e.gain, "осколок", "осколка", "осколков") + " сверху", 4200); auKey = ""; eclKey = ""; }
   else if (e.t === "au_gain") { auKey = ""; eclKey = ""; }

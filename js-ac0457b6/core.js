@@ -263,8 +263,10 @@ const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + (S.f
 // Рисунки на сетке отряда (сами рисунки и попадания по плиткам — js/ui.js): собран рисунок — комбо растёт, души идут с
 // прибавкой, пока комбо живо. Время на следующий рисунок идёт только в игре; без игрока комбо обрывается.
 export const figMul = (S) => 1 + CFG.figStep * Math.min(S.fig.k, CFG.figCap);
-export function figDone(S, cells, name) {                    // cells — сколько плиток было в рисунке
-  S.fig.k += 1; S.fig.left = CFG.figHold;
+export const figTime = (cells) => CFG.figHold + CFG.figPer * Math.max(1, cells);   // сколько секунд даётся на рисунок из стольких плиток
+export function figNext(S, cells) { if (S.fig.k > 0) S.fig.left = figTime(cells); }   // появился следующий рисунок: время — по его размеру
+export function figDone(S, cells, name, plus) {              // cells — сколько плиток было в рисунке; plus — сколько он прибавляет к комбо
+  S.fig.k += Math.max(1, Math.floor(plus || 1)); S.fig.left = figTime(cells);
   S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, S.fig.k);
   const r = rateLg(S), loot = r === NEG ? NEG : r + L10(CFG.figLoot * Math.max(1, cells));
   if (loot !== NEG) gain(S, loot);
