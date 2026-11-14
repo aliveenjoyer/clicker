@@ -101,6 +101,11 @@ async function swap(n) {
   else if (d.error === "rate") note = "Слишком часто. Подожди минуту";
   else if (d.error === "age") note = "";
   else if (d.error === "limit") note = "На сегодня норма выбрана";
+  else if (d.error === "ban") note = "Обмен для этого аккаунта закрыт";
+  else if (d.error === "ip") note = "С этого адреса сегодня уже меняли три аккаунта. Обмен — один аккаунт на человека";
+  else if (d.error === "queue") note = "Ещё не дошли прошлые обмены. Подожди, пока колесо хаоса их выдаст";
+  else if (d.error === "noplayer") note = "Колесо не нашло тебя среди игроков RPG. Напиши в чат на стриме и попробуй через " + Math.max(1, Math.ceil((d.npw || 3600) / 60)) + " мин";
+  else if (d.error === "store") note = "Сервер сейчас не может принять обмен. Попробуй позже";
   render(); drawChip();
 }
 

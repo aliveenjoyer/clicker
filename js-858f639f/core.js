@@ -5,12 +5,16 @@ import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
 import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
 
 const N = HEROES.length;
+// Часы правил: Затмение, задания дня, сохранение. По умолчанию — часы компьютера (так считают проверки и бот),
+// в игре main.js подставляет часы, сверенные с сервером (js/clock.js): перевод часов компьютера на правила не влияет.
+let clock = () => Date.now();
+export function setClock(fn) { clock = fn; }
 const L2 = L10(2), L4 = L10(4);
 const LG_KEYS = ["souls", "life", "run", "ash", "ashAll", "altarPaid", "ashLife"];   // поля-логарифмы: в сохранении NEG пишется как null
 
 export function newState() {
   const S = {
-    v: 1, at: Date.now(),
+    v: 1, at: clock(),
     souls: NEG, life: NEG, run: NEG,
     lv: new Array(N + 1).fill(0), lvRun: 0,
     z: 1, zrec: 1, best: 1, kills: 0, hp: 1, mode: "push", wall: false, bossT: 0,
@@ -57,7 +61,7 @@ export function newState() {
 export function save(S) {
   const o = {};
   for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "loud" && k !== "sess" && k !== "achT") o[k] = S[k];
-  o.at = Date.now();
+  o.at = clock();
   return JSON.stringify(o, (k, v) => (v === -Infinity ? null : v));
 }
 export function load(text) {
@@ -66,9 +70,32 @@ export function load(text) {
   try { o = JSON.parse(text); } catch (e) { return S; }
   if (!o || o.v !== 1) return S;
   for (const k in o) {
-    if (k === "rel" || k === "cd" || k === "act" || k === "set" || k === "stats" || k === "statues" || k === "album") Object.assign(S[k], o[k]);
+    if (k === "ev" || k === "d" || k === "live" || k === "watch" || k === "loud" || k === "sess" || k === "achT") continue;   // то, что живёт только в этом заходе
+    if (k === "rel" || k === "cd" || k === "act" || k === "set" || k === "stats" || k === "statues" || k === "album") { if (o[k] && typeof o[k] === "object") Object.assign(S[k], o[k]); }
     else S[k] = o[k];
   }
+  // Явная чушь из правленого сохранения приводится к тому, что игра может дать: уровни — целые и не меньше нуля,
+  // реликвии и предметы — до своих потолков, ачивки — только существующие, бафы и умения — не дольше часа.
+  const int = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+  S.lv = (Array.isArray(S.lv) ? S.lv : []).slice(0, N + 1).map((v) => int(v, 1e9));
+  for (const r of RELICS) S.rel[r.id] = int(S.rel[r.id], r.cap || 1000);
+  for (const k in S.rel) if (!RELICS.some((r) => r.id === k)) delete S.rel[k];
+  const oi = S.items && typeof S.items === "object" ? S.items : {};
+  S.items = {};
+  for (const x of ITEMS) { const v = int(oi[x.id], x.max || ITEM_MAX); if (v) S.items[x.id] = v; }
+  const okAch = new Set(ACH_SINGLE.map((a) => a.id));
+  for (const l of ACH_LADDERS) for (let i = 0; i < l.at.length; i++) okAch.add(l.id + ":" + i);
+  const oach = S.ach && typeof S.ach === "object" ? S.ach : {};
+  S.ach = {};
+  for (const k in oach) if (okAch.has(k) && oach[k]) S.ach[k] = oach[k];
+  for (const k of ["cd", "act"]) for (const id in S[k]) S[k][id] = Math.max(0, Math.min(3600, Number(S[k][id]) || 0));
+  const ob = S.buff && typeof S.buff === "object" ? S.buff : {};
+  S.buff = {};
+  for (const id in ob) if (BUFFS[id]) { const v = Math.max(0, Math.min(1800, Number(ob[id]) || 0)); if (v) S.buff[id] = v; }
+  for (const k in S.statues) S.statues[k] = int(S.statues[k], 1e6);
+  S.best = Math.max(1, int(S.best, 1e7)); S.zrec = Math.max(1, Math.min(S.best, int(S.zrec, 1e7))); S.z = Math.max(1, Math.min(S.zrec, int(S.z, 1e7)));
+  S.cycBest = Math.max(1, Math.min(S.best, int(S.cycBest === undefined ? S.best : S.cycBest, 1e7)));
+  S.rb = int(S.rb, 1e7);
   for (const k of LG_KEYS) if (S[k] === null || S[k] === undefined) S[k] = NEG;
   S.ash = ashInt(S.ash); S.ashAll = ashInt(S.ashAll);       // пепел — целый: дробные остатки прежних версий срезаются
   if (S.lv.length < N + 1) S.lv = S.lv.concat(new Array(N + 1 - S.lv.length).fill(0));
@@ -79,6 +106,7 @@ export function load(text) {
   S.shards = Math.max(0, Math.floor(Number(S.shards) || 0)); S.ecl = Math.max(0, Math.floor(Number(S.ecl) || 0));
   S.chaos = Math.max(0, Math.min(CFG.chaosMax, Math.floor(Number(S.chaos) || 0)));
   S.eclAt = Math.max(0, Number(S.eclAt) || 0);
+  if (S.ecl > 0 && !S.eclAt) S.eclAt = clock();             // Затмение было, а когда — стёрто: ждать сутки от загрузки
   S.pat = {};
   for (const p of PATRONS) S.pat[p.id] = Math.max(0, Math.min(p.cap || 100000, Math.floor(Number(o.pat && typeof o.pat === "object" ? o.pat[p.id] : 0) || 0)));
   // автозапуск умений: час, который идёт, — только если числа сходятся (иначе как будто его не было: осколки свободны).
@@ -545,7 +573,7 @@ export function useSkill(S, id) {
   const s = SKILLS.find((x) => x.id === id);
   if (!s || !skillOpen(S, s) || S.cd[id] > 0) return false;
   S.cd[id] = s.cd * S.d.cdMul;
-  if (id === "siege") S.grd.dealt = NEG;                    // «Натиск»: счёт урона по Стражу с нуля
+  if (id === "siege") { if (S.act.siege > 0) siegeEnd(S); S.grd.dealt = NEG; }   // «Натиск»: идущий засчитывается, счёт урона по Стражу с нуля
   if (id === "rewind") {
     const r = rateLg(S);
     if (r !== NEG) { const l = r + L10(3600); gain(S, l); ev(S, { t: "gift", loot: l, title: "Перемотка" }); }
@@ -867,7 +895,7 @@ export const eclOpen = (S) => S.best > CFG.eclWave;
 // Затмение приходит раз в сутки: сколько секунд ждать следующего. Часы перевели назад — ждать от нового времени.
 export function eclWait(S, now) {
   if (!S.eclAt) return 0;
-  const t = now === undefined ? Date.now() : now;
+  const t = now === undefined ? clock() : now;
   if (t < S.eclAt) S.eclAt = t;
   return Math.max(0, CFG.eclCool - (t - S.eclAt) / 1000);
 }
@@ -933,7 +961,7 @@ export function buyPatron(S, id) {
 export function eclipse(S, now) {
   const n = shardsGain(S);
   if (!eclOpen(S) || n < 1 || eclWait(S, now) > 0) return false;
-  S.eclAt = now === undefined ? Date.now() : now;
+  S.eclAt = now === undefined ? clock() : now;
   const g = ashGain(S);
   if (g !== NEG) S.ashLife = lsum(S.ashLife, g);
   S.shards += n; S.ecl += 1;
@@ -969,7 +997,7 @@ export function buyRelic(S, id) {
 // Всё это не сбрасывается ни возрождением, ни Затмением. Числа — KEEP в data.js.
 export function setWatch(S, v) { S.watch = !!v; }           // стрим aliveenjoyer идёт и включён фоном в игре (js/stream.js)
 export const dayNo = (now) => {                              // номер дня по часам игрока
-  const d = now === undefined ? new Date() : new Date(now);
+  const d = new Date(now === undefined ? clock() : now);
   return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
 };
 export function taskValue(S, src) {                         // счётчики заданий: растут всю игру, возрождение их не трогает
@@ -1161,7 +1189,7 @@ export function checkAch(S, quiet) {                         // выдать в�
   st.hitMax = Math.max(st.hitMax || 0, clickLg(S));
   if (S.d.dps !== NEG) st.dpsMax = Math.max(st.dpsMax || 0, dpsLg(S));
   if (S.souls !== NEG) st.bankMax = Math.max(st.bankMax || 0, S.souls);
-  const now = new Date(), day = now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
+  const now = new Date(clock()), day = now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
   if (st.day !== day) { st.day = day; st.days = (st.days || 0) + 1; }
 
   let got = 0;

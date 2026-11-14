@@ -111,7 +111,7 @@ function draw(force) {
     const out = el("button", "linkbtn", "выйти"); out.dataset.logout = ""; foot.appendChild(out);
   } else foot.appendChild(el("span", "", "Игроков в таблице: " + total));
   box.appendChild(foot);
-  if (behind) box.appendChild(el("p", "note", "В таблице пока учтено " + soulsTxt(got) + " душ и волна " + group(best) + ". Сервер принимает рост не быстрее 360 волн в час и скоро догонит."));
+  if (behind) box.appendChild(el("p", "note", "В таблице пока учтено " + soulsTxt(got) + " душ и волна " + group(best) + ". Сервер принимает рост рекорда постепенно, по темпу Затмений, и скоро догонит."));
   box.appendChild(el("p", "note", "Место — по душам, заработанным за всё время. Возрождения их не сбрасывают, покупки не уменьшают. В таблицу попадают те, кто вошёл через Twitch."));
 }
 

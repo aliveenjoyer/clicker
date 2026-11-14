@@ -10,6 +10,11 @@ import { txt, lg } from "./num.js";
 import * as TW from "./stream.js";
 import * as TELE from "./tele.js";
 import * as CLOUD from "./cloud.js";
+import * as CLOCK from "./clock.js";
+// Цикл игры идёт по своим, взятым при загрузке, ссылкам на requestAnimationFrame и часы: подмена их из консоли
+// потом игру не ускоряет.
+const RAF = window.requestAnimationFrame.bind(window);
+C.setClock(CLOCK.now);
 
 const KEY = "hlystopad.save.v1";
 const STEP = 1 / 60;
@@ -61,7 +66,7 @@ const hooks = {
     const was = { w: S.best, p: S.stats.played || 0, gen: S.gen || 0 };
     N.set = S.set;                                          // настройки у каждого устройства свои
     // сколько игра простояла — по часам сервера (когда он её сохранил и сколько на нём сейчас), а не по часам двух разных устройств
-    const gone = meta && meta.now && meta.t ? Math.max(0, meta.now - meta.t) : Math.max(0, (Date.now() - (N.at || Date.now())) / 1000);
+    const gone = meta && meta.now && meta.t ? Math.max(0, meta.now - meta.t) : CLOCK.ready() ? Math.max(0, (CLOCK.now() - (N.at || CLOCK.now())) / 1000) : 0;
     S = N;
     FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S);
     if (gone > 5) away(gone);
@@ -78,12 +83,17 @@ function drain() {
 }
 
 function away(seconds) {                                    // вернулись: меньше минуты — догоняем, больше — офлайн
-  if (seconds < 60) { for (let t = 0; t < seconds; t += 0.5) C.tick(S, 0.5, true); S.ev = S.ev.filter((e) => e.t === "unlock"); return; }
+  if (seconds < 60) {                                       // сундук эфира копится, только пока игра на экране
+    const w = S.watch; S.watch = false;
+    for (let t = 0; t < seconds; t += 0.5) C.tick(S, 0.5, true);
+    S.watch = w; S.ev = S.ev.filter((e) => e.t === "unlock"); return;
+  }
   const o = C.offline(S, seconds);
   if (o && o.gained > -1) UI.showOffline(o);
 }
 
-function loop(ts) {
+function loop() {
+  const ts = CLOCK.perf();                                  // время кадра — по своим часам, а не по тому, что передал браузер
   const real = (ts - last) / 1000 || 0;
   const dt = Math.min(0.1, real);
   last = ts;
@@ -99,15 +109,16 @@ function loop(ts) {
   UI.frame(dt);
   saveT += dt;
   if (saveT > 10) { saveT = 0; store(); }
-  requestAnimationFrame(loop);
+  RAF(loop);
 }
 
 async function boot() {
-  await loadArt();
+  await Promise.all([loadArt(), CLOCK.first(2500)]);        // часы сверяются с сервером, пока грузятся картинки
   S = restore();
   if (Q.has("faction")) S.set.faction = Q.get("faction");
   if (Q.has("mute")) S.set.sound = false;                   // ?mute=1 — тихая проверка
-  const gone = (Date.now() - (S.at || Date.now())) / 1000;
+  // офлайн-доход — только по часам сервера: без сверки (нет связи) его нет, чтобы перевод часов ничего не давал
+  const gone = CLOCK.ready() ? (CLOCK.now() - (S.at || CLOCK.now())) / 1000 : 0;
   UI.mount(S, hooks); FX.mount(S); UI.applySettings();
   TELE.mount({ state: () => S, tab: UI.curTab, watching: TW.watching });   // наблюдение: обезличенная сводка раз в минуту
   CLOUD.mount({ state: () => S, adopt: hooks.adopt, device: TELE.deviceId, settled: UI.tryGift });   // прогресс один на аккаунт Twitch; подарок за вход — когда ясно, чья игра главная
@@ -118,6 +129,7 @@ async function boot() {
 
   const field = FX.fieldEl();
   const strike = (e) => {                                   // удар: по линии или по труперу, вынесенному со страницы
+    if (e && e.isTrusted === false && !LOCAL) return;        // события из консоли не бьют (проверки на своём компьютере — бьют)
     audioUnlock(); TW.nudge();
     if (e.target.closest("#draft")) return;                 // идёт выбор предмета — удары не считаются
     if (TW.isFront() || e.target.closest("#twplay, #twback, #twctl, .foe-tools")) return;   // плеер стрима выведен вперёд
@@ -137,15 +149,25 @@ async function boot() {
   window.addEventListener("blur", () => { down = false; });
   field.addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("keydown", (e) => {
-    if (e.repeat || e.target.closest("input, textarea")) return;
+    if (e.repeat || e.target.closest("input, textarea") || (!e.isTrusted && !LOCAL)) return;
     if (e.code === "Space") { e.preventDefault(); audioUnlock(); C.hit(S, "click"); }
     else if (/^Digit[1-7]$/.test(e.code)) { const s = ["flurry", "rage", "greed", "mark", "ult", "rewind", "siege"][Number(e.code.slice(5)) - 1]; if (!C.useSkill(S, s)) sfx.deny(); }
     else if (e.code === "Escape") UI.closeModal();
   });
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { hiddenAt = Date.now(); store(); }
-    else if (hiddenAt) { away((Date.now() - hiddenAt) / 1000); hiddenAt = 0; last = performance.now(); }
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden) { hiddenAt = CLOCK.now(); store(); return; }
+    if (!hiddenAt) return;
+    const from = hiddenAt; hiddenAt = 0;
+    await CLOCK.sync();                                     // компьютер мог спать: время — с сервера
+    away(CLOCK.ready() ? Math.max(0, (CLOCK.now() - from) / 1000) : 0); last = CLOCK.perf();
   });
+  // Новая версия игры: свернутая вкладка обновляется сама (прогресс сохранён), открытая — просит обновить страницу.
+  // Заодно часы раз в 5 минут сверяются заново.
+  setInterval(async () => {
+    const b = await CLOCK.sync();
+    if (!b || !CLOCK.builtAs() || b === CLOCK.builtAs()) return;
+    if (document.hidden) { store(); location.reload(); } else UI.updateNote();
+  }, 300000);
   window.addEventListener("pagehide", store);
 
   if (LOCAL && Q.has("dev")) {                                       // ?dev=1 — ручки для проверки: __dev.give(30), __dev.wave(49)
@@ -163,8 +185,8 @@ async function boot() {
     if (Q.has("give")) window.__dev.give(lg(Number(Q.get("give"))));
     if (Q.has("wave")) window.__dev.wave(Number(Q.get("wave")));
   }
-  last = performance.now();
-  requestAnimationFrame(loop);
+  last = CLOCK.perf();
+  RAF(loop);
   welcome();
 }
 boot();

@@ -10,6 +10,8 @@ import * as TW from "./stream.js";
 import * as TOP from "./top.js";
 import * as SWAP from "./swap.js";
 import * as ACCT from "./acct.js";
+import * as CLOCK from "./clock.js";
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // проверки на своём компьютере шлют события из кода
 
 const $ = (id) => document.getElementById(id);
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -71,18 +73,19 @@ export function mount(state, hooks) {
       sw = null; dotAt = null; tapN = 0;
     };
     list.addEventListener("click", (e) => {
+      if (!e.isTrusted && !LOCAL) return;                    // нажатия из консоли героев не покупают
       if (swipeDone) { swipeDone = false; return; }          // мышью всё уже куплено: по нажатию или по пути свайпа
       buyTile(e.target.closest(".hg"), true);
     });
     list.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;                            // мышь (левая кнопка), палец и перо — одинаково
+      if (e.button !== 0 || (!e.isTrusted && !LOCAL)) return;   // мышь (левая кнопка), палец и перо — одинаково
       const b = e.target.closest(".hg");
       tapN = 0;
       sw = { last: b, used: !!b };
       if (b) buyTile(b, true);                               // покупка сразу, по нажатию
     });
     window.addEventListener("pointermove", (e) => {
-      if (!sw) return;
+      if (!sw || (!e.isTrusted && !LOCAL)) return;
       if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
       trail(e.clientX, e.clientY);
       const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .hg") : null;
@@ -495,6 +498,7 @@ export function cloudNote(was, now, first) {                // игра прод
   if ((now.gen || 0) > was.gen) { note("Прогресс стёрт на всех устройствах", "Его стёрли с другого устройства этого аккаунта Twitch. Игра начата заново", 9000); return; }
   note("Прогресс аккаунта подхвачен", "С другого устройства: волна " + group(now.best) + (was.w > 1 && was.w !== now.best ? ". Здесь была волна " + group(was.w) : "") + ". Прогресс один на аккаунт Twitch", 9000);
 }
+export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
 export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s }));
@@ -865,6 +869,7 @@ function drawEclipse() {
 function openEclipse() {                                     // окно Затмения: что сгорит, что останется; само действие — удержанием
   const n = C.shardsGain(S);
   if (!C.eclOpen(S) || n < 1 || C.eclWait(S) > 0) return;
+  if (!CLOCK.ready()) { note("Сверяю время с сервером", "Затмение идёт по часам сервера. Проверь связь и нажми ещё раз", 6000); CLOCK.sync(); return; }
   const step = C.chaosOpen(S) && C.chaosStep(S) < CFG.chaosMax;
   let t0 = 0, timer = 0;
   const m = openModal('<img class="eclart" alt="" src="' + art("ev-rift") + '"><h2>Затмение</h2><div class="bignum ecl">+' + group(n) + " " + plural(n, "осколок", "осколка", "осколков") + "</div>" +
