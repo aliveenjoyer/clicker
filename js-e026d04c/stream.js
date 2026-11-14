@@ -32,9 +32,18 @@ const vol = () => Math.max(0, Math.min(100, Number(S.set.twVol === undefined ? 5
 const sound = () => !!S.set.twSound && vol() > 0;
 function applySound() {                                      // передать плееру громкость и «без звука»
   if (!player || player === "loading") return;
-  try { player.setVolume(vol() / 100); player.setMuted(!sound()); } catch (e) { /* плеер ещё не готов */ }
+  const on = sound() && !hush;
+  try { player.setVolume(vol() / 100); if (on && player.getMuted()) unmutedAt = performance.now(); player.setMuted(!on); } catch (e) { /* плеер ещё не готов */ }
 }
 let playing = false, askT = 0;                              // идёт ли показ; когда предложить кнопку «Включить стрим»
+// Сторож плеера. Twitch перед показом крутит рекламу, и после неё плеер часто встаёт на паузу или так и не стартует, а своих
+// кнопок у него нет (controls: false) — раньше спасала только кнопка «Включить стрим». Теперь сам плеер подталкивается:
+//   — встал на паузу, а игрок его не останавливал (плеер не выведен вперёд) — через 0,6 с и дальше раз в 2 с play();
+//   — браузер не пускает показ со звуком без нажатия — показ идёт без звука (hush), звук вернётся с первым ударом по линии;
+//   — картинка не пошла за 90 секунд (ни показа, ни движения времени; реклама столько обычно не длится) — плеер создаётся
+//     заново, не чаще двух раз за 15 минут.
+const STUCK_MS = Number(Q.get("stuckms")) || 90000, REBORN_MAX = 2, REBORN_WIN = 15 * 60000;   // ?stuckms= — только на своём компьютере, для проверки
+let hush = false, unmutedAt = 0, watchT = 0, movedAt = 0, lastPos = -1, reborn = [];
 // Качество стрима: S.set.twQ — что выбрал игрок: "auto" или группа Twitch ("chunked" — исходное, "720p60", "480p30"…),
 // S.set.twQh — высота этого качества: у другого канала ступени могут называться иначе, тогда берём ближайшую не выше.
 let quals = [], setQ = "", menuOpen = false;                // что предлагает плеер; что ему уже поставлено
@@ -99,6 +108,7 @@ const ICON_OFF = '<svg viewBox="0 0 24 24" width="20" height="20"><path fill="cu
 const nice = (ch) => NAMES[ch] || ch;
 
 function loadScript() {
+  if (!scriptP && window.Twitch && window.Twitch.Player) scriptP = Promise.resolve();   // плеер уже есть на странице (подставной в проверке)
   if (!scriptP) {
     scriptP = new Promise((ok, bad) => {
       const s = document.createElement("script");
@@ -183,9 +193,34 @@ async function start() {
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
-  player.addEventListener(T.PAUSE, () => { playing = false; askT = performance.now() + 1500; draw(); });
-  playing = false; askT = performance.now() + 5000;
+  player.addEventListener(T.PLAYING, () => { playing = true; movedAt = performance.now(); front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
+  player.addEventListener(T.PAUSE, () => {
+    playing = false; askT = performance.now() + 4000;
+    if (performance.now() - unmutedAt < 3000) hush = true;   // включили звук — и браузер тут же остановил показ: дальше без звука до нажатия
+    setTimeout(resume, 600); draw();
+  });
+  if (T.PLAYBACK_BLOCKED) player.addEventListener(T.PLAYBACK_BLOCKED, () => { hush = true; setTimeout(resume, 300); });
+  playing = false; askT = performance.now() + 5000; movedAt = performance.now(); lastPos = -1;
+  if (!watchT) watchT = setInterval(guard, 2000);
+}
+function resume() {                                          // плеер на паузе, а игрок его не ставил — запустить
+  if (!shown || !player || player === "loading" || isFront()) return;
+  try { if (player.isPaused()) { if (hush) player.setMuted(true); player.play(); } } catch (e) { /* плеер ещё грузится */ }
+}
+function guard() {
+  if (!shown || !player || player === "loading" || isFront()) return;
+  const now = performance.now();
+  if (document.hidden) { movedAt = now; return; }            // вкладка свёрнута: ничего не трогаем и не копим «застой»
+  let paused = true, pos = -1;
+  try { paused = player.isPaused(); pos = player.getCurrentTime(); } catch (e) { return; }
+  if ((playing && !paused) || pos !== lastPos) movedAt = now;
+  lastPos = pos;
+  if (paused) resume();
+  if (now - movedAt > STUCK_MS) {                            // так и не пошёл: создать плеер заново
+    movedAt = now;
+    reborn = reborn.filter((t) => now - t < REBORN_WIN);
+    if (reborn.length < REBORN_MAX) { reborn.push(now); stop(); start(); }
+  }
 }
 function stop() {
   if (player && player !== "loading") { try { player.pause(); } catch (e) { /* плеер уже снят */ } }
@@ -263,7 +298,7 @@ export function mount(state, h) {
   });
   $("live").addEventListener("click", () => {                // предложение в плашке наверху: включить свой стрим фоном со звуком
     if (!live || loud() || !fits()) return;
-    S.set.stream = true; S.set.twPick = "auto"; S.set.twSound = true; if (vol() === 0) S.set.twVol = 50;
+    S.set.stream = true; S.set.twPick = "auto"; S.set.twSound = true; if (vol() === 0) S.set.twVol = 50; hush = false;
     hooks.changed(); setChannel(LIST[0]); sync(); applySound(); draw();
   });
   $("twSrc").addEventListener("click", (e) => {               // выбор: рекомендуемый канал или LoFi-музыка
@@ -283,14 +318,14 @@ export function mount(state, h) {
   $("btnStreamSound").addEventListener("click", () => {      // значок: звук включить или выключить
     const on = !sound();
     if (on && vol() === 0) S.set.twVol = 50;
-    S.set.twSound = on;
+    S.set.twSound = on; hush = false;
     applySound(); hooks.changed(); draw();
   });
   const sl = $("twVol");
   sl.addEventListener("input", () => {                       // ползунок: громкость; в ноль — без звука
     const v = Math.max(0, Math.min(100, Number(sl.value) || 0));
     if (v > 0) S.set.twVol = v;
-    S.set.twSound = v > 0;
+    S.set.twSound = v > 0; hush = false;
     applySound(); draw();
   });
   sl.addEventListener("change", () => hooks.changed());
@@ -328,5 +363,7 @@ export function info() {                                     // для пров�
 // Браузер не даёт плееру стартовать без действия человека: первый же удар по линии запускает показ.
 export function nudge() {
   if (!shown || !player || player === "loading") return;
+  if (hush) { hush = false; applySound(); }                  // удар — это нажатие: теперь браузер пустит и звук
   try { if (player.isPaused()) player.play(); } catch (e) { /* плеер ещё грузится */ }
 }
+export const guardInfo = () => ({ hush, reborn: reborn.length, stuck: Math.round(performance.now() - movedAt) });   // для проверки
