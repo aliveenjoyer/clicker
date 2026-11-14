@@ -50,7 +50,7 @@ const hooks = {
     FX.setState(S); UI.setState(S); UI.applySettings(); C.checkUnlocks(S); store();
     document.getElementById("hint").hidden = false;
   },
-  defaults() { Object.assign(S.set, { sound: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
+  defaults() { Object.assign(S.set, { sound: true, hit: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
 };
 
 function drain() {

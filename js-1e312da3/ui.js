@@ -3,7 +3,7 @@
 import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
-import { sfx, setSound } from "./audio.js";
+import { sfx, setSound, setHitSound } from "./audio.js";
 import { art, heroArt, applyArt, tskinArt, rpgSkinArt } from "./art.js";
 import * as FX from "./fx.js";
 import * as TW from "./stream.js";
@@ -55,7 +55,7 @@ export function mount(state, hooks) {
       const how = loud ? "gridTap" : "gridSw"; S.stats[how] = (S.stats[how] || 0) + 1;   // сколько куплено нажатием и сколько свайпом (для наблюдения)
       return true;
     };
-    let sw = null, dotAt = null;      // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
+    let sw = null, dotAt = null, swipeT = 0;   // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
     const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над сеткой героев
       if (dotAt && Math.hypot(x - dotAt[0], y - dotAt[1]) < 5) return;
       dotAt = [x, y];
@@ -66,13 +66,16 @@ export function mount(state, hooks) {
       document.body.appendChild(d);
       d.addEventListener("animationend", () => d.remove());
     };
-    const end = () => { if (sw && sw.used) { swipeDone = true; setTimeout(() => { swipeDone = false; }, 0); } sw = null; dotAt = null; tapN = 0; };
+    const end = (e) => {                                     // щелчок после пальца приходит не сразу — ждём его дольше
+      if (sw && sw.used) { swipeDone = true; clearTimeout(swipeT); swipeT = setTimeout(() => { swipeDone = false; }, e && e.pointerType && e.pointerType !== "mouse" ? 450 : 0); }
+      sw = null; dotAt = null; tapN = 0;
+    };
     list.addEventListener("click", (e) => {
       if (swipeDone) { swipeDone = false; return; }          // мышью всё уже куплено: по нажатию или по пути свайпа
       buyTile(e.target.closest(".hg"), true);
     });
     list.addEventListener("pointerdown", (e) => {
-      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      if (e.button !== 0) return;                            // мышь (левая кнопка), палец и перо — одинаково
       const b = e.target.closest(".hg");
       tapN = 0;
       sw = { last: b, used: !!b };
@@ -90,6 +93,9 @@ export function mount(state, hooks) {
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
     list.addEventListener("dragstart", (e) => e.preventDefault());
+    // Палец на сетке рисует, а не листает страницу. Одного touch-action мало: пока плитка ещё «щёлкает» после прошлого
+    // рисунка, браузер успевал начать прокрутку, и рисунок срывался. Листают за всё, что вокруг сетки, и кнопкой в углу.
+    for (const t of ["touchstart", "touchmove"]) list.addEventListener(t, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
     // строка над сеткой рассказывает про героя под курсором (или про того, кого только что купили)
     list.addEventListener("pointerover", (e) => { const b = e.target.closest(".hg"); if (b) { hgShow = Number(b.dataset.i); drawInfo(); } });
     list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); } });
@@ -97,6 +103,11 @@ export function mount(state, hooks) {
     window.addEventListener("resize", fitGrid);
   }
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
+  $("btnJump").addEventListener("click", (e) => {
+    if (e.currentTarget.dataset.to === "side") $("side").scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  window.addEventListener("scroll", drawJump, { passive: true });
+  window.addEventListener("resize", drawJump);
   $("skillbar").addEventListener("click", (e) => { const s = e.target.closest(".skill"); if (s && !s.classList.contains("lock")) { if (!C.useSkill(S, s.dataset.id)) sfx.deny(); slowT = 0; } });
   $("relicList").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.classList.contains("off")) { if (C.buyRelic(S, b.dataset.id)) { sfx.buy(); slowT = 0; } } });
   $("patronList").addEventListener("click", (e) => {        // покровитель: «+1» или «макс» — сколько хватит осколков
@@ -231,7 +242,7 @@ function fitGrid() {
   if (!list || !rows.length || list.offsetParent === null) return;
   const cs = getComputedStyle(list), gap = parseFloat(cs.columnGap) || 6;
   const W = list.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = list.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  const flow = matchMedia("(max-width: 720px)").matches || H < 160;
+  const flow = H < 160;                                      // у сетки нет своей высоты — плитки идут потоком
   let c = 0, r = 0, size = 0;
   if (flow) { c = Math.max(4, Math.min(9, Math.round(W / 76))); r = Math.ceil(TILES / c); size = (W - gap * (c - 1)) / c; }
   else for (let k = 4; k <= 16; k++) {
@@ -393,6 +404,15 @@ function drawFigChip() {                                    // справа в �
     (k ? "<span>комбо <b>" + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
 }
+// Телефон: кнопка в углу водит между боем (верх страницы) и отрядом — сетка занимает экран целиком и сама страницу не листает.
+function drawJump() {
+  const b = $("btnJump"); if (!b) return;
+  const phone = matchMedia("(max-width: 720px)").matches, top = $("side").getBoundingClientRect().top;
+  const down = top > window.innerHeight * 0.55, up = top < 80;
+  const show = phone && tab !== "chat" && (down || up) && $("veil").hidden;   // над чатом Twitch ничего висеть не должно
+  if (b.hidden !== !show) b.hidden = !show;
+  if (show) { const t = down ? "Отряд ↓" : "Бой ↑"; if (b.textContent !== t) b.textContent = t; b.dataset.to = down ? "side" : "top"; }
+}
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
 export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t }));
@@ -428,7 +448,7 @@ function drawRows() {
 function drawInfo() {
   const i = hgShow, shown = C.heroesShown(S);
   let h;
-  if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(hover: none)").matches ? "Нажми на героя — купишь уровень" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
+  if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(pointer: coarse)").matches ? "Веди пальцем по героям — купится каждый по пути" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
   else {
     const whip = i === 0, name = whip ? "Хлыст Лэша" : HEROES[i - 1].name, lv = S.lv[i], nm = C.nextMs(lv);
     const skin = C.hasRpgSkin(S, whip ? "lesh" : HEROES[i - 1].id) ? '<span>скин из RPG: урон <b>×' + String(C.rpgSkinMul(whip ? "lesh" : HEROES[i - 1].id)).replace(".", ",") + "</b></span>" : "";
@@ -892,6 +912,7 @@ const RANKS = { тыс: "Тысяча!", млн: "Миллион!", млрд: "�
 const rankWord = (s) => RANKS[s] || s.toUpperCase() + "!";
 
 function drawSlow() {
+  drawJump();
   drawWave(); drawPace();
   const r = C.rateLg(S);
   $("bankRate").innerHTML = r === NEG ? "бей труперов — души твои" : "<b>+" + txt(r) + "</b> в секунду";
@@ -1060,7 +1081,7 @@ let wipeT = 0;
 
 function openSettings() {
   const sw = (k, label) => '<div class="row"><span>' + label + '</span><button class="sw' + (S.set[k] ? " on" : "") + '" data-k="' + k + '" aria-label="' + label + '"></button></div>';
-  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
+  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("hit", "Звук ударов по труперу") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
     sw("sci", "Научная запись чисел") + sw("autoBoss", "Сам идти на босса, когда наёмники справятся") +
     '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
@@ -1094,7 +1115,7 @@ function openWipe() {                                       // стирание 
   for (const n of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(n, stop);
   b.addEventListener("contextmenu", (e) => e.preventDefault());
 }
-export function applySettings() { setSound(S.set.sound); setSci(S.set.sci); FX.setCalm(S.set.calm); }
+export function applySettings() { if (S.set.hit === undefined) S.set.hit = true; setSound(S.set.sound); setHitSound(S.set.hit); setSci(S.set.sci); FX.setCalm(S.set.calm); }
 
 // ---------- вкладка «Скины»: сундуки, задания дня, скины труперов, скины героев из RPG ----------
 // Правила — core.js, раздел «удержание». Вкладка строится заново, только когда поменялось что-то по существу

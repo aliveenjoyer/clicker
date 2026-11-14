@@ -1116,3 +1116,62 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 .hg-figc.hurry { animation: hg-hurry 500ms ease-in-out infinite alternate; }
 @keyframes hg-hurry { from { box-shadow: 0 0 14px rgba(255,197,61,.7); } to { background: linear-gradient(180deg, #ffb199, #ff5a4d); box-shadow: 0 0 18px rgba(255,90,77,.9); } }
 @media (prefers-reduced-motion: reduce) { .hg-figc.hurry { animation: none; background: linear-gradient(180deg, #ffb199, #ff5a4d); } }
+
+/* ---------- телефон (14.11): главное — сетка отряда с рисунками ----------
+   Слова пользователя: «с телефона всё забаговано… чтобы основной элемент, создание комбо, работал нормально на телефоне,
+   и трупер ему не мешал». Порядок блоков: полоса волны, короткое чистое поле, полоса со счётом, умения в один ряд,
+   «Дальше» с возрождением, панель. Сетка героев занимает экран целиком и рисуется пальцем (touch-action: none), страницу
+   листают за всё остальное или кнопкой в углу. Трупер с линии на телефоне не снимается (js/fx.js, PHONE). */
+.jump { display: none; }
+.side .list.hgrid, .side .list.hgrid * { touch-action: none; }   /* и на каждой плитке с содержимым: с затемнённых плиток запрет сетки не срабатывал */
+@media (max-width: 720px) {
+  .main { display: flex; flex-direction: column; gap: 10px; }
+  .stage, .lower { display: contents; }
+  .wavebar { order: 1; } .field { order: 2; } .dock { order: 3; } .skillbar { order: 4; } #nextBox { order: 5; } .side { order: 6; }
+  /* полоса волны: номер, точки и кнопки — одной строкой, датчик темпа и «Вперёд / Фарм» — второй */
+  .wavebar, .stage.narrow .wavebar { gap: 8px 10px; padding: 8px 12px; flex-wrap: wrap; align-items: center; }
+  .wavebar .w b { font-size: 26px; }
+  .wavebar #waveSub, .wavebar .rec, .wavebar .sp, .wavebar .wavemid .sub { display: none; }
+  .wavebar .wavemid { order: 2; flex: 1 1 0; min-width: 60px; }
+  .wavebar .pips { gap: 3px; } .wavebar .pips i { width: 9px; height: 9px; } .wavebar .pips i.boss { width: 16px; }
+  .wavebar #btnBoss { order: 3; padding-left: 12px; padding-right: 12px; font-size: 12.5px; } .wavebar #btnStream { order: 4; }
+  .wavebar .seg { order: 5; flex: none; }
+  .wavebar .pace, .stage.narrow .wavebar .pace { order: 6; flex: 1 1 100%; min-width: 0; max-width: none; }
+  /* поле: только бой. Счёт, комбо, цифры и Душка — в полосе под ним */
+  .field:not(.tw) { height: 214px; min-height: 0; }
+  .field:not(.tw) .enemy { right: 6%; bottom: 12px; width: 128px; max-width: 36vw; }
+  .field:not(.tw) .enemy.boss { right: 3%; width: 158px; max-width: 44vw; }
+  .field:not(.tw) .enemy.elite, .field:not(.tw) .enemy.altar { width: 146px; max-width: 40vw; }
+  .field:not(.tw) .q1, .field:not(.tw) .q2 { display: none; }
+  .field:not(.tw) .plate-enemy { left: 10px; right: auto; top: 10px; width: 54%; padding: 8px 10px; }
+  .field:not(.tw) .bossring { left: 10px; right: auto; top: 78px; transform: scale(.72); transform-origin: 0 0; }
+  .field:not(.tw) .hint { left: 14px; right: auto; top: auto; bottom: 14px; font-size: 28px; }
+  .field .banner { top: 8px; } .field .banner b { font-size: 20px; }
+  .foe-tools { display: none; }
+  .dock { margin-top: -10px; }
+  /* умения — в один ряд во всю ширину; раньше ряд сжимался до полоски рядом с «Дальше» */
+  .lower, .stage.narrow .lower { grid-template-columns: minmax(0, 1fr); }
+  .skillbar, .stage.narrow .skillbar { display: flex; gap: 6px; padding: 8px; min-height: 0; height: auto; overflow: visible; }
+  .skillbar .sk { flex: 1 1 0; min-width: 0; max-width: none; }
+  .skillbar .skill-cap { font-size: 8.5px; letter-spacing: -.03em; }
+  .skillbar .buffs { display: none; }
+  #nextBox { height: auto; min-height: 0; }
+  /* панель: сетка героев целиком на экране */
+  /* панель тянется по ширине экрана и не шире: раньше она брала ширину по самой длинной строке (align-self: start) — длинная
+     подпись героя распирала страницу, и телефон уменьшал масштаб */
+  html, body { max-width: 100%; overflow-x: clip; }
+  .side { position: static; align-self: stretch; width: auto; min-width: 0; height: auto; min-height: 0; max-height: none; }
+  .side .pane, .hg-info, .hg-it { min-width: 0; max-width: 100%; }
+  #paneSquad { overflow: visible; max-height: none; }
+  #paneSquad .head, #paneSquad .foot { position: static; }   /* панель больше не листается сама: липнуть им не к чему, а к краю экрана — нельзя */
+  .side .list.hgrid { flex: none; height: min(680px, calc(100vh - 178px)); height: min(680px, calc(100dvh - 178px)); min-height: 300px; padding: 2px 8px 8px; gap: 5px; }
+  .hg { border-radius: 10px; }
+  /* строка над сеткой — всегда две ровные строчки: текст про героя и плашка рисунка. Иначе сетка прыгала под пальцем */
+  .hg-info { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: center; gap: 4px; height: 62px; min-height: 0; padding: 5px 10px; white-space: nowrap; }
+  .hg-it { flex: none; flex-wrap: nowrap; gap: 10px; height: 20px; overflow: hidden; }
+  .hg-figc { align-self: flex-start; max-width: 100%; }
+  .hg-lv { top: 3px; left: 3px; padding: 2px 4px; } .hg-q { top: 3px; right: 3px; padding: 2px 4px; }
+  .jump { display: block; position: fixed; right: 12px; bottom: 14px; z-index: 40; height: 40px; padding: 0 14px; border: 0; border-radius: 999px; font: 900 13px/1 var(--ui); color: #1b1140;
+    background: linear-gradient(180deg, #e4dbff, #a78bfa); box-shadow: 0 4px 0 #5b3fc4, 0 8px 16px rgba(20,10,60,.5); }
+  .jump[hidden] { display: none; }
+}

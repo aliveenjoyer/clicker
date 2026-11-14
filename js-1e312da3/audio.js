@@ -13,6 +13,8 @@ function ac() {
   return ctx;
 }
 export function setSound(v) { on = !!v; }
+let hitOn = true;                                            // звук ударов по труперу (хлыст, крит, смерть трупера) — своя настройка
+export function setHitSound(v) { hitOn = !!v; }
 export function unlock() { ac(); }
 
 function tone(freq, dur, type, vol, slide, delay) {
@@ -50,12 +52,13 @@ const loud = (fn) => { const was = cap; cap = 16; try { fn(); } finally { cap = 
 
 export const sfx = {
   whip(step) {                                               // щелчок хлыста; step — ступень комбо, поднимает тон
+    if (!hitOn) return;
     const k = 1 + (Math.random() * 0.12 - 0.06);
     noise(0.07, 0.34, 3200 * k, 0.9);
     tone(semi(330, PENTA[Math.min(PENTA.length - 1, step || 0) % PENTA.length]) * k, 0.07, "triangle", 0.12, 0.5);
   },
-  crit() { noise(0.12, 0.4, 1800, 0.6); tone(880, 0.16, "square", 0.1, 1.5); },
-  kill() { tone(220, 0.09, "sine", 0.16, 0.45); },
+  crit() { if (!hitOn) return; noise(0.12, 0.4, 1800, 0.6); tone(880, 0.16, "square", 0.1, 1.5); },
+  kill() { if (!hitOn) return; tone(220, 0.09, "sine", 0.16, 0.45); },
   orb(i) { tone(semi(784, PENTA[(i || 0) % 6]), 0.12, "sine", 0.12, 1.02); },
   buy() { tone(660, 0.06, "triangle", 0.14); tone(990, 0.09, "triangle", 0.12, 1, 0.05); },
   ms() { [0, 4, 7, 12].forEach((s, i) => tone(semi(523, s), 0.16, "triangle", 0.16, 1, i * 0.07)); },

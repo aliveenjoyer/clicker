@@ -10,6 +10,8 @@ import { bossOf } from "./data.js";
 const $ = (id) => document.getElementById(id);
 let S = null, el = {}, W = 1, H = 1, FW = 1, FH = 1, ctx = null, dpr = 1;   // W×H — холст эффектов, FW×FH — само поле
 let away = false, strike = null, notice = null;             // трупер вынесен с линии: эффекты рисуются в рамке вокруг него
+const PHONE = window.matchMedia("(max-width: 720px)");      // телефон: поле короткое и чистое, трупер с линии не снимается
+let askDock = false;                                         // просил ли полосу под полем стрим (на телефоне она есть всегда)
 let docked = false, wantDock = false;                       // стрим фоном: счёт душ, комбо, цифры и Душка стоят в полосе под картинкой
 const pv = { x: -999, y: -999 };                            // указатель в координатах окна
 let parts = [], rings = [], orbs = [], flies = 0;
@@ -40,7 +42,8 @@ export function mount(state) {
   el.enemy.querySelector("img").addEventListener("load", () => { if (away) syncFoe(); });   // босс выше трупера: не даём ему вылезти за край окна
   setEnemy();
   syncFoe();
-  setDock(wantDock);
+  setDock(askDock);
+  PHONE.addEventListener("change", () => { setDock(askDock); syncFoe(); });
 }
 export function setState(state) { S = state; refreshLine(); setEnemy(); syncFoe(); }
 export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", calm); }
@@ -166,7 +169,8 @@ export function onNotice(fn) { notice = fn; }                // ui.js: чем п
 // Счёт душ, комбо, цифры урона и Душка в обычном виде стоят на поле. Когда фоном идёт стрим, на картинке остаётся только
 // сам бой: трупер с полоской здоровья и то, что нужно бить. Зовёт js/stream.js через UI при каждом появлении и уходе картинки.
 export function setDock(on) {
-  wantDock = !!on;
+  askDock = !!on;
+  wantDock = askDock || PHONE.matches;                       // телефон: счёт, комбо, цифры и Душка — всегда под полем
   if (!el.field || wantDock === docked) return;
   docked = wantDock;
   for (const n of [el.dushka, el.bankBox, el.combo, el.stats]) {
@@ -221,6 +225,7 @@ function savePos() {                                         // место за�
   S.set.foe = { x: +(r.left / window.innerWidth).toFixed(4), y: +(r.top / window.innerHeight).toFixed(4) };
 }
 function syncFoe() {                                         // при запуске, смене игры и размера окна
+  if (PHONE.matches) { if (away) attach(); return; }         // на телефоне вынесенный трупер закрывал бы сетку отряда: он всегда на линии
   const p = S.set.foe;
   if (p && typeof p.x === "number" && typeof p.y === "number") { if (!away) detach(0, 0); placeFoe(p.x * window.innerWidth, p.y * window.innerHeight); }
   else if (away) attach();
