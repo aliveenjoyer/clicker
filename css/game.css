@@ -1044,7 +1044,7 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
    Отмеченные плитки — с кружком и номером по ходу (как в osu), между ними сплошная линия; собранная отметка зеленеет. Справа в строке над сеткой — какой
    рисунок, сколько отмечено, комбо, прибавка к душам и полоска времени. */
 .side .list.hgrid { position: relative; }
-.hg-fig { position: absolute; left: 0; top: 0; z-index: 20; pointer-events: none; overflow: visible; transform: translateZ(0); will-change: transform; }
+.hg-fig { position: absolute; left: 0; top: 0; z-index: 20; pointer-events: none; overflow: hidden; transform: translateZ(0); will-change: transform; }   /* overflow: кольцо кружка у края не растягивает сетку */
 .hg-fig svg { position: absolute; left: 0; top: 0; overflow: visible; }
 .hg-fig polyline, .hg-fig line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .hg-fig .hg-lo { stroke: rgba(8,6,24,.85); stroke-width: 13; }
@@ -1100,28 +1100,28 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 @keyframes hg-win { 0% { transform: scale(1.16); filter: brightness(2.6) saturate(1.4); } 60% { transform: scale(1.03); filter: brightness(1.3); } 100% { transform: none; filter: none; } }
 .hgrid.hg-boom { animation: hg-shake 300ms linear; }
 @keyframes hg-shake { 0% { transform: translate(0, 0); } 15% { transform: translate(-5px, 3px); } 30% { transform: translate(5px, -3px); } 45% { transform: translate(-4px, -2px); } 60% { transform: translate(3px, 3px); } 80% { transform: translate(-2px, 1px); } 100% { transform: none; } }
-.hg-sp { position: absolute; z-index: 8; width: 9px; height: 9px; margin: -4px 0 0 -4px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, #fff 0 30%, #ffd666 55%, rgba(255,150,30,0) 75%);
-  box-shadow: 0 0 10px 2px rgba(255,197,61,.9); animation: hg-sp 640ms cubic-bezier(.1,.7,.3,1) forwards; }
-.hg-sp.l2, .hg-sp.l3 { width: 11px; height: 11px; background: radial-gradient(circle, #fff 0 30%, #ffb02e 55%, rgba(255,90,20,0) 75%); box-shadow: 0 0 12px 3px rgba(255,140,40,.95); }
-.hg-sp.l4 { width: 12px; height: 12px; background: radial-gradient(circle, #fff 0 30%, #ff7ad9 55%, rgba(170,60,255,0) 75%); box-shadow: 0 0 14px 4px rgba(255,90,210,.95); }
+.hg-sp { position: absolute; z-index: 8; width: 9px; height: 9px; margin: -4px 0 0 -4px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, #fff 0 30%, var(--rk2, #ffd3f5) 55%, transparent 75%);
+  box-shadow: 0 0 10px 2px var(--rk, #ff3fd0); animation: hg-sp 640ms cubic-bezier(.1,.7,.3,1) forwards; }
+.hg-sp.l2, .hg-sp.l3 { width: 11px; height: 11px; box-shadow: 0 0 12px 3px var(--rk, #ff3fd0); }
+.hg-sp.l4 { width: 12px; height: 12px; box-shadow: 0 0 14px 4px var(--rk, #ff3fd0); }
 @keyframes hg-sp { 0% { transform: translate(0, 0) scale(1.3); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
-.hg-ring { position: absolute; z-index: 7; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 6px rgba(255,243,176,.95), 0 0 30px 10px rgba(255,190,50,.8); animation: hg-ringout 560ms ease-out forwards; }
-.hg-ring.l3 { box-shadow: 0 0 0 7px rgba(255,220,150,.95), 0 0 36px 12px rgba(255,110,40,.85); }
-.hg-ring.l4 { box-shadow: 0 0 0 8px rgba(255,200,245,.95), 0 0 40px 14px rgba(255,90,210,.85); }
+.hg-ring { position: absolute; z-index: 7; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 6px var(--rk2, #ffd3f5), 0 0 30px 10px var(--rk, #ff3fd0); animation: hg-ringout 560ms ease-out forwards; }
+.hg-ring.l3 { box-shadow: 0 0 0 7px var(--rk2, #ffd3f5), 0 0 36px 12px var(--rk, #ff3fd0); }
+.hg-ring.l4 { box-shadow: 0 0 0 8px var(--rk2, #ffd3f5), 0 0 40px 14px var(--rk, #ff3fd0); }
 @keyframes hg-ringout { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(6); opacity: 0; } }
 .hg-pop { position: absolute; z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 0; white-space: nowrap; pointer-events: none; text-align: center;
   transform: translate(0, -50%) rotate(-6deg); animation: hg-popin 1400ms cubic-bezier(.2,1.5,.3,1) forwards; }
-.hg-pop b { font: italic 900 34px/1 var(--display); letter-spacing: .01em; text-transform: uppercase; color: #fff7c9; -webkit-text-stroke: 2px #2a1200; paint-order: stroke fill;
-  text-shadow: 0 4px 0 #6a3500, 0 0 22px rgba(255,197,61,.95), 0 0 46px rgba(255,150,30,.7); }
-.hg-pop span { font: 900 16px/1 var(--ui); color: #fff; -webkit-text-stroke: 3px #2a1200; paint-order: stroke fill; text-shadow: 0 2px 0 #2a1200; }
+.hg-pop b { font: italic 900 34px/1 var(--display); letter-spacing: .01em; text-transform: uppercase; color: #fff; -webkit-text-stroke: 2px #14062e; paint-order: stroke fill;
+  text-shadow: 0 4px 0 var(--rkd, #6e0a56), 0 0 22px var(--rk, #ff3fd0), 0 0 46px var(--rk, #ff3fd0); }
+.hg-pop span { font: 900 16px/1 var(--ui); color: #fff; -webkit-text-stroke: 3px #14062e; paint-order: stroke fill; text-shadow: 0 2px 0 #14062e; }
 .hg-pop span i { font-style: normal; color: #7dffbf; }
-.hg-pop.l1 b { font-size: 40px; color: #ffe58f; }
-.hg-pop.l2 b { font-size: 48px; color: #ffc53d; text-shadow: 0 5px 0 #7a2e00, 0 0 26px rgba(255,150,30,.95), 0 0 56px rgba(255,90,20,.8); }
+.hg-pop.l1 b { font-size: 40px; }
+.hg-pop.l2 b { font-size: 48px; text-shadow: 0 5px 0 var(--rkd, #6e0a56), 0 0 26px var(--rk, #ff3fd0), 0 0 56px var(--rk, #ff3fd0); }
 .hg-pop.l2 span { font-size: 18px; }
-.hg-pop.l3 b { font-size: 56px; color: #ff9d3d; -webkit-text-stroke: 3px #2a0a00; text-shadow: 0 6px 0 #7a1c00, 0 0 30px rgba(255,90,20,.95), 0 0 70px rgba(255,40,40,.85); }
+.hg-pop.l3 b { font-size: 56px; -webkit-text-stroke: 3px #14062e; text-shadow: 0 6px 0 var(--rkd, #6e0a56), 0 0 30px var(--rk, #ff3fd0), 0 0 70px var(--rk, #ff3fd0); }
 .hg-pop.l3 span { font-size: 20px; }
-.hg-pop.l4 b { font-size: 64px; color: #ff9ae6; -webkit-text-stroke: 3px #2a0030; text-shadow: 0 6px 0 #5a0a6a, 0 0 34px rgba(255,90,210,.95), 0 0 80px rgba(170,60,255,.9); }
-.hg-pop.l4 span { font-size: 22px; color: #ffe9ff; }
+.hg-pop.l4 b { font-size: 64px; -webkit-text-stroke: 3px #14062e; text-shadow: 0 6px 0 var(--rkd, #6e0a56), 0 0 34px var(--rk, #ff3fd0), 0 0 80px var(--rk, #ff3fd0); }
+.hg-pop.l4 span { font-size: 22px; }
 @keyframes hg-popin { 0% { transform: translate(0, -50%) rotate(-14deg) scale(.2); opacity: 0; } 12% { transform: translate(0, -50%) rotate(-4deg) scale(1.35); opacity: 1; } 22% { transform: translate(0, -50%) rotate(-7deg) scale(1); }
   70% { transform: translate(0, -62%) rotate(-6deg) scale(1.04); opacity: 1; } 100% { transform: translate(0, -110%) rotate(-5deg) scale(1.1); opacity: 0; } }
 .hg-pop.lose { animation: hg-poplose 1300ms ease-in forwards; transform: translate(0, -50%); }
@@ -1182,7 +1182,8 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
   .side .pane, .hg-info, .hg-it { min-width: 0; max-width: 100%; }
   #paneSquad { overflow: visible; max-height: none; }
   #paneSquad .head, #paneSquad .foot { position: static; }   /* панель больше не листается сама: липнуть им не к чему, а к краю экрана — нельзя */
-  .side .list.hgrid { flex: none; height: min(680px, calc(100vh - 178px)); height: min(680px, calc(100dvh - 178px)); min-height: 300px; padding: 2px 8px 8px; gap: 5px; }
+  .side .hg-wrap { flex: none; height: min(680px, calc(100vh - 178px)); height: min(680px, calc(100dvh - 178px)); min-height: 300px; }
+  .side .list.hgrid { padding: 2px 8px 8px; gap: 5px; }
   .hg { border-radius: 10px; }
   /* строка над сеткой — всегда две ровные строчки: текст про героя и плашка рисунка. Иначе сетка прыгала под пальцем */
   .hg-info { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: center; gap: 4px; height: 62px; min-height: 0; padding: 5px 10px; white-space: nowrap; }
@@ -1235,3 +1236,160 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 
 /* телефон: в строке «Покупка» не хватает места на подпись, кнопку «Комбо» и режимы — подпись уходит */
 @media (max-width: 720px) { .side .head .eyebrow { display: none; } .side .head .hg-figbtn { margin-left: 0; } }
+
+/* ---------- комбо рисунков: ранги, шкала справа от сетки, разгон картинки (15.11) ----------
+   Сетка и шкала стоят рядом в .hg-wrap. Цвет ранга — в --rk (основной), --rk2 (светлый), --rkd (тёмный): его берут шкала,
+   рамка сетки, искры, кольца, надписи и вспышка плитки при покупке. Сам рисунок (кружки и линия) остаётся розовым — это
+   «что делать», а цвет ранга — «как идёт». На двух верхних рангах всё переливается. Жёлтого тут нет: жёлтые — цены. */
+.hg-wrap { position: relative; flex: 1 1 0; min-height: 0; display: flex; --rk: #a7a5e6; --rk2: #e4e3fb; --rkd: #26285a; }
+.hg-wrap.hg-flowwrap { flex: none; }
+.side .hg-wrap > .list.hgrid { min-width: 0; }
+.side .hg-wrap > .list.hgrid.hg-flow { flex: 1 1 0; }
+.hg-wrap[data-rank="c"] { --rk: #5c9dff; --rk2: #d3e4ff; --rkd: #10306e; }
+.hg-wrap[data-rank="b"] { --rk: #2fd9e6; --rk2: #cffbff; --rkd: #064a52; }
+.hg-wrap[data-rank="a"] { --rk: #a970ff; --rk2: #ecdcff; --rkd: #38127a; }
+.hg-wrap[data-rank="s"] { --rk: #ff3fd0; --rk2: #ffd3f5; --rkd: #6e0a56; }
+.hg-wrap[data-rank="ss"] { --rk: #ff3b5c; --rk2: #ffd6dc; --rkd: #70091d; }
+.hg-wrap[data-rank="sss"], .hg-wrap[data-rank="max"] { --rk: #ff5ad2; --rk2: #fff0fb; --rkd: #4d0a72; }
+
+/* шкала */
+.hg-meter { flex: none; width: 62px; margin: 0 8px 8px -2px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: default; user-select: none; -webkit-user-select: none; }
+.hg-meter[hidden] { display: none; }
+.hg-mrank { position: relative; flex: none; width: 48px; height: 48px; display: grid; place-items: center; }
+.hg-mring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.hg-mring circle { fill: none; stroke-width: 4; }
+.hg-mring .t { stroke: rgba(10,10,30,.6); fill: rgba(10,10,30,.4); }
+.hg-mring .v { stroke: var(--rk); stroke-linecap: round; stroke-dasharray: 131.95; stroke-dashoffset: 0; transition: stroke .3s; filter: drop-shadow(0 0 3px var(--rk)); }
+.hg-wrap:not([data-rank]) .hg-mring .v { opacity: .3; }
+.hg-wrap.hg-hurry .hg-mring .v { stroke: #ff5a4d; filter: drop-shadow(0 0 4px #ff5a4d); }
+.hg-wrap.hg-hurry .hg-mrank { animation: hg-mhurry 250ms ease-in-out infinite alternate; }
+@keyframes hg-mhurry { to { transform: scale(1.1); } }
+.hg-mmark, .hg-mfall { position: relative; font: italic 900 21px/1 var(--display); letter-spacing: -.05em; padding-right: .1em; color: #fff; text-shadow: 0 2px 0 var(--rkd), 0 0 10px var(--rk); }
+.hg-mmark[data-n="2"], .hg-mfall[data-n="2"] { font-size: 15px; }
+.hg-mmark[data-n="3"], .hg-mfall[data-n="3"] { font-size: 11px; }
+.hg-mrank.hg-mbump { animation: hg-mbump 440ms cubic-bezier(.2,1.6,.4,1); }
+@keyframes hg-mbump { 0% { transform: scale(1.8); filter: brightness(2.4); } 100% { transform: none; filter: none; } }
+.hg-mfall { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #b9bbdc; text-shadow: none; animation: hg-mfall 650ms cubic-bezier(.4,0,.9,.6) forwards; }
+@keyframes hg-mfall { to { transform: translate(-20%, 96px) rotate(40deg); opacity: 0; } }
+.hg-mbody { flex: 1 1 0; min-height: 0; width: 100%; display: flex; justify-content: center; gap: 3px; }
+.hg-mticks { position: relative; flex: none; width: 21px; }
+.hg-mticks span { position: absolute; right: 1px; transform: translateY(50%); font: 900 10px/1 var(--ui); letter-spacing: -.02em; color: #5d6196; transition: color .25s, text-shadow .25s; --tc: #a7a5e6; }
+.hg-mticks span:last-child { transform: translateY(105%); font-size: 12px; }
+.hg-mticks span.on { color: var(--tc); text-shadow: 0 0 7px var(--tc); }
+.tc-c { --tc: #7fb2ff; } .tc-b { --tc: #4fe6f0; } .tc-a { --tc: #c29bff; } .tc-s { --tc: #ff7ae0; } .tc-ss { --tc: #ff6f88; } .hg-mticks .tc-sss, .hg-mticks .tc-max { --tc: #fff; }
+/* трубка: восемь секций снизу вверх, у каждой свой цвет; секция заливается на долю --f */
+.hg-mtube { position: relative; flex: none; width: 18px; display: flex; flex-direction: column; gap: 2px; padding: 2px; border-radius: 10px; background: rgba(8,8,26,.62); box-shadow: inset 0 0 0 1px var(--line), inset 0 3px 8px rgba(0,0,0,.55); --lv: 0; }
+.hg-mseg { position: relative; flex: 1 1 0; min-height: 0; border-radius: 3px; overflow: hidden; background: rgba(255,255,255,.07); text-decoration: none; --f: 0; --c: #6d70a8; --c2: #a7a5e6; }
+.hg-mseg.sg-top { border-radius: 8px 8px 3px 3px; } .hg-mseg.sg-bot { border-radius: 3px 3px 8px 8px; }   /* не .top/.bot: .top — это шапка страницы */
+.hg-mseg i { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f) * 100%); background: linear-gradient(0deg, var(--c), var(--c2)); box-shadow: 0 0 8px var(--c); transition: height 380ms cubic-bezier(.2,1.4,.4,1); }
+.sg-d { --c: #7f7ad6; --c2: #bdb9ff; } .sg-c { --c: #3f7fe8; --c2: #8fbdff; } .sg-b { --c: #17b6c4; --c2: #6ff0f8; } .sg-a { --c: #8748e6; --c2: #c49bff; } .sg-s { --c: #e01ab6; --c2: #ff7ae0; } .sg-ss { --c: #e0183c; --c2: #ff7088; }
+.sg-sss i { background: linear-gradient(0deg, #ff3b5c, #ff5ad2 30%, #a970ff 55%, #5c9dff 78%, #6ff0f8); box-shadow: 0 0 10px #ff5ad2; }
+.hg-mcap { position: absolute; left: 1px; right: 1px; bottom: calc(var(--lv) * (100% - 4px)); height: 4px; border-radius: 4px; background: #fff; box-shadow: 0 0 8px 2px var(--rk2); opacity: 0; transition: bottom 380ms cubic-bezier(.2,1.4,.4,1), opacity .2s; }
+.hg-wrap[data-rank] .hg-mcap { opacity: 1; }
+.hg-wrap:is([data-rank="s"], [data-rank="ss"], [data-rank="sss"], [data-rank="max"]) .hg-mcap::before,
+.hg-wrap:is([data-rank="s"], [data-rank="ss"], [data-rank="sss"], [data-rank="max"]) .hg-mcap::after { content: ""; position: absolute; left: 3px; bottom: 2px; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: hg-mbub 820ms ease-out infinite; }
+.hg-wrap:is([data-rank="s"], [data-rank="ss"], [data-rank="sss"], [data-rank="max"]) .hg-mcap::after { left: auto; right: 3px; animation-delay: -410ms; }
+@keyframes hg-mbub { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
+.hg-wrap[data-rank="max"] .hg-mseg i { animation: hg-mflow 900ms ease-in-out infinite alternate; }
+@keyframes hg-mflow { to { filter: brightness(1.7) saturate(.7); } }
+.hg-mword { flex: none; width: 17px; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font: 900 11px/17px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--rk2); text-shadow: 0 0 8px var(--rk); white-space: nowrap; overflow: hidden; }
+.hg-mnum { flex: none; height: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.hg-mnum b { font: 900 17px/1 var(--display); color: #fff; text-shadow: 0 0 10px var(--rk); }
+.hg-mnum b.hg-mbump { animation: hg-mnum 300ms cubic-bezier(.2,1.6,.4,1); }
+@keyframes hg-mnum { 0% { transform: scale(1.7); } 100% { transform: none; } }
+.hg-mnum span { font: 800 11px/1 var(--ui); color: var(--rk2); white-space: nowrap; }
+.hg-wrap.hg-mbreak .hg-mtube { animation: hg-mshake 420ms linear; }
+.hg-wrap.hg-mbreak .hg-mseg i, .hg-wrap.hg-mbreak .hg-mcap { transition-duration: 520ms; transition-timing-function: ease-in; }
+@keyframes hg-mshake { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+
+/* рамка сетки: с рангом разгорается, с S пульсирует */
+.side .list.hgrid::after { content: ""; position: absolute; left: 5px; right: 5px; top: 0; bottom: 3px; z-index: 7; border-radius: 15px; pointer-events: none; opacity: 0; transform: translateZ(0); transition: opacity .4s; }
+.hg-wrap[data-rank="c"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rk) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--rk) 22%, transparent); }
+.hg-wrap[data-rank="b"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rk) 70%, transparent), inset 0 0 20px color-mix(in srgb, var(--rk) 32%, transparent); }
+.hg-wrap[data-rank="a"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rk) 85%, transparent), inset 0 0 28px color-mix(in srgb, var(--rk) 42%, transparent); }
+.hg-wrap[data-rank="s"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 2px var(--rk), inset 0 0 36px color-mix(in srgb, var(--rk) 55%, transparent); animation: hg-frame 1100ms ease-in-out infinite alternate; }
+.hg-wrap[data-rank="ss"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 3px var(--rk), inset 0 0 46px color-mix(in srgb, var(--rk) 68%, transparent); animation: hg-frame 750ms ease-in-out infinite alternate; }
+.hg-wrap[data-rank="sss"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 3px var(--rk), inset 0 0 54px color-mix(in srgb, var(--rk) 75%, transparent); animation: hg-frame 600ms ease-in-out infinite alternate, hg-hue 2.4s ease-in-out infinite alternate; }
+.hg-wrap[data-rank="max"] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 7px var(--rk), inset 0 0 60px color-mix(in srgb, var(--rk) 85%, transparent); animation: hg-frame 450ms ease-in-out infinite alternate, hg-hue 1.2s ease-in-out infinite alternate; }
+@keyframes hg-frame { from { opacity: .5; } to { opacity: 1; } }
+@keyframes hg-hue { from { filter: hue-rotate(-105deg); } to { filter: hue-rotate(28deg); } }   /* от синего через розовый к алому и обратно: без жёлтого и зелёного */
+/* два верхних ранга: рисунок и шкала переливаются */
+.hg-wrap[data-rank="sss"] .hg-fig, .hg-wrap[data-rank="sss"] .hg-mrank { animation: hg-hue 2.4s ease-in-out infinite alternate; }
+.hg-wrap[data-rank="max"] .hg-fig, .hg-wrap[data-rank="max"] .hg-mrank { animation: hg-hue 1.2s ease-in-out infinite alternate; }
+/* покупка плитки вспыхивает цветом ранга */
+.hg-wrap[data-rank] .hg.tapfx::after { box-shadow: inset 0 0 0 3px var(--rk2), inset 0 0 22px var(--rk); }
+
+/* слой «вылетов» поверх сетки */
+.hg-fx { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 22; pointer-events: none; overflow: hidden; transform: translateZ(0); }   /* overflow: «вылеты» у края не растягивают сетку */
+.hg-hitr { position: absolute; width: calc(var(--hg-s, 80px) * .5); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); border: 3px solid var(--rk2); box-shadow: 0 0 12px var(--rk); animation: hg-hitr 360ms ease-out forwards; }
+@keyframes hg-hitr { from { transform: translate(-50%, -50%) scale(.8); opacity: 1; } to { transform: translate(-50%, -50%) scale(2.1); opacity: 0; } }
+/* «эхо» собранного рисунка: белый контур расходится от середины и тает */
+.hg-ghost { position: absolute; left: 0; top: 0; pointer-events: none; animation: hg-ghost 460ms ease-out forwards; }
+.hg-ghost svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.hg-ghost line { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; }
+.hg-ghost .hg-lo, .hg-ghost .hg-lg { display: none; }
+.hg-gd { position: absolute; width: calc(var(--hg-s, 80px) * .46); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 3px #fff, 0 0 18px 3px var(--rk); }
+@keyframes hg-ghost { from { transform: scale(1); opacity: .95; } to { transform: scale(1.28); opacity: 0; } }
+.hg-flash { position: absolute; inset: 0; width: 100%; height: 100%; background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--rk) 55%, transparent), transparent 72%); animation: hg-flash 500ms ease-out forwards; }
+@keyframes hg-flash { from { opacity: 1; } to { opacity: 0; } }
+.hg-whip { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hg-whip svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 10px #fff) drop-shadow(0 0 22px var(--rk)); }
+.hg-whip path { fill: none; stroke: #fff; stroke-width: 7; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: hg-whip 900ms cubic-bezier(.3,.9,.3,1) forwards; }
+@keyframes hg-whip { 0% { stroke-dashoffset: 100; opacity: 1; } 32% { stroke-dashoffset: 0; opacity: 1; } 70% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: -100; opacity: 0; } }
+
+/* новый ранг: буква врезается в сетку, под ней слово, потом улетает в шкалу */
+.hg-rankup { position: absolute; z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; white-space: nowrap; transform: translate(-50%, -50%) rotate(-6deg); animation: hg-rslam 300ms cubic-bezier(.2,.9,.3,1) both; will-change: transform, opacity; }
+@keyframes hg-rslam { 0% { transform: translate(-50%, -50%) rotate(-14deg) scale(3); opacity: 0; } 55% { transform: translate(-50%, -50%) rotate(-4deg) scale(.9); opacity: 1; } 78% { transform: translate(-50%, -50%) rotate(-7deg) scale(1.06); } 100% { transform: translate(-50%, -50%) rotate(-6deg) scale(1); opacity: 1; } }
+.hg-rankup.hg-rout { transition: opacity 240ms; opacity: 0; }
+.hg-rmark { position: relative; z-index: 1; font: italic 900 var(--rs, 150px)/.92 var(--display); letter-spacing: -.07em; padding: 0 .14em 0 .06em; color: #14062e; -webkit-text-stroke: calc(var(--rs) * .1) #14062e;
+  filter: drop-shadow(0 0 calc(var(--rs) * .1) var(--rk)); }
+.hg-rmark::after { content: attr(data-m); position: absolute; inset: 0; padding: inherit; color: transparent; -webkit-text-stroke: 0 transparent;
+  background: linear-gradient(180deg, #fff 18%, var(--rk2) 42%, var(--rk) 74%, var(--rkd) 98%); -webkit-background-clip: text; background-clip: text; }
+.hg-rword { position: relative; z-index: 1; margin-top: calc(var(--rs) * -.06); font: italic 900 calc(var(--rs) * .21)/1 var(--display); letter-spacing: .02em; text-transform: uppercase; color: #fff; -webkit-text-stroke: 5px #14062e; paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--rkd), 0 0 18px var(--rk); }
+.hg-rsub { position: relative; z-index: 1; margin-top: 4px; font: 900 15px/1 var(--ui); color: #fff; -webkit-text-stroke: 3px #14062e; paint-order: stroke fill; }
+.hg-rrays { position: absolute; z-index: 0; left: 50%; top: 40%; width: calc(var(--rs) * 3); aspect-ratio: 1; margin: calc(var(--rs) * -1.5) 0 0 calc(var(--rs) * -1.5); border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--rk) 60%, transparent) 0 7deg, transparent 7deg 20deg); -webkit-mask: radial-gradient(circle, #000 12%, transparent 66%); mask: radial-gradient(circle, #000 12%, transparent 66%);
+  animation: hg-rrays 900ms ease-out forwards; }
+@keyframes hg-rrays { from { transform: rotate(0deg) scale(.4); opacity: 1; } to { transform: rotate(50deg) scale(1.1); opacity: 0; } }
+.hg-wrap[data-rank="sss"] .hg-rmark::after, .hg-wrap[data-rank="max"] .hg-rmark::after { background: linear-gradient(100deg, #7df9ff, #fff 22%, #ff5ad2 45%, #a970ff 68%, #7df9ff) 0 0 / 220% 100%; -webkit-background-clip: text; background-clip: text; animation: hg-rshine 900ms linear infinite; }
+@keyframes hg-rshine { to { background-position: 220% 0; } }
+
+/* плашка над сеткой: буква ранга */
+.hg-frk { font: italic 900 12px/1 var(--display); font-style: italic; color: #fff; padding: 2px 5px 2px 4px; margin-right: 1px; border-radius: 5px; background: var(--rk, #a7a5e6); background: color-mix(in srgb, var(--rk, #a7a5e6) 78%, #14062e); }
+.hg-figc.on .hg-frk { color: #fff; }
+
+/* след за курсором: цвет ранга, на высоких рангах крупнее и переливается */
+.swdot[class*="rk-"] { --c1: #a7a5e6; --c2: #e4e3fb; background: radial-gradient(circle, #fff 0%, var(--c2) 22%, var(--c1) 42%, color-mix(in srgb, var(--c1) 30%, transparent) 62%, transparent 74%); }
+.swdot.rk-c { --c1: #5c9dff; --c2: #d3e4ff; }
+.swdot.rk-b { --c1: #2fd9e6; --c2: #cffbff; width: 28px; height: 28px; margin: -14px 0 0 -14px; }
+.swdot.rk-a { --c1: #a970ff; --c2: #ecdcff; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+.swdot.rk-s { --c1: #ff3fd0; --c2: #ffd3f5; width: 34px; height: 34px; margin: -17px 0 0 -17px; animation-duration: 760ms; }
+.swdot.rk-ss { --c1: #ff3b5c; --c2: #ffd6dc; width: 38px; height: 38px; margin: -19px 0 0 -19px; animation-duration: 860ms; }
+.swdot.rk-sss, .swdot.rk-max { --c1: #ff5ad2; --c2: #fff0fb; width: 42px; height: 42px; margin: -21px 0 0 -21px; animation-duration: 960ms; filter: hue-rotate(var(--h, 0deg)); }
+
+/* поуже: окно ноутбука */
+@media (max-width: 1500px) {
+  .hg-meter { width: 42px; margin-right: 6px; }
+  .hg-mrank { width: 38px; height: 38px; }
+  .hg-mmark, .hg-mfall { font-size: 17px; } .hg-mmark[data-n="2"], .hg-mfall[data-n="2"] { font-size: 12px; } .hg-mmark[data-n="3"], .hg-mfall[data-n="3"] { font-size: 9px; }
+  .hg-mword { display: none; }
+  .hg-mticks { width: 19px; } .hg-mticks span { font-size: 9px; } .hg-mtube { width: 14px; }
+  .hg-mnum b { font-size: 14px; } .hg-mnum span { font-size: 10px; }
+  .hg-rsub { font-size: 13px; }
+}
+/* телефон: от шкалы остаётся узкая трубка у правого края; ранг и комбо — в плашке над сеткой */
+@media (max-width: 720px) {
+  .hg-meter { width: 10px; margin: 2px 6px 8px -4px; }
+  .hg-mrank, .hg-mticks, .hg-mword, .hg-mnum { display: none; }
+  .hg-mtube { width: 10px; padding: 1px; gap: 1px; }
+  .hg-fkw { display: none; }
+  .hg-rword { -webkit-text-stroke-width: 4px; } .hg-rsub { font-size: 12px; }
+}
+/* спокойный режим и «меньше движения»: без тряски, вспышек, пульса и переливов */
+.calm .hgrid.hg-boom, .calm .list.hgrid::after, .calm .hg-fig, .calm .hg-mrank, .calm .hg-mseg i, .calm .hg-rrays { animation: none !important; }
+.calm .hg-rrays { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .list.hgrid::after, .hg-wrap .hg-fig, .hg-wrap .hg-mrank, .hg-mcap::before, .hg-mcap::after, .hg-mseg i, .hg-mnum b.hg-mbump, .hg-wrap.hg-mbreak .hg-mtube { animation: none !important; }
+  .hg-mseg i, .hg-mcap { transition: none; }
+}

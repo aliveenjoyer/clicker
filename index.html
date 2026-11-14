@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=ecb60cf2">
-<link rel="stylesheet" href="css/ui.css?v=ecb60cf2">
-<link rel="stylesheet" href="css/game.css?v=ecb60cf2">
+<link rel="stylesheet" href="css/tokens.css?v=5454a299">
+<link rel="stylesheet" href="css/ui.css?v=5454a299">
+<link rel="stylesheet" href="css/game.css?v=5454a299">
 </head>
 <body>
 
@@ -175,7 +175,22 @@
       </div>
       <!-- Отряд — сеткой: все герои видны сразу, без прокрутки; плитка и есть кнопка покупки (js/ui.js, «Покупка героев») -->
       <div class="hg-info"><div class="hg-it" id="hgInfo"></div><div class="hg-figc" id="hgFigc" hidden></div></div>
-      <div class="list hgrid" id="mercList"></div>
+      <!-- сетка героев и справа от неё шкала комбо рисунков (js/ui.js, «шкала комбо») -->
+      <div class="hg-wrap" id="hgWrap">
+        <div class="list hgrid" id="mercList"></div>
+        <div class="hg-meter" id="hgMeter" hidden>
+          <div class="hg-mrank" id="hgMRank">
+            <svg class="hg-mring" viewBox="0 0 48 48" aria-hidden="true"><circle class="t" cx="24" cy="24" r="21"/><circle class="v" id="hgMRing" cx="24" cy="24" r="21"/></svg>
+            <b class="hg-mmark" id="hgMMark"></b>
+          </div>
+          <div class="hg-mbody">
+            <div class="hg-mticks" id="hgMTicks"></div>
+            <div class="hg-mtube" id="hgMTube"><i class="hg-mcap"></i></div>
+            <div class="hg-mword" id="hgMWord"></div>
+          </div>
+          <div class="hg-mnum"><b id="hgMNum">0</b><span id="hgMMul"></span></div>
+        </div>
+      </div>
       <div class="foot"><span>Наёмников: <b id="footN">0</b></span><span>Всего урон: <b id="footDps">0</b></span></div>
     </div>
     <div class="pane scroll" id="paneItems" hidden>
@@ -209,7 +224,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-8bb082ce/main.js"></script>
+<script type="module" src="js-8e520542/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

@@ -58,14 +58,16 @@ export function mount(state, hooks) {
       const how = loud ? "gridTap" : "gridSw"; S.stats[how] = (S.stats[how] || 0) + 1;   // сколько куплено нажатием и сколько свайпом (для наблюдения)
       return true;
     };
-    let sw = null, dotAt = null, swipeT = 0;   // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
+    let sw = null, dotAt = null, swipeT = 0, trailN = 0;   // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
     const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над сеткой героев
       if (dotAt && Math.hypot(x - dotAt[0], y - dotAt[1]) < 5) return;
       dotAt = [x, y];
       const r = list.getBoundingClientRect();
       if (x < r.left || x > r.right || y < r.top || y > r.bottom || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const d = document.createElement("i");
-      d.className = "swdot"; d.style.left = x + "px"; d.style.top = y + "px";
+      const tr = figWanted() ? figRank(S.fig.k) : -1;         // идёт комбо — след цвета ранга, на высоких рангах переливается
+      d.className = "swdot" + (tr >= 0 ? " rk-" + FIG_RANKS[tr].id : ""); d.style.left = x + "px"; d.style.top = y + "px";
+      if (tr >= 6) d.style.setProperty("--h", ((trailN = (trailN + 1) % 15) * 24) + "deg");
       document.body.appendChild(d);
       d.addEventListener("animationend", () => d.remove());
     };
@@ -161,7 +163,7 @@ export function mount(state, hooks) {
   syncRpg(true);
 }
 export function setState(state) {
-  S = state; rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; hgShow = -1; shownLg = NEG; lastK = -1; slowT = 0;
+  S = state; rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; hgShow = -1; meterKey = "?"; shownLg = NEG; lastK = -1; slowT = 0;
   itemsKey = rosterKey = roadKey = keepKey = ""; draftKey = "?"; relicsBuilt = false; achNew = []; achUntil = 0; chestBadge = -1;
   TW.setState(S); TOP.setState(S); SWAP.setState(S); drawTabs();
 }
@@ -256,7 +258,7 @@ function fitGrid() {
   const key = [flow, c, r, Math.round(size)].join("|");
   if (key === hgFit) { drawFigLines(); return; }            // размер тот же, но плитки могли сдвинуться — линия рисунка идёт за ними
   hgFit = key;
-  list.classList.toggle("hg-flow", flow);
+  list.classList.toggle("hg-flow", flow); $("hgWrap").classList.toggle("hg-flowwrap", flow);
   list.style.setProperty("--hg-c", c); list.style.setProperty("--hg-r", r); list.style.setProperty("--hg-s", Math.round(size) + "px");
   hgC = c; hgR = r;
   spawnFig();                                               // сетка другая — рисунок ставится заново
@@ -376,7 +378,32 @@ for (const f of FIGS) {
   }
 }
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
-const figLvl = (k) => (k >= 75 ? 4 : k >= 40 ? 3 : k >= 15 ? 2 : k >= 5 ? 1 : 0);   // уровень вида и звука — по комбо
+// Ранги комбо: буква, слово и с какого комбо. Вместе с рангом разгоняется всё вокруг: шкала справа от сетки, рамка сетки,
+// цвет искр и следа за курсором, размер «вылетов». Слова идут по нарастающей — от «вяло» до названия игры на потолке.
+const FIG_RANKS = [
+  { k: 1, id: "d", mark: "D", word: "Вяло" },
+  { k: 3, id: "c", mark: "C", word: "Сойдёт" },
+  { k: 10, id: "b", mark: "B", word: "Хорошо" },
+  { k: 25, id: "a", mark: "A", word: "Красиво" },
+  { k: 40, id: "s", mark: "S", word: "Жара" },
+  { k: 60, id: "ss", mark: "SS", word: "Безумие" },
+  { k: 80, id: "sss", mark: "SSS", word: "Зверюга" },
+  { k: CFG.figCap, id: "max", mark: "MAX", word: "Хлыстопад" },
+];
+const figRank = (k) => { let r = -1; for (let i = 0; i < FIG_RANKS.length; i++) if (k >= FIG_RANKS[i].k) r = i; return r; };
+// Сколько шкалы залито, 0…1: ранги стоят на шкале через равные промежутки, внутри ранга — ровно. Первые ранги пролетают
+// быстро, дальше каждый даётся труднее.
+const figLevel = (k) => {
+  let lo = 0;
+  for (let i = 0; i < FIG_RANKS.length; i++) { if (k < FIG_RANKS[i].k) return (i + (k - lo) / (FIG_RANKS[i].k - lo)) / FIG_RANKS.length; lo = FIG_RANKS[i].k; }
+  return 1;
+};
+const figLvl = (k) => [0, 0, 0, 1, 2, 3, 4, 4, 4][figRank(k) + 1];   // уровень звука и размера «вылета» — по рангу
+function rankSound(r) {                                     // новый ранг: чем выше, тем длиннее фанфары
+  if (r === 1) sfx.mile();
+  else if (r >= 2) sfx.fanfare(r === FIG_RANKS.length - 1 ? 4 : Math.min(3, r - 2));
+  if (r === 6) setTimeout(() => sfx.rank(), 520);
+}
 let hurryAt = 0;                                            // на какой секунде уже тикнуло: время на рисунок кончается
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";
 let touchSpot = -1, touchPrev = -1;                         // место плитки, на которой сейчас мышь (палец), и прошлое — куда она движется
@@ -483,7 +510,7 @@ function drawFigLines() {                                   // слой рису
   list.classList.toggle("hg-has", !!fig);                    // рисунок есть — остальные плитки чуть приглушены
   if (!fig) { const old = list.querySelector(".hg-fig"); if (old) old.remove(); return; }
   const lay = figLayer(), svg = lay.querySelector("svg");
-  const lr = list.getBoundingClientRect(), W = Math.round(lr.width), H = Math.round(Math.max(lr.height, list.scrollHeight));
+  const lr = list.getBoundingClientRect(), W = Math.round(lr.width), H = Math.round(list.classList.contains("hg-flow") ? Math.max(lr.height, list.scrollHeight) : lr.height);
   lay.style.width = W + "px"; lay.style.height = H + "px";
   const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]; };
   svg.setAttribute("width", W); svg.setAttribute("height", H);
@@ -500,6 +527,101 @@ function drawFigLines() {                                   // слой рису
   }
   svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => segs.map((q) => '<line class="' + c + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
 }
+// Все «вылеты» (искры, кольца, надписи) живут в своём слое поверх сетки — как кружки и линия рисунка: плитки их не
+// перекрывают и не обрезают (на iPhone иначе они уходили под плитки). Слой не ловит касания.
+function fxLayer() {
+  const list = $("mercList");
+  let lay = list.querySelector(".hg-fx");
+  if (!lay) { lay = document.createElement("div"); lay.className = "hg-fx"; list.appendChild(lay); }
+  return lay;
+}
+function fxAdd(cls, x, y, ms, html) {
+  const n = document.createElement("div");
+  n.className = cls; n.style.left = x.toFixed(1) + "px"; n.style.top = y.toFixed(1) + "px";
+  if (html) n.innerHTML = html;
+  fxLayer().appendChild(n);
+  if (ms) setTimeout(() => n.remove(), ms);
+  return n;
+}
+const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// ---------- шкала комбо справа от сетки ----------
+// Трубка — лесенка из восьми секций, по одной на ранг, каждая своего цвета: заливаются снизу вверх по мере роста комбо.
+// Слева буквы рангов (загораются по мере взятия), справа — слово нынешнего. Наверху буква ранга в кольце:
+// кольцо убывает, пока идёт время на следующий рисунок. Внизу — комбо и во сколько раз больше душ. Рисунки выключены —
+// шкалы нет, и сетка занимает её место.
+let meterKey = "?", ringShown = -1, hurryOn = false, ticksDone = false;
+function drawMeter() {
+  const m = $("hgMeter"), wrap = $("hgWrap");
+  if (!m) return;
+  const on = figWanted(), k = on ? S.fig.k : 0, key = (on ? 1 : 0) + "|" + k;
+  if (key === meterKey) return;
+  meterKey = key;
+  m.hidden = !on;
+  const r = figRank(k), Rk = r >= 0 ? FIG_RANKS[r] : null;
+  if (Rk) wrap.dataset.rank = Rk.id; else delete wrap.dataset.rank;
+  if (!on) return;
+  const N = FIG_RANKS.length, tube = $("hgMTube");
+  if (!ticksDone) {                                          // секция j ведёт к рангу j и окрашена в цвет ранга, который игрок держит, пока идёт по ней
+    ticksDone = true;
+    $("hgMTicks").innerHTML = FIG_RANKS.map((x, i) => '<span class="tc-' + x.id + '" style="bottom:' + (100 * (i + 1) / N).toFixed(2) + '%">' + (x.id === "max" ? "★" : x.mark) + "</span>").join("");
+    for (let j = 0; j < N; j++) { const sg = document.createElement("u"); sg.className = "hg-mseg sg-" + (j ? FIG_RANKS[j - 1].id : "n") + (j === 0 ? " sg-bot" : j === N - 1 ? " sg-top" : ""); sg.innerHTML = "<i></i>"; tube.insertBefore(sg, tube.firstChild); }
+  }
+  [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i <= r));
+  const lv = figLevel(k), segs = tube.querySelectorAll(".hg-mseg");   // в разметке секции идут сверху вниз
+  segs.forEach((sg, n) => { const j = N - 1 - n; sg.style.setProperty("--f", Math.max(0, Math.min(1, lv * N - j)).toFixed(3)); });
+  tube.style.setProperty("--lv", lv.toFixed(4));
+  const mk = $("hgMMark");
+  mk.textContent = Rk ? Rk.mark : ""; mk.dataset.n = Rk ? Rk.mark.length : 0;
+  $("hgMWord").textContent = Rk ? Rk.word : "";
+  $("hgMNum").textContent = group(k);
+  $("hgMMul").textContent = k ? "×" + mulT(C.figMul(S)) : "";
+  m.title = "Шкала комбо. Собирай рисунки подряд — растёт ранг: от D «" + FIG_RANKS[0].word + "» до MAX «" + FIG_RANKS[FIG_RANKS.length - 1].word + "», а с ним и души" + (k ? " (сейчас ×" + mulT(C.figMul(S)) + ")" : "") +
+    ". Кольцо вокруг буквы — время на следующий рисунок";
+}
+function stepMeter() {                                      // каждый кадр: кольцо времени и «время кончается»
+  if (meterKey.charAt(0) !== "1") return;
+  const k = S.fig.k, f = k > 0 && fig ? Math.max(0, Math.min(1, S.fig.left / C.figTime(fig.cells.length))) : 1, v = Math.round(f * 240);
+  if (v !== ringShown) { ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1); }
+  const h = k > 0 && S.fig.left <= 3;
+  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); }
+}
+// Новый ранг: буква врезается в сетку (в ту её половину, где нет следующего рисунка), под ней слово; потом буква улетает
+// в шкалу и встаёт там в кольцо. На потолке по сетке ещё и хлещет хлыст.
+function rankUp(r) {
+  const wrap = $("hgWrap"), list = $("mercList"), Rk = FIG_RANKS[r], max = r === FIG_RANKS.length - 1;
+  if (still()) return;                                       // «меньше движения»: ранг просто меняется в шкале
+  const W = list.clientWidth, H = Math.max(120, list.clientHeight);
+  // место — то из девяти (углы, стороны, середина), что дальше всего от кружков нового рисунка: надпись не должна его закрывать
+  const dots = fig ? [...fig.dots.values()].map((d) => [parseFloat(d.style.left) || 0, parseFloat(d.style.top) || 0]) : [];
+  let bx = W / 2, by = H / 2, far = -1;
+  for (const fx of [0.5, 0.27, 0.73]) for (const fy of [0.5, 0.28, 0.72]) {
+    const x = W * fx, y = H * fy; let near = 1e9;
+    for (const p of dots) near = Math.min(near, Math.hypot(p[0] - x, (p[1] - y) * 1.25));
+    if (near > far + 1) { far = near; bx = x; by = y; }
+  }
+  const size = Math.round(Math.max(50, Math.min(170, W * 0.26)) * [1, 1, 0.8, 0.6][Math.min(3, Rk.mark.length)]);
+  const el = document.createElement("div");
+  el.className = "hg-rankup"; el.style.setProperty("--rs", size + "px");
+  el.style.left = bx.toFixed(1) + "px"; el.style.top = by.toFixed(1) + "px";
+  el.innerHTML = '<i class="hg-rrays"></i><b class="hg-rmark" data-m="' + Rk.mark + '">' + Rk.mark + '</b><span class="hg-rword">' + Rk.word + '</span><span class="hg-rsub">комбо ' + group(S.fig.k) + " · души ×" + mulT(C.figMul(S)) + "</span>";
+  wrap.appendChild(el);
+  const half = el.offsetWidth / 2 + 6;                      // на узкой сетке надпись не должна уезжать за край
+  if (W > 2 * half) el.style.left = Math.max(half, Math.min(W - half, bx)).toFixed(1) + "px";
+  if (r >= 4 && !S.set.calm) fxAdd("hg-flash", 0, 0, 520);
+  if (max && !S.set.calm) fxAdd("hg-whip", 0, 0, 1000, '<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M-4 86 C 16 28, 36 98, 56 46 S 84 10, 104 2" pathLength="100"/></svg>');
+  setTimeout(() => {
+    const em = $("hgMRank"), mark = el.querySelector(".hg-rmark");
+    const land = () => { el.remove(); em.classList.remove("hg-mbump"); void em.offsetWidth; em.classList.add("hg-mbump"); };
+    if (em.offsetParent === null || !el.animate) { el.classList.add("hg-rout"); setTimeout(() => el.remove(), 260); return; }
+    // буква (а не вся надпись) должна прийти ровно в кольцо: считаем сдвиг с учётом того, что надпись сжимается к своей середине
+    const e = el.getBoundingClientRect(), b = em.getBoundingClientRect(), s = Math.max(0.1, Math.min(0.5, b.height * 0.5 / Math.max(1, mark.offsetHeight)));
+    const ox = mark.offsetLeft + mark.offsetWidth / 2 - el.offsetWidth / 2, oy = mark.offsetTop + mark.offsetHeight / 2 - el.offsetHeight / 2;
+    const tx = b.left + b.width / 2 - (e.left + e.width / 2) - s * ox, ty = b.top + b.height / 2 - (e.top + e.height / 2) - s * oy;
+    el.animate([{ transform: "translate(-50%, -50%) rotate(-6deg) scale(1)", opacity: 1 },
+      { transform: "translate(calc(-50% + " + tx.toFixed(0) + "px), calc(-50% + " + ty.toFixed(0) + "px)) rotate(0deg) scale(" + s.toFixed(3) + ")", opacity: 0.4 }],
+    { duration: 340, easing: "cubic-bezier(.6,0,.9,.5)", fill: "forwards" }).onfinish = land;
+  }, max ? 1500 : 800);
+}
 function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
   const spot = slotOf ? slotOf[i] : i;                       // где на сетке эта плитка (герои могут быть пересажены)
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
@@ -508,48 +630,62 @@ function figTouch(i) {                                      // по плитке
   rows[i].root.classList.add("hg-hit");
   sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl(S.fig.k));
   const dot = fig.dots.get(i);
-  if (dot) { dot.classList.add("hit"); dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick"); }
+  if (dot) {
+    dot.classList.add("hit"); dot.classList.remove("hg-tick"); void dot.offsetWidth; dot.classList.add("hg-tick");
+    if (!still()) fxAdd("hg-hitr", parseFloat(dot.style.left) || 0, parseFloat(dot.style.top) || 0, 380);   // кольцо от отметки, как от попадания в osu
+  }
   if (fig.hit.size === fig.cells.length) {
-    const done = fig;
+    const done = fig, r0 = figRank(S.fig.k);
     C.figDone(S, done.cells.length, done.name, done.plus);
-    figBoom(done);
+    const up = figBoom(done, r0);
     let dir = null;                                          // куда шла рука: следующий рисунок — по ходу
     if (touchPrev >= 0 && hgC) { const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC)); if (dx || dy) dir = [dx, dy]; }
     spawnFig({ spot: touchSpot, dir });
     if (fig) C.figNext(S, fig.cells.length);                 // время на следующий — по его размеру
+    if (up) rankUp(figRank(S.fig.k));                         // после нового рисунка: надпись встаёт так, чтобы его не закрыть
     figChipKey = "?"; drawFigChip(); slowT = 0;
   }
   else drawFigChip();
 }
-// Рисунок собран: плитки вспыхивают, из них летят искры, поверх вылетает надпись с названием и множителем — чем выше
-// комбо, тем крупнее и горячее. Сетка коротко вздрагивает. Всё живёт внутри сетки героев и само убирается.
-function figBoom(done) {
+// Рисунок собран: плитки вспыхивают, из них летят искры цвета ранга, сам рисунок расходится «эхом» и тает, поверх вылетает
+// надпись с названием и множителем — чем выше ранг, тем крупнее. Сетка коротко вздрагивает. Если комбо перешло в новый
+// ранг (C и выше), вместо надписи рисунка вылетает буква ранга (rankUp) — отдаёт true. Всё само убирается.
+function figBoom(done, r0) {
   const list = $("mercList"), k = S.fig.k, lr = list.getBoundingClientRect();
-  const lvl = figLvl(k);
+  const lvl = figLvl(k), r1 = figRank(k), up = r1 > r0 && r1 >= 1;
   sfx.boom(lvl, done.plus);
-  const step = [10, 25, 50, 75, CFG.figCap].map((m) => k >= m && k - done.plus < m).lastIndexOf(true);   // перешли рубеж комбо — фанфары
-  if (step >= 0) setTimeout(() => sfx.fanfare(step), 240);
+  if (up) setTimeout(() => rankSound(r1), 240);
   let cx = 0, cy = 0;
   const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), q = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += q[0]; cy += q[1]; return q; });
   cx /= pts.length; cy /= pts.length;
   for (const i of done.cells) { const t = rows[i].root; t.classList.remove("hg-win"); void t.offsetWidth; t.classList.add("hg-win"); }
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const add = (cls, x, y, html) => { const n = document.createElement("div"); n.className = cls; n.style.left = x.toFixed(1) + "px"; n.style.top = y.toFixed(1) + "px"; if (html) n.innerHTML = html; list.appendChild(n); return n; };
+  drawMeter();                                               // шкала и цвет ранга — сразу: искры ниже уже нового цвета
+  const num = $("hgMNum");
+  if (num) { num.classList.remove("hg-mbump"); void num.offsetWidth; num.classList.add("hg-mbump"); }
+  if (still()) return up;
   const per = Math.max(2, Math.min(5, Math.floor((26 + lvl * 8) / pts.length)));
   for (const q of pts) for (let j = 0; j < per; j++) {
-    const a = Math.random() * 6.283, d = 34 + Math.random() * (60 + lvl * 22), n = add("hg-sp l" + lvl, q[0], q[1]);
+    const a = Math.random() * 6.283, d = 34 + Math.random() * (60 + lvl * 22), n = fxAdd("hg-sp l" + lvl, q[0], q[1], 800);
     n.style.setProperty("--dx", (Math.cos(a) * d).toFixed(1) + "px"); n.style.setProperty("--dy", (Math.sin(a) * d).toFixed(1) + "px");
     n.style.animationDelay = (Math.random() * 60).toFixed(0) + "ms";
-    setTimeout(() => n.remove(), 800);
   }
-  const ring = add("hg-ring l" + lvl, cx, cy); setTimeout(() => ring.remove(), 700);
-  const W = list.clientWidth, H = Math.max(list.clientHeight, 120);
-  const pop = add("hg-pop l" + lvl, Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)),
-    "<b>" + done.name + "!</b><span>комбо " + group(k) + (done.plus > 1 ? " <i>+" + done.plus + "</i>" : "") + " · души ×" + mulT(C.figMul(S)) + "</span>");
-  const half = Math.max(pop.firstChild.offsetWidth, pop.lastChild.offsetWidth) / 2 + 14;   // длинное название не должно уезжать за край сетки
-  pop.style.left = Math.max(half, Math.min(W - half, cx)).toFixed(1) + "px";
-  setTimeout(() => pop.remove(), 1500);
+  fxAdd("hg-ring l" + lvl, cx, cy, 700);
+  const lay = list.querySelector(".hg-fig");                 // «эхо»: собранный рисунок расходится от своей середины и тает
+  if (lay && !S.set.calm) {
+    const g = lay.cloneNode(true);
+    g.className = "hg-ghost"; g.style.transformOrigin = cx.toFixed(1) + "px " + cy.toFixed(1) + "px";
+    g.querySelectorAll(".hg-dot").forEach((d) => { d.className = "hg-gd"; d.removeAttribute("data-i"); d.textContent = ""; });
+    fxLayer().appendChild(g); setTimeout(() => g.remove(), 480);
+  }
+  if (!up) {
+    const W = list.clientWidth, H = Math.max(list.clientHeight, 120);
+    const pop = fxAdd("hg-pop l" + lvl, Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)), 1500,
+      "<b>" + done.name + "!</b><span>комбо " + group(k) + (done.plus > 1 ? " <i>+" + done.plus + "</i>" : "") + " · души ×" + mulT(C.figMul(S)) + "</span>");
+    const half = Math.max(pop.firstChild.offsetWidth, pop.lastChild.offsetWidth) / 2 + 14;   // длинное название не должно уезжать за край сетки
+    pop.style.left = Math.max(half, Math.min(W - half, cx)).toFixed(1) + "px";
+  }
   list.classList.remove("hg-boom"); void list.offsetWidth; list.classList.add("hg-boom");
+  return up;
 }
 const mulT = (m) => String(Math.round(m * 10) / 10).replace(".", ",");
 function drawFigBtn() {                                     // кнопка «Комбо» над сеткой: рисунки включены или нет
@@ -564,6 +700,7 @@ function figApply() {                                       // настройк�
   else drawFigBtn();
 }
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, комбо и прибавка к душам
+  drawMeter();
   const el = $("hgFigc"), k = S.fig.k;
   const sec = k > 0 && S.fig.left <= 3 ? Math.max(1, Math.ceil(S.fig.left)) : 0;   // последние три секунды: тикает и мигает
   if (sec && sec !== hurryAt) sfx.hurry(sec === 1);
@@ -578,7 +715,7 @@ function drawFigChip() {                                    // справа в �
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок прибавляет к комбо (простой — 1, сложные — до 4), а комбо умножает души: комбо 5 — души ×6, " +
     "и так до ×" + mulT(1 + CFG.figStep * CFG.figCap) + ". Чем выше комбо, тем сложнее рисунки. Не успел собрать следующий — комбо обрывается";
   el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b>" + (fig.plus > 1 ? " <i>+" + fig.plus + "</i>" : "") + "</span>" +
-    (k ? "<span>комбо <b>" + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
+    (k ? '<span><em class="hg-frk">' + FIG_RANKS[Math.max(0, figRank(k))].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
 }
 // Телефон: кнопка в углу водит между боем (верх страницы) и отрядом — сетка занимает экран целиком и сама страницу не листает.
@@ -1162,6 +1299,7 @@ export function frame(dt) {
   C.setWatch(S, TW.watching() && TW.isLive() && TW.ownShown());              // сундук эфира копится, пока свой стрим идёт фоном
   C.setLoud(S, TW.loud());                                   // свой стрим фоном со звуком — всё ×2
   drawBank(dt);
+  stepMeter();
   stepHold(dt);
   stepDraft();
   slowT -= dt;
@@ -1201,11 +1339,16 @@ export function onEvent(e) {
     if (fig) { for (const i of fig.hit) if (rows[i]) rows[i].root.classList.remove("hg-hit"); fig.hit.clear(); }
     figChipKey = "?";
     sfx.drop();
+    const list = $("mercList"), wrap = $("hgWrap"), mk = $("hgMMark"), live = list.offsetParent !== null && !still();
+    if (live && mk.textContent && $("hgMRank").offsetParent !== null) {   // буква ранга выпадает из кольца
+      const f = document.createElement("b"); f.className = "hg-mfall"; f.textContent = mk.textContent; f.dataset.n = mk.dataset.n;
+      $("hgMRank").appendChild(f); setTimeout(() => f.remove(), 700);
+    }
+    wrap.classList.remove("hg-mbreak"); void wrap.offsetWidth; wrap.classList.add("hg-mbreak"); setTimeout(() => wrap.classList.remove("hg-mbreak"), 700);
     spawnFig();                                              // сложный рисунок уходит: новое комбо начинается с простого
-    const list = $("mercList");
-    if (list.offsetParent !== null && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const n = document.createElement("div"); n.className = "hg-pop lose"; n.style.left = (list.clientWidth / 2) + "px"; n.style.top = Math.max(60, list.clientHeight / 2) + "px";
-      n.innerHTML = "<b>Комбо оборвалось</b><span>было " + group(e.k) + "</span>"; list.appendChild(n); setTimeout(() => n.remove(), 1500);
+    if (live) {
+      const er = FIG_RANKS[Math.max(0, figRank(e.k))];
+      fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight / 2), 1500, "<b>Комбо оборвалось</b><span>было " + group(e.k) + " · ранг " + er.mark + "</span>");
     }
     if (e.k >= 5) note("Комбо рисунков оборвалось", "Было " + group(e.k) + ". Собери рисунок на сетке отряда — начнётся новое", 3400);
   }
