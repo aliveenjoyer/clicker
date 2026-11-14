@@ -1044,19 +1044,26 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
    рисунок, сколько отмечено, комбо, прибавка к душам и полоска времени. */
 .side .list.hgrid { position: relative; }
 .hg-fig { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; overflow: visible; }
-.hg-fig polyline { fill: none; stroke: rgba(255,229,143,.8); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 10; filter: drop-shadow(0 0 4px rgba(255,197,61,.95)); animation: hg-dash 700ms linear infinite; }
-@keyframes hg-dash { to { stroke-dashoffset: -22; } }
-.hg-dot { position: absolute; left: 50%; top: 42%; z-index: 4; width: 36%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
-  background: rgba(20,10,40,.4); box-shadow: 0 0 0 3px #ffe58f, 0 0 14px rgba(255,197,61,.95), inset 0 0 10px rgba(255,229,143,.55); animation: hg-dot 800ms ease-in-out infinite alternate; }
-@keyframes hg-dot { from { transform: translate(-50%, -50%) scale(.88); } to { transform: translate(-50%, -50%) scale(1.1); } }
-.hg.hg-m { --rc: #ffe58f; }
-.hg.hg-hit .hg-dot { background: #63e6a5; box-shadow: 0 0 0 3px #d6fbe6, 0 0 14px rgba(99,230,165,.95); animation: none; transform: translate(-50%, -50%) scale(.8); }
-.hg.hg-hit { --rc: #63e6a5; }
-.hg-figc { flex: none; position: relative; display: flex; align-items: center; gap: 10px; height: 26px; padding: 0 10px; border-radius: 8px; overflow: hidden; color: var(--text-dim); background: rgba(255,214,102,.1); box-shadow: inset 0 0 0 1px rgba(255,214,102,.35); }
+.hg-fig polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.hg-fig .hg-lo { stroke: rgba(8,6,24,.85); stroke-width: 13; }
+.hg-fig .hg-lg { stroke: rgba(255,190,50,.6); stroke-width: 9; filter: blur(3px); }
+.hg-fig .hg-ll { stroke: #fff3b0; stroke-width: 5; stroke-dasharray: 12 9; animation: hg-dash 600ms linear infinite; }
+@keyframes hg-dash { to { stroke-dashoffset: -42; } }
+.hg-dot { position: absolute; left: 50%; top: 42%; z-index: 6; width: 46%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  background: radial-gradient(circle, #fffbe0 0 22%, rgba(255,214,102,.55) 23% 100%); box-shadow: 0 0 0 4px #fff3b0, 0 0 0 7px rgba(8,6,24,.8), 0 0 22px 6px rgba(255,190,50,.95); animation: hg-dot 700ms ease-in-out infinite alternate; }
+@keyframes hg-dot { from { transform: translate(-50%, -50%) scale(.86); } to { transform: translate(-50%, -50%) scale(1.12); } }
+/* плитки рисунка горят, остальные чуть приглушены — рисунок читается с первого взгляда */
+.hgrid.hg-has .hg:not(.hg-m) { filter: brightness(.86) saturate(.92); }
+.hg.hg-m { --rc: #fff3b0; z-index: 2; box-shadow: 0 0 0 2px #ffd666, 0 0 18px 3px rgba(255,190,50,.85); }
+.hg.hg-m::before { box-shadow: inset 0 0 0 3px var(--rc); }
+.hg.hg-hit .hg-dot { background: radial-gradient(circle, #f3fff8 0 30%, #3ddc8f 31% 100%); box-shadow: 0 0 0 4px #d6fbe6, 0 0 0 7px rgba(8,6,24,.8), 0 0 20px 5px rgba(61,220,143,.95); animation: none; transform: translate(-50%, -50%) scale(.82); }
+.hg.hg-hit { --rc: #7dffbf; box-shadow: 0 0 0 2px #3ddc8f, 0 0 16px 3px rgba(61,220,143,.8); }
+.hg-figc { flex: none; position: relative; display: flex; align-items: center; gap: 10px; height: 26px; padding: 0 10px; border-radius: 8px; overflow: hidden; font-weight: 800; color: #ffe9a8; background: rgba(255,197,61,.2); box-shadow: inset 0 0 0 2px rgba(255,214,102,.75); }
 .hg-figc[hidden] { display: none; }
-.hg-figc.on { color: #ffe9a8; background: rgba(255,197,61,.2); box-shadow: inset 0 0 0 1px rgba(255,214,102,.7); }
+.hg-figc.on { color: #3d1f00; background: linear-gradient(180deg, #ffe58f, #ffb52e); box-shadow: 0 0 14px rgba(255,197,61,.7); }
+.hg-figc.on b { color: #3d1f00; }
 .hg-figc b { color: #fff; font-weight: 900; }
-.hg-figt { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: linear-gradient(90deg, #ffe58f, #ff9d3d); transform-origin: 0 50%; animation: hg-figt linear forwards; }
+.hg-figt { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: #c2410c; transform-origin: 0 50%; animation: hg-figt linear forwards; }
 @keyframes hg-figt { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 1500px) { .hg-figc .tip { display: none; } }
 @media (prefers-reduced-motion: reduce) { .hg-fig polyline, .hg-dot { animation: none; } }

@@ -290,12 +290,15 @@ function spawnFig() {                                       // новый рис
 function drawFigLines() {                                   // линия рисунка — поверх сетки, между центрами плиток
   const list = $("mercList");
   let svg = list.querySelector(".hg-fig");
+  list.classList.toggle("hg-has", !!fig);                    // рисунок есть — остальные плитки чуть приглушены
   if (!fig) { if (svg) svg.remove(); return; }
   if (!svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "hg-fig"); list.appendChild(svg); }
   const lr = list.getBoundingClientRect();
   const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return (r.left + r.width / 2 - lr.left + list.scrollLeft).toFixed(1) + "," + (r.top + r.height * 0.42 - lr.top + list.scrollTop).toFixed(1); };
   svg.setAttribute("width", Math.round(lr.width)); svg.setAttribute("height", Math.round(Math.max(lr.height, list.scrollHeight)));
-  svg.innerHTML = fig.segs.map((st) => '<polyline points="' + st.map(pt).join(" ") + '"/>').join("");
+  // три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама бегущая линия
+  const lines = fig.segs.map((st) => st.map(pt).join(" "));
+  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => lines.map((q) => '<polyline class="' + c + '" points="' + q + '"/>').join("")).join("");
 }
 function figTouch(i) {                                      // по плитке провели или нажали: если она из рисунка — отметить
   if (!fig || fig.hit.has(i) || fig.cells.indexOf(i) < 0) return;
