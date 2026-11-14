@@ -8,6 +8,7 @@ import { sfx, unlock as audioUnlock } from "./audio.js";
 import { loadArt } from "./art.js";
 import { txt, lg } from "./num.js";
 import * as TW from "./stream.js";
+import * as TELE from "./tele.js";
 
 const KEY = "hlystopad.save.v1";
 const STEP = 1 / 60;
@@ -90,6 +91,7 @@ async function boot() {
   if (Q.has("mute")) S.set.sound = false;                   // ?mute=1 — тихая проверка
   const gone = (Date.now() - (S.at || Date.now())) / 1000;
   UI.mount(S, hooks); FX.mount(S); UI.applySettings();
+  TELE.mount({ state: () => S, tab: UI.curTab, watching: TW.watching });   // наблюдение: обезличенная сводка раз в минуту
   document.getElementById("hint").hidden = S.stats.clicks > 0;
   if (gone > 5) away(gone);
   C.checkUnlocks(S);
@@ -129,7 +131,7 @@ async function boot() {
 
   if (LOCAL && Q.has("dev")) {                                       // ?dev=1 — ручки для проверки: __dev.give(30), __dev.wave(49)
     window.__dev = {
-      S: () => S, C, UI, TW,
+      S: () => S, C, UI, TW, TELE,
       give(x) { S.souls = x; S.life = Math.max(S.life, x); },
       wave(z) { S.z = z; S.zrec = Math.max(S.zrec, z); S.best = Math.max(S.best, z); S.cycBest = Math.max(S.cycBest, z); S.kills = 0; S.hp = 1; S.wall = false; S.mode = "push"; C.checkUnlocks(S); C.derive(S); FX.setState(S); },
       ecl() { S.eclAt = 0; },                                // Затмение доступно сразу, без суток ожидания

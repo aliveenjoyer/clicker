@@ -13,6 +13,7 @@ const subs = new Set();
 export const state = { phase: "idle", code: "", uri: "", err: "" };   // idle | start | code | error
 let lid = "", pollT = 0, until = 0, step = 5300, win = null;
 
+export const apiUrl = () => API;                            // адрес сервера кликера: по нему же уходит сводка наблюдения (js/tele.js)
 export const sid = () => get(K_SID);
 export const who = () => get(K_WHO);
 export const logged = () => /^[a-f0-9]{48}$/.test(sid());

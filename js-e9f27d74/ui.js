@@ -52,6 +52,7 @@ export function mount(state, hooks) {
       if (b.classList.contains("hg-no") || !C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
       slowT = 0; tap(b);
       sfx.tap(tapN++); gridBuys += 1;                        // звук покупки — сразу и свой: каждая следующая плитка свайпа выше
+      const how = loud ? "gridTap" : "gridSw"; S.stats[how] = (S.stats[how] || 0) + 1;   // сколько куплено нажатием и сколько свайпом (для наблюдения)
       return true;
     };
     let sw = null, dotAt = null;      // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
@@ -392,6 +393,7 @@ function drawFigChip() {                                    // справа в �
     (k ? "<span>комбо <b>" + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt" style="animation-duration:' + full.toFixed(1) + "s;animation-delay:-" + Math.max(0, full - S.fig.left).toFixed(2) + 's"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
 }
+export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
 export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, cells: fig.cells.slice(), hit: [...fig.hit] } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t }));
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
@@ -1063,6 +1065,7 @@ function openSettings() {
     '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
     '<div class="row"><span>Сыграно</span><b>' + mins(S.stats.played) + " · ударов " + group(S.stats.clicks) + "</b></div>" +
+    '<p class="note">Игра считает обезличенную статистику: как далеко дошли игроки и чем пользуются. Ника и адреса в ней нет.</p>' +
     '<div class="acts split"><button class="btn danger sm" data-wipe>Стереть весь прогресс…</button><button class="btn" data-x>Готово</button></div>',
   (e) => {
     const b = e.target.closest("button"); if (!b) return;
