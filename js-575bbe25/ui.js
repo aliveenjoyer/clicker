@@ -11,6 +11,7 @@ import * as TOP from "./top.js";
 import * as SWAP from "./swap.js";
 import * as ACCT from "./acct.js";
 import * as CLOCK from "./clock.js";
+import * as CHAT from "./chat.js";
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // проверки на своём компьютере шлют события из кода
 
 const $ = (id) => document.getElementById(id);
@@ -174,7 +175,8 @@ export function mount(state, hooks) {
   $("btnMenu").addEventListener("click", openSettings);
   $("veil").addEventListener("click", closeModal);
   bindHold($("btnRebirth"));
-  TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); }, stage: (on) => FX.setDock(on) });
+  TW.mount(S, { changed: () => { slowT = 0; api.settings(); }, channel: () => { if (tab === "chat") buildChat(); }, stage: (on) => FX.setDock(on), login: () => { if (!ACCT.logged()) whoClick(); } });
+  CHAT.mount({ live: TW.isLive, changed: () => { TW.draw(); slowT = 0; } });   // кто в чате стрима: «всё ×2» и сундук эфира
   TOP.mount(S, { toast });
   FX.onNotice((text) => toast(text, 7000));
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
@@ -1388,9 +1390,12 @@ function stepDraft() {                                       // карточки
 }
 
 export function frame(dt) {
-  if (TW.watching()) C.achNote(S, "tw", dt);                // ачивка «Кино и клики»: время игры со стримом на фоне
-  C.setWatch(S, TW.watching() && TW.isLive() && TW.ownShown());              // сундук эфира копится, пока свой стрим идёт фоном
-  C.setLoud(S, TW.loud());                                   // свой стрим фоном со звуком — всё ×2
+  CHAT.tick();
+  const inChat = TW.isLive() && CHAT.inChat();               // игрок сидит в чате своего стрима, пока тот идёт (js/chat.js)
+  if (inChat) C.achNote(S, "tw", dt);                        // ачивка «Кино и клики»: время игры в чате стрима
+  C.setWatch(S, inChat);                                     // сундук эфира копится, пока игрок в чате
+  C.setLoud(S, inChat);                                      // и всё идёт ×2
+  C.setSpoke(S, inChat && CHAT.spoke());                     // писал в чат за последние 10 минут — сундук копится вдвое быстрее
   drawBank(dt);
   stepMeter();
   stepHold(dt);
@@ -1570,9 +1575,9 @@ function note(cap, text, ms) { achCap = cap; achMsg = text; achUntil = performan
 function airNote() {
   const c = S.chest;
   if (c.air >= KEEP.airCap) return "Ждёт " + c.air + " — открой, и начнут копиться новые";
-  if (S.live && S.watch) return "Следующий через " + mmss(Math.max(0, KEEP.airEvery - c.airT));
-  if (S.live) return "Стрим идёт! Включи его фоном — кнопка Twitch над линией";
-  return "Копится, пока идёт стрим aliveenjoyer и он включён здесь фоном: 10 минут — сундук";
+  if (S.live && S.watch) return "Следующий через " + mmss(Math.max(0, KEEP.airEvery - c.airT) / (S.spoke ? KEEP.airSpoke : 1)) + (S.spoke ? " · вдвое быстрее: ты писал в чат" : " · напиши в чат — пойдёт вдвое быстрее");
+  if (S.live) return ACCT.logged() ? "Стрим идёт! Зайди в его чат на Twitch — и сундук начнёт копиться" : "Стрим идёт! Войди через Twitch и зайди в чат стрима — сундук начнёт копиться";
+  return "Копится, пока идёт стрим aliveenjoyer и ты сидишь в его чате на Twitch: 10 минут — сундук";
 }
 function taskLine(i) {                                       // «312 / 400» или «12 / 20 мин»
   const q = S.tsk.list[i], t = TASKS.find((x) => x.id === q.id), v = C.taskNow(S, i);
@@ -1650,7 +1655,7 @@ function drawKeep() {
 }
 function drawLiveChest() {                                   // рядом с плашкой «Стрим идёт»: сколько до сундука эфира
   const b = $("liveChest"), c = S.chest;
-  const text = c.air > 0 ? "Сундук эфира ждёт" + (c.air > 1 ? " · " + c.air : "") : !S.live ? "" : S.watch ? "Сундук через " + mmss(Math.max(0, KEEP.airEvery - c.airT)) : "Включи стрим — будут сундуки";
+  const text = c.air > 0 ? "Сундук эфира ждёт" + (c.air > 1 ? " · " + c.air : "") : !S.live ? "" : S.watch ? "Сундук через " + mmss(Math.max(0, KEEP.airEvery - c.airT) / (S.spoke ? KEEP.airSpoke : 1)) : "Зайди в чат — будут сундуки";
   if (b.hidden !== !text) b.hidden = !text;
   if (text && b.textContent !== text) b.textContent = text;
   b.classList.toggle("ready", c.air > 0);

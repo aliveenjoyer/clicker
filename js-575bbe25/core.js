@@ -61,7 +61,7 @@ export function newState() {
 
 export function save(S) {
   const o = {};
-  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "loud" && k !== "sess" && k !== "achT") o[k] = S[k];
+  for (const k in S) if (k !== "ev" && k !== "d" && k !== "live" && k !== "watch" && k !== "loud" && k !== "spoke" && k !== "sess" && k !== "achT") o[k] = S[k];
   o.at = clock();
   return JSON.stringify(o, (k, v) => (v === -Infinity ? null : v));
 }
@@ -71,7 +71,7 @@ export function load(text) {
   try { o = JSON.parse(text); } catch (e) { return S; }
   if (!o || o.v !== 1) return S;
   for (const k in o) {
-    if (k === "ev" || k === "d" || k === "live" || k === "watch" || k === "loud" || k === "sess" || k === "achT") continue;   // то, что живёт только в этом заходе
+    if (k === "ev" || k === "d" || k === "live" || k === "watch" || k === "loud" || k === "spoke" || k === "sess" || k === "achT") continue;   // то, что живёт только в этом заходе
     if (k === "rel" || k === "cd" || k === "act" || k === "set" || k === "stats" || k === "statues" || k === "album") { if (o[k] && typeof o[k] === "object") Object.assign(S[k], o[k]); }
     else S[k] = o[k];
   }
@@ -287,8 +287,10 @@ export function comboTier(S) {
   for (let i = 0; i < CFG.combo.length; i++) if (S.combo >= CFG.combo[i][0]) t = i;
   return t;
 }
-// Свой стрим идёт фоном со звуком (S.loud — js/stream.js): всё ×2 — урон наёмников, урон удара и души.
+// Игрок сидит в чате своего стрима, пока тот идёт (S.loud — js/chat.js): всё ×2 — урон наёмников, урон удара и души.
+// До 15.11 это давал встроенный плеер со звуком; имя поля осталось прежним.
 export function setLoud(S, v) { S.loud = !!v; }
+export function setSpoke(S, v) { S.spoke = !!v; }            // игрок недавно писал в чат стрима: сундук эфира копится быстрее
 const loudLg = (S) => (S.loud ? L2 : 0);
 export const dpsLg = (S) => (S.d.dps === NEG ? NEG : S.d.dps + buffLg(S, "dmg") + buffLg(S, "dps") + loudLg(S));
 const rushCap = (S) => S.d.rushCap + (S.buff.tide > 0 ? L10(3) : 0);   // баф «Прилив»: слабые волны пролетают втрое быстрее
@@ -475,8 +477,8 @@ export function tick(S, dt, live) {                         // live=false — о
     S.sess += dt;
     if (S.live) S.stats.live = (S.stats.live || 0) + dt;      // идёт стрим aliveenjoyer
     S.achT += dt; if (S.achT >= 0.25) { S.achT = 0; checkAch(S); stepKeep(S); }
-    if (S.watch && S.live && S.chest.air < KEEP.airCap) {     // сундук эфира: копится, пока свой стрим идёт фоном в игре
-      S.chest.airT += dt;
+    if (S.watch && S.live && S.chest.air < KEEP.airCap) {     // сундук эфира: копится, пока игрок в чате своего стрима; писал в чат — быстрее
+      S.chest.airT += dt * (S.spoke ? KEEP.airSpoke : 1);
       if (S.chest.airT >= KEEP.airEvery) { S.chest.airT -= KEEP.airEvery; S.chest.air += 1; ev(S, { t: "chest_in", kind: "air" }); }
     }
   }
@@ -1061,7 +1063,7 @@ export function buyRelic(S, id) {
 
 // ---------- удержание: сундуки, задания дня, скины ----------
 // Всё это не сбрасывается ни возрождением, ни Затмением. Числа — KEEP в data.js.
-export function setWatch(S, v) { S.watch = !!v; }           // стрим aliveenjoyer идёт и включён фоном в игре (js/stream.js)
+export function setWatch(S, v) { S.watch = !!v; }           // стрим aliveenjoyer идёт, и игрок сидит в его чате на Twitch (js/chat.js)
 export const dayNo = (now) => {                              // номер дня по часам игрока
   const d = new Date(now === undefined ? clock() : now);
   return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);

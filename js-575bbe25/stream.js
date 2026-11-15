@@ -2,7 +2,8 @@
 // Пока стрим на фоне, его должно быть удобно смотреть: поле становится картинкой 16:9 без затемнения, а счёт душ,
 // комбо, цифры урона, Душка и звук стрима уезжают в полосу под картинкой (hooks.stage → js/fx.js, setDock).
 // Показываем свой канал, а когда он не в эфире — первый живой из списка друзей, по порядку. Как только свой стрим
-// начинается, фон возвращается на него. Бонус «эфир ×2» даёт только свой канал.
+// начинается, фон возвращается на него. Бонус «эфир ×2» (души) даёт только свой канал — всем, пока он в эфире.
+// «Всё ×2» и сундук эфира плеер больше не даёт (15.11): их получает тот, кто сидит в чате стрима на Twitch (js/chat.js).
 // Вместо этого «рекомендуемого» канала игрок может поставить фоном LoFi-музыку (канал lofigirl, идёт круглые сутки):
 // выбор — в пилюле под картинкой, рядом с именем рекомендуемого канала, запоминается в настройках (S.set.twPick). LoFi —
 // чужой канал: ни «эфира ×2», ни сундуков эфира он не даёт, чат во вкладке остаётся свой. Свой эфир начался — фон
@@ -23,6 +24,7 @@ const NAMES = { aliveenjoyer: "aliveenjoyer", sashawaify: "sashawaify", qissme_:
 const LIST = clean(Q.get("channel")) ? [clean(Q.get("channel"))] : [OWN].concat(FRIENDS);   // ?channel=<имя> — проверка на чужом канале
 const DEAD_MS = 5 * 60000;                                   // плеер сказал «не в эфире» — столько канал не предлагаем: превью у Twitch запаздывает
 export let CHANNEL = LIST[0];                                // чей стрим сейчас фоном (и чей чат во вкладке); никто не в эфире — свой
+import * as CHAT from "./chat.js";
 const $ = (id) => document.getElementById(id);
 let S = null, hooks = null, player = null, cur = "", live = false, scriptP = null, probeT = 0, shown = false;
 let rec = "", ownWas = null;                                 // кто сейчас рекомендуемый ("" — никто не в эфире); был ли свой канал в эфире при прошлой проверке
@@ -158,20 +160,22 @@ function setChannel(ch) {
   sync();
 }
 let liveKey = "?";
-function drawLive() {                                        // плашка наверху: свой эфир — души ×2, со звуком — всё ×2; чужой — просто чей стрим на фоне
-  const el = $("live"), on = loud(), can = live && !on && fits();   // can — бонус за звук можно включить нажатием
-  const key = [cur, live, on, can].join("|");
+function drawLive() {                                        // плашка наверху: свой эфир — души ×2, в чате стрима — всё ×2; чужой — просто чей стрим на фоне
+  const el = $("live"), on = live && CHAT.inChat(), fast = on && CHAT.spoke(), can = live && !on, lg = CHAT.logged();
+  const key = [cur, live, on, fast, can, lg].join("|");
   if (key === liveKey) return;
   liveKey = key;
   el.hidden = !cur;
   if (!cur) return;
   el.textContent = "";
   el.classList.toggle("loud", on); el.classList.toggle("offer", can);
-  el.title = on ? "Стрим идёт фоном со звуком: урон и души ×2" : can ? "Включи стрим фоном со звуком — урон и души пойдут ×2. Нажми, и он включится" : "";
+  el.title = on ? "Ты в чате стрима: урон и души ×2, копится сундук эфира." + (fast ? " Ты писал в чат — сундук копится вдвое быстрее" : " Напиши в чат — 10 минут сундук будет копиться вдвое быстрее")
+    : can ? (lg ? "Зайди в чат стрима на Twitch — урон и души пойдут ×2 и начнёт копиться сундук эфира. Смотреть можно где угодно, игра увидит тебя в чате за минуту. Нажми — стрим откроется в новой вкладке"
+      : "Войди через Twitch и зайди в чат стрима — урон и души пойдут ×2 и начнёт копиться сундук эфира. Нажми, чтобы войти") : "";
   const dot = document.createElement("span"); dot.className = "dot"; el.appendChild(dot);
   const add = (text, bold) => { el.appendChild(document.createTextNode(text)); const b = document.createElement("b"); b.textContent = bold; el.appendChild(b); };
-  if (on) add("Стрим со звуком — всё ", "×2");
-  else if (live) { add("Стрим идёт — души ", "×2"); if (can) add(" · со звуком всё ", "×2"); }
+  if (on) { add("Ты в чате стрима — всё ", "×2"); if (fast) add(" · сундук ", "×2"); }
+  else if (live) { add("Стрим идёт — души ", "×2"); add(lg ? " · зайди в чат — всё " : " · войди и зайди в чат — всё ", "×2"); }
   else add(cur === LOFI ? "На фоне " : "На фоне стрим ", nice(cur));
 }
 async function check() {
@@ -236,9 +240,8 @@ export function draw() {
     const on = sound(), sb = $("btnStreamSound"), sl = $("twVol");
     sb.innerHTML = on ? ICON_ON : ICON_OFF;
     sb.classList.toggle("on", on);
-    const offer = !on && live && ownShown();               // свой стрим без звука: звук даёт ×2 на всё
-    sb.classList.toggle("offer", offer);
-    sb.title = on ? "Выключить звук стрима" : offer ? "Включи звук стрима — урон и души пойдут ×2" : "Включить звук стрима";
+    sb.classList.remove("offer");                            // звук стрима бонусов не даёт (с 15.11 — только чат)
+    sb.title = on ? "Выключить звук стрима" : "Включить звук стрима";
     const v = String(on ? vol() : 0);
     if (document.activeElement !== sl && sl.value !== v) sl.value = v;
     sl.style.setProperty("--v", (on ? vol() : 0) + "%");
@@ -251,9 +254,9 @@ export function draw() {
     rb.disabled = !rec && isLofi;
     rb.setAttribute("aria-pressed", isLofi ? "false" : "true"); lb.setAttribute("aria-pressed", isLofi ? "true" : "false");
     const one = (isLofi ? rb : lb).offsetParent === null;    // узкая полоса: кнопка одна, она же переключатель
-    rb.title = (rec ? "Рекомендуемый канал: сейчас в эфире " + nice(rec) + (rec === LIST[0] ? " — свой стрим, фарм ×2 и сундуки эфира" : "") : "Из рекомендуемых каналов сейчас никто не в эфире") +
+    rb.title = (rec ? "Рекомендуемый канал: сейчас в эфире " + nice(rec) + (rec === LIST[0] ? " — свой стрим: души ×2, а в его чате — всё ×2 и сундуки эфира" : "") : "Из рекомендуемых каналов сейчас никто не в эфире") +
       (one && !isLofi ? ". Нажми — фоном пойдёт LoFi-музыка" : "");
-    lb.title = "LoFi-музыка: канал lofigirl, играет круглые сутки. Бонусов эфира и сундуков не даёт" + (one && isLofi ? (rec ? ". Нажми — вернётся " + nice(rec) : ". Из рекомендуемых каналов сейчас никто не в эфире") : "");
+    lb.title = "LoFi-музыка: канал lofigirl, играет круглые сутки" + (one && isLofi ? (rec ? ". Нажми — вернётся " + nice(rec) : ". Из рекомендуемых каналов сейчас никто не в эфире") : "");
     if (playing) applyQ();                                   // список качеств приходит не сразу: ставим выбранное, как только оно появилось
     const qb = $("btnStreamQ"), ql = qLabel();
     if (qb.textContent !== ql) qb.textContent = ql;
@@ -275,10 +278,11 @@ export function mount(state, h) {
     if (S.set.stream && !cur) { S.set.twPick = "lofi"; hooks.changed(); setChannel(LOFI); check(); return; }   // никто не в эфире — включаем LoFi-музыку
     S.set.stream = !S.set.stream; hooks.changed(); sync();
   });
-  $("live").addEventListener("click", () => {                // предложение в плашке наверху: включить свой стрим фоном со звуком
-    if (!live || loud() || !fits()) return;
-    S.set.stream = true; S.set.twPick = "auto"; S.set.twSound = true; if (vol() === 0) S.set.twVol = 50; hush = false;
-    hooks.changed(); setChannel(LIST[0]); sync(); applySound(); draw();
+  $("live").addEventListener("click", () => {                // предложение в плашке наверху: войти и зайти в чат стрима
+    if (!live || CHAT.inChat()) return;
+    if (!CHAT.logged()) { if (hooks.login) hooks.login(); return; }
+    window.open(CHAT.URL_TWITCH, "_blank", "noopener");      // стрим на Twitch в новой вкладке: там и чат
+    CHAT.soon(15000);
   });
   $("twSrc").addEventListener("click", (e) => {               // выбор: рекомендуемый канал или LoFi-музыка
     const b = e.target.closest("button[data-src]"); if (!b || b.disabled) return;
@@ -326,13 +330,7 @@ export function setState(state) { S = state; if (S.set.stream === undefined) S.s
 export const isLive = () => live;
 export const ownShown = () => !!cur && cur === LIST[0];      // фоном стоит именно свой канал: сундук эфира копится только так
 export const watching = () => shown && (playing || FAKEPLAY);              // стрим сейчас идёт фоном линии
-// Свой стрим идёт фоном именно со звуком: за это всё ×2 (js/core.js, setLoud). Смотрим и настройку, и сам плеер.
-function heard() {
-  if (!sound()) return false;
-  if (FAKEPLAY) return true;
-  try { return !!player && player !== "loading" && !player.getMuted() && player.getVolume() > 0; } catch (e) { return false; }
-}
-export const loud = () => watching() && live && ownShown() && heard();
+// Плеер бонусов не даёт (с 15.11): «всё ×2» и сундук эфира — за чат стрима (js/chat.js).
 export function info() {                                     // для проверки (?dev=1): что говорит сам плеер
   const on = player && player !== "loading";
   let q = null, list = [];
