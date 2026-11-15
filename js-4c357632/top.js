@@ -19,6 +19,9 @@ export const paceAll = () => paceAllNow;
 // сервер отвечает средним по игрокам: {avg — секунд от возрождения до рекорда, n — игроков}.
 let reachT = null, reachN = null, reachAllNow = null;
 export const reachAll = () => reachAllNow;
+// Рост рекорда у остальных: сервер считает каждому волны рекорда за час игры по отметкам последних суток (поле v в строке
+// таблицы; 0 — не замерен). Свой рост датчик считает сам (js/core.js, grow), поэтому своя строка сюда не идёт.
+export const tempos = () => (rows || []).filter((r) => r.v > 0 && !(A.logged() && r.n === A.who())).map((r) => r.v);
 
 const soulsNow = () => (S.life === NEG || !(S.life > 0) ? 0 : S.life);       // lg душ, заработанных за всё время
 const soulsTxt = (lg) => (lg > 0 ? txt(lg) : "0");

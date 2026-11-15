@@ -20,6 +20,7 @@ export function newState() {
     z: 1, zrec: 1, best: 1, kills: 0, hp: 1, mode: "push", wall: false, bossT: 0,
     runZ: 1, pw0: { t: 0, n: 0 },                           // датчик темпа: волна, с которой начат забег, и счётчики движения вперёд на его старте
     rr: { z: 0, hit: 0, log: [] },                          // путь до рекорда: рекорд, с которым начат забег (0 — нет), за сколько секунд до него дошли (0 — ещё нет), прошлые времена
+    gr: { m: [], h: [] },                                   // рост рекорда: отметки [секунда игры, рекорд] — раз в минуту за последний час и раз в десять минут за восемь часов
     combo: 0, comboIdle: 0, tier: -1,
     cd: {}, act: {}, buff: {}, flAcc: 0, bucket: 40,
     wispIn: 0, wispOn: 0, wisps: 0,
@@ -150,6 +151,8 @@ export function load(text) {
   const orr = o.rr && typeof o.rr === "object" ? o.rr : {};
   S.rr = { z: Math.floor(num(orr.z)), hit: num(orr.hit), log: (Array.isArray(orr.log) ? orr.log : []).map(Number).filter((v) => v > 0 && v < 1e7).slice(-10) };
   S.stats.reachT = num(S.stats.reachT); S.stats.reachN = Math.floor(num(S.stats.reachN));
+  const ogr = o.gr && typeof o.gr === "object" ? o.gr : {};
+  S.gr = { m: growMarks(ogr.m, GROW_M, S), h: growMarks(ogr.h, GROW_H, S) };
   const og2 = o.grd && typeof o.grd === "object" ? o.grd : {};
   const gl = Number(og2.left);
   S.grd = { lv: N0(og2.lv, 100000), left: gl > 0 && gl <= 1 ? gl : 1, dealt: NEG, last: Math.max(0, Math.min(1, Number(og2.last) || 0)) };
@@ -472,6 +475,7 @@ export function hit(S, src, weak) {                         // src: click | hold
 // ---------- ход времени ----------
 export function tick(S, dt, live) {                         // live=false — офлайн: без умений, комбо и огоньков
   S.stats.played += live ? dt : 0;
+  growMark(S);
   if (live && S.mode === "push" && !S.wall) S.stats.pushT = (S.stats.pushT || 0) + dt;   // время движения вперёд: не «Фарм» и не стена перед боссом
   if (live) {
     S.sess += dt;
@@ -887,6 +891,40 @@ export function pace(S) {
   const usual = last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
   const since = S.rb > 0 || S.ecl > 0 ? Math.max(0, t - (S.stats.rbAt || 0)) : null;
   return { now, mine, limit, state, canRb, since, target: rr.z, reach: rr.hit || null, usual };
+}
+
+// ---------- рост рекорда: одна метрика датчика темпа ----------
+// На сколько волн рекорда игрок уходит вперёд за час игры. Это и есть прогресс: возрождения, предметы и Затмения нужны
+// затем, чтобы рекорд рос быстрее, поэтому одно число отвечает и «лучше ли я иду, чем обычно», и «как иду среди остальных»
+// (сервер считает то же каждому игроку — поле v в таблице). Отметки [секунда игры, рекорд] ставятся раз в минуту (хранится
+// час — «сейчас») и раз в десять минут (восемь часов — «обычно»). Время — только игры с открытой страницей
+// (S.stats.played): то, что наёмники прошли, пока игрока не было, идёт в рост даром.
+const GROW_M = 61, GROW_H = 49;
+export function growMark(S) {
+  const t = S.stats.played;
+  const put = (a, step, n) => {
+    const last = a[a.length - 1];
+    if (last && (last[1] > S.best || last[0] > t + 1)) a.length = 0;   // рекорд или время стали меньше (сброс, откат сервера) — меряем заново
+    if (!a.length || t - a[a.length - 1][0] >= step) { a.push([Math.round(t), S.best]); if (a.length > n) a.shift(); }
+  };
+  put(S.gr.m, 60, GROW_M); put(S.gr.h, 600, GROW_H);
+}
+function growMarks(a, n, S) {                               // отметки из сохранения: пары чисел по возрастанию, не из будущего и не выше рекорда
+  const out = [], t = Number(S.stats.played) || 0;
+  for (const x of Array.isArray(a) ? a : []) {
+    if (!Array.isArray(x)) continue;
+    const p = Number(x[0]), b = Math.floor(Number(x[1])), last = out[out.length - 1];
+    if (!(p >= 0 && p <= t + 1 && b >= 1 && b <= S.best) || (last && (p <= last[0] || b < last[1]))) continue;
+    out.push([Math.round(p), b]);
+  }
+  return out.slice(-n);
+}
+// now — волн рекорда в час за последний час игры (null, пока не набралось пяти минут); usual — то же за последние восемь
+// часов игры (null, пока не набрался час).
+export function grow(S) {
+  const t = S.stats.played;
+  const rate = (a, min) => { const x = a[0]; return x && t - x[0] >= min && S.best >= x[1] ? (S.best - x[1]) / (t - x[0]) * 3600 : null; };
+  return { now: rate(S.gr.m, 300), usual: rate(S.gr.h, 3600) };
 }
 
 // ---------- Страж Затмения: цель между Затмениями ----------

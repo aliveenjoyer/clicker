@@ -130,6 +130,11 @@ export function mount(state, hooks) {
     window.addEventListener("resize", fitGrid);
   }
   $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) { tab = t.dataset.t; drawTabs(); slowT = 0; } });
+  $("paceBox").addEventListener("click", () => {             // датчик темпа: нажатие открывает таблицу игроков
+    tab = "top"; drawTabs(); slowT = 0;
+    const side = $("side");
+    if (side && side.getBoundingClientRect().top > window.innerHeight - 160) side.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   $("btnJump").addEventListener("click", (e) => {
     if (e.currentTarget.dataset.to === "side") $("side").scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo({ top: 0, behavior: "smooth" });
   });
@@ -1272,31 +1277,50 @@ function drawWave() {
 const secs = (s) => (s < 0.1 ? "меньше 0,1 с" : s < 10 ? s.toFixed(1).replace(".", ",") + " с" : s < 100 ? Math.round(s) + " с"
   : s < 3600 ? Math.floor(s / 60) + " мин " + Math.floor(s % 60) + " с" : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин");
 const runT = (s) => (s < 60 ? Math.round(s) + " с" : s < 3600 ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин");
-const PACE_WORD = { fly: "идёшь хорошо", slow: "замедляешься", farm: "стоишь в «Фарме»" };
+const PACE_WORD = { fly: ["идёшь хорошо", "хорошо"], slow: ["замедляешься", "медленно"], farm: ["стоишь в «Фарме»", "фарм"] };
+const growT = (v) => (v >= 9950 ? (v / 1000).toFixed(v < 99500 ? 1 : 0).replace(".", ",") + " тыс" : group(Math.round(v)));
 let paceKey = "";
+// Датчик темпа — одна метрика: на сколько волн в час игры растёт рекорд (js/core.js, grow). Шкала под числом: ромб — игрок
+// сейчас (последний час игры), черта — его обычный рост (восемь часов), точки — остальные игроки за последние сутки
+// (сервер, поле v в таблице). Под шкалой — место по росту. Вердикт справа от числа — что делать: правило прежнее (pace).
+// Время волны, путь до рекорда и средние по игрокам — в подсказке при наведении. Нажатие открывает «Топ».
 function drawPace() {
-  const p = C.pace(S), all = TOP.reachAll(), allW = TOP.paceAll();
-  const now = p.now === null ? "—" : secs(p.now);
-  const word = p.state === "stuck" ? (p.canRb ? "пора возрождаться" : "упёрся: качай отряд") : PACE_WORD[p.state] || "";
-  const fill = p.state === "stuck" ? 100 : p.now === null ? 0 : Math.round(Math.min(1, p.now / p.limit) * 100);
-  // Нижняя строка — путь до рекорда: сколько прошло с возрождения, за сколько забег вернулся к рекорду, с которым начался,
-  // как обычно и как у игроков. Пока возрождений не было — прежнее: среднее время волны и предел.
-  // Варианты строки от полного к короткому: в узкой полосе (стрим рядом, кнопка «На босса») берётся первый, что помещается.
-  const B = (s) => "<b>" + s + "</b>", J = (...a) => a.filter(Boolean).join(" · ");
-  const subs = p.since === null ? [J(p.mine === null ? "" : "среднее " + B(secs(p.mine)), "предел " + B(secs(p.limit))), "предел " + B(secs(p.limit))]
-    : p.reach !== null ? [J("рекорд за " + B(runT(p.reach)), p.usual !== null ? "обычно " + B(runT(p.usual)) : "", all ? "у игроков " + B(runT(all.avg)) : ""),
-      J("рекорд за " + B(runT(p.reach)), p.usual !== null ? "обычно " + B(runT(p.usual)) : ""), "рекорд за " + B(runT(p.reach))]
-    : [J("с возрождения " + B(runT(p.since)), !p.target ? "" : p.usual !== null ? "до рекорда обычно " + B(runT(p.usual)) : "до рекорда " + group(Math.max(0, p.target - S.zrec)) + " волн"),
-      J("с возрождения " + B(runT(p.since)), p.target && p.usual !== null ? "обычно " + B(runT(p.usual)) : ""), "с возрождения " + B(runT(p.since))];
-  const sub = subs[0];
-  const key = [now, word, p.state, fill, sub].join("|");
+  const p = C.pace(S), g = C.grow(S), others = TOP.tempos(), all = TOP.reachAll(), allW = TOP.paceAll();
+  const still = g.now !== null && g.now < 0.5;
+  const num = g.now === null ? "—" : still ? "0" : "+" + growT(g.now);
+  const words = p.state === "stuck" ? (p.canRb ? ["пора возрождаться", "возрождайся"] : ["упёрся: качай отряд", "качай отряд"]) : PACE_WORD[p.state] || [""];
+  const n = others.length + 1, place = g.now !== null && others.length >= 2 ? 1 + others.filter((v) => v > g.now).length : 0;
+  // Строка под шкалой — от полного варианта к короткому: берётся первый, что помещается.
+  const B = (t) => "<b>" + t + "</b>", J = (...a) => a.filter(Boolean).join(" · ");
+  const usual = g.usual === null ? "" : "обычно " + B("+" + growT(g.usual));
+  const subs = g.now === null ? ["меряю рост: нужно пять минут игры", "меряю рост…"]
+    : place ? [J(B(place + "-е место") + " по росту из " + n, usual), J("место " + B(place) + " из " + n, usual), "место " + B(place) + " из " + n]
+    : usual ? [usual + " в час", usual] : ["обычный рост — через час игры", "меряю обычный рост…"];
+  const max = Math.max(1, g.now || 0, g.usual || 0, ...others);
+  const at = (v) => (3 + 94 * Math.sqrt(Math.min(1, Math.max(0, v) / max))).toFixed(1);   // корень: быстрый лидер не сжимает остальных в угол
+  const scale = others.map((v) => '<i class="o" style="left:' + at(v) + '%"></i>').join("") +
+    (g.usual === null ? "" : '<i class="u" style="left:' + at(g.usual) + '%"></i>') + (g.now === null ? "" : '<i class="me" style="left:' + at(g.now) + '%"></i>');
+  const key = [num, words[0], p.state, subs[0], scale].join("|");
   if (key === paceKey) return;
   paceKey = key;
-  const box = $("paceBox"), v = $("paceVerdict");
+  const box = $("paceBox"), v = $("paceVerdict"), unit = $("paceUnit");
   box.className = "pace p-" + p.state;
-  $("paceNow").textContent = now;
-  v.hidden = !word; v.textContent = word;
-  $("paceFill").style.width = fill + "%";
+  $("paceNow").textContent = num;
+  $("paceScale").innerHTML = scale;
+  // Верхняя строка, когда тесно, уступает по шагам: уходит подпись «Рост рекорда», вердикт берёт слово короче. Не помогло —
+  // вердикт без дела («хорошо», «медленно», «фарм») прячется: о нём говорит цвет ромба; вердикт с делом («возрождайся»,
+  // «качай отряд») остаётся, а уходит «в час».
+  // Мерим с долями пикселя (как строку ниже): многоточие ставится и при нехватке в полпикселя.
+  v.hidden = !words[0];
+  const cs = v.hidden ? null : getComputedStyle(v), pad = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 0;
+  const cut = () => { if (v.hidden) return false; const have = v.getBoundingClientRect().width; return !!have && v.firstChild.getBoundingClientRect().width > have - pad + 0.02; };
+  const short = words[words.length - 1];
+  unit.hidden = g.now === null;
+  for (const [tight, word] of [[false, words[0]], [true, words[0]], [true, short]]) {
+    box.classList.toggle("tight", tight); v.innerHTML = "<span>" + word + "</span>";
+    if (!cut()) break;
+  }
+  if (cut()) { if (p.state === "stuck") unit.hidden = true; else v.hidden = true; }
   const line = $("paceSub");
   for (let i = 0; i < subs.length; i++) {
     if (i && subs[i] === subs[i - 1]) continue;
@@ -1304,7 +1328,14 @@ function drawPace() {
     const have = line.getBoundingClientRect().width;       // мерим с долями пикселя: многоточие ставится и при нехватке в полпикселя
     if (!have || line.firstChild.getBoundingClientRect().width <= have + 0.02) break;   // помещается (или блок не виден — мерить нечего)
   }
-  box.title = (p.now === null ? "Здесь видно, сколько времени уходит на волну." : "Сейчас на волну уходит " + now + ".") +
+  const waves = (x) => growT(x) + " " + (x >= 9950 ? "волн" : plural(Math.round(x), "волну", "волны", "волн"));
+  box.title = (g.now === null ? "Здесь видно, на сколько волн в час растёт твой рекорд. Чтобы замерить, нужно пять минут игры."
+      : still ? "Рекорд не растёт: за последний час игры он не сдвинулся." : "Рекорд растёт на " + waves(g.now) + " в час: так прошёл последний час игры.") +
+    (g.usual === null ? "" : " Обычно у тебя " + growT(g.usual) + " в час (последние восемь часов игры).") +
+    (others.length ? " На шкале ромб — ты сейчас, черта — твой обычный рост, точки — другие игроки за последние сутки." : "") +
+    (place ? " По росту ты на " + place + "-м месте из " + n + "." : "") +
+    " Нажми — откроется таблица игроков." +
+    (p.now === null ? "" : " Сейчас на волну уходит " + secs(p.now) + ".") +
     " У босса здоровья как у целой волны, а времени на него — " + secs(p.limit) + ". Когда волна идёт дольше, босса уже не взять: ты упёрся" +
     (p.canRb ? " — пора возрождаться." : S.un.rebirth ? " — качай отряд." : " — качай отряд; возрождение откроется на 50-й волне.") +
     (p.mine === null ? "" : " В среднем за забег у тебя " + secs(p.mine) + " на волну.") +

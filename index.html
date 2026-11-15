@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=06875bdf">
-<link rel="stylesheet" href="css/ui.css?v=06875bdf">
-<link rel="stylesheet" href="css/game.css?v=06875bdf">
+<link rel="stylesheet" href="css/tokens.css?v=5d1c40e2">
+<link rel="stylesheet" href="css/ui.css?v=5d1c40e2">
+<link rel="stylesheet" href="css/game.css?v=5d1c40e2">
 </head>
 <body>
 
@@ -62,11 +62,11 @@
         <div class="pips" id="pips"></div>
         <div class="sub" id="waveNext"></div>
       </div>
-      <!-- Датчик темпа: за сколько проходится волна, среднее за забег и по игрокам, не пора ли возрождаться (js/core.js, pace) -->
+      <!-- Датчик темпа: рост рекорда в волнах за час, шкала с остальными игроками, место среди них и не пора ли возрождаться (js/core.js: grow, pace) -->
       <div class="pace p-none" id="paceBox">
-        <div class="pa"><span class="eyebrow">Волна за</span><b id="paceNow">—</b><span class="pv" id="paceVerdict" hidden></span></div>
-        <i class="pm"><u id="paceFill"></u></i>
-        <div class="sub" id="paceSub">меряю темп…</div>
+        <div class="pa"><span class="eyebrow">Рост рекорда</span><b id="paceNow">—</b><span class="pu" id="paceUnit">в час</span><span class="pv" id="paceVerdict" hidden></span></div>
+        <div class="ps" id="paceScale"></div>
+        <div class="sub" id="paceSub">меряю рост…</div>
       </div>
       <div class="sp"></div>
       <button class="btn gold" id="btnBoss" hidden>На босса</button>
@@ -225,7 +225,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-575bbe25/main.js"></script>
+<script type="module" src="js-4c357632/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

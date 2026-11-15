@@ -382,9 +382,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .dcard.rar-l .rk, .dcard.rar-x .rk { color: var(--bc); }
 .dcard.rar-r { box-shadow: 0 6px 0 #0f1130, 0 14px 30px rgba(0,0,0,.5), inset 0 0 0 3px var(--bc), 0 0 0 2px rgba(77,163,255,.5); }
 
-/* датчик темпа в полосе волны: три строки не выше соседних блоков, чтобы полоса не росла */
+/* датчик темпа в полосе волны: число «рекорд растёт на N в час» с вердиктом, шкала с игроками и строка места — три строки
+   не выше соседних блоков, чтобы полоса не росла */
 .wavebar { container: wavebar / inline-size; }
-.wavebar .pace { flex: 0 1 auto; min-width: 0; max-width: 380px; overflow: hidden; }
+.wavebar .pace { flex: 0 1 auto; min-width: 0; max-width: 380px; overflow: hidden; cursor: pointer; }
 /* полоса уже 900 пикселей (окно ноутбука): «трупер N / 10» и рекорд уступают место датчику; уже 800 — уходит и подпись «Волна за» */
 @container wavebar (min-width: 700px) and (max-width: 900px) { .rec, #waveSub { display: none; } }
 @container wavebar (min-width: 700px) and (max-width: 800px) { .pace .eyebrow { display: none; } }
@@ -396,16 +397,24 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .pace.p-slow .pv { color: #2a1c00; background: var(--farm); }
 .pace.p-stuck .pv { color: #2a0610; background: var(--danger-soft); }
 .pace.p-farm .pv { color: var(--text-dim); background: var(--surface-3); }
-.pace .pm { display: block; height: 3px; margin-top: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
-.pace .pm u { display: block; height: 100%; width: 0; background: #63e6a5; transition: width 200ms; }
-.pace.p-slow .pm u { background: var(--farm); }
-.pace.p-stuck .pm u { background: var(--danger-soft); }
-.wavebar .pace .sub { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+.pace .pu { flex: none; margin-left: -3px; font: 700 11.5px/1 var(--ui); color: var(--text-dim); }
+.pace.tight .eyebrow { display: none; }                      /* тесно: подпись уступает место вердикту (js/ui.js, drawPace) */
+/* шкала роста: точки — другие игроки, черта — свой обычный рост, ромб — игрок сейчас (цвет — как у вердикта) */
+.pace .ps { position: relative; height: 9px; margin-top: 1px; }
+.pace .ps::before { content: ""; position: absolute; left: 0; right: 0; top: 3.5px; height: 2px; border-radius: 1px; background: var(--surface-3); }
+.pace .ps i { position: absolute; top: 50%; }
+.pace .ps .o { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #8f96c8; }
+.pace .ps .u { width: 2px; height: 10px; margin: -5px 0 0 -1px; border-radius: 1px; background: var(--text); opacity: .7; }
+.pace .ps .me { width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 2px; transform: rotate(45deg); background: var(--text); box-shadow: 0 0 0 2px #20244c; }
+.pace.p-fly .ps .me { background: #63e6a5; }
+.pace.p-slow .ps .me { background: var(--farm); }
+.pace.p-stuck .ps .me { background: var(--danger-soft); }
+.pace.p-farm .ps .me { background: var(--text-dim); }
+.wavebar .pace .sub { margin-top: 2px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
 .wavebar .pace .sub b { color: var(--text); font-weight: 800; }
 .stage.narrow .wavebar .pace { max-width: 250px; }
-@media (max-width: 720px) {                                  /* телефон: датчик — своей строкой под полосой, без полоски */
+@media (max-width: 720px) {                                  /* телефон: датчик — своей строкой под полосой */
   .wavebar .pace, .stage.narrow .wavebar .pace { order: 6; flex: 1 1 100%; max-width: none; }
-  .pace .pm { display: none; }
 }
 
 /* автовыбор предметов: выключатель, любимые по номерам, кнопки у выбранного предмета */
@@ -926,7 +935,7 @@ html { scrollbar-gutter: stable; }
    уходят «трупер N / 10» и рекорд, точки труперов и кнопка мельче; уже 900 (окно ноутбука, стрим рядом) — точки уходят
    совсем. Строка под вердиктом сама берёт вариант короче, если не помещается (js/ui.js, drawPace). Телефон не трогаем:
    там датчик и точки стоят своими строками. */
-.wavebar:has(#btnBoss:not([hidden])) .pace.p-stuck .eyebrow, .wavebar:has(#btnBoss:not([hidden])) .pace.p-stuck #paceNow { display: none; }
+/* (с 15.11 число — главная метрика «рост рекорда за час», оно остаётся и когда забег упёрся: вердикт сам берёт слово короче) */
 @media (min-width: 721px) {
   @container wavebar (max-width: 1100px) {
     .wavebar:has(#btnBoss:not([hidden])) .rec, .wavebar:has(#btnBoss:not([hidden])) #waveSub { display: none; }
@@ -942,6 +951,18 @@ html { scrollbar-gutter: stable; }
   }
 }
 .stage.narrow .wavebar:has(#btnBoss:not([hidden])) { gap: 8px; }   /* стрим рядом на небольшом экране: каждый пиксель датчику */
+/* средняя и узкая полоса (окно 1920 с широкой колонкой, окно ноутбука) и без кнопки «На босса»: точки труперов мелкие, как с кнопкой (не прыгают,
+   когда она появляется), «трупер N / 10» уходит, подпись под точками сжимается первой, но не уже самих точек — иначе
+   датчику не хватало места на подпись «Рост рекорда» и вердикт, а точки наезжали на него */
+@media (min-width: 721px) {
+  @container wavebar (min-width: 600px) and (max-width: 1100px) {
+    .wavebar #waveSub { display: none; }
+    .wavebar .wavemid { flex-shrink: 100000; min-width: 124px; }
+    .wavebar .pips { gap: 3px; }
+    .wavebar .pips i { width: 9px; height: 9px; }
+    .wavebar .pips i.boss { width: 16px; }
+  }
+}
 
 /* автозапуск умений: карточка под Стражем и метка «авто» на умениях, пока он работает */
 .rebox.au { margin-top: 10px; background: linear-gradient(180deg, rgba(99,230,165,.14), rgba(99,230,165,.04)); box-shadow: inset 0 0 0 2px rgba(99,230,165,.32); }
