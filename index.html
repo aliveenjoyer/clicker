@@ -17,9 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=5d1c40e2">
-<link rel="stylesheet" href="css/ui.css?v=5d1c40e2">
-<link rel="stylesheet" href="css/game.css?v=5d1c40e2">
+<link rel="stylesheet" href="css/tokens.css?v=d7a8ec36">
+<link rel="stylesheet" href="css/ui.css?v=d7a8ec36">
+<link rel="stylesheet" href="css/game.css?v=d7a8ec36">
 </head>
 <body>
 
@@ -77,10 +77,12 @@
       <div class="rec">рекорд<b id="waveRec">1</b></div>
     </div>
 
+    <!-- Поле боя и картинка стрима. Картинка стоит РЯДОМ с полем, а не под ним: правила встраивания Twitch не разрешают
+         ничем накрывать плеер, поэтому на ней нет ни одного слоя игры (js/stream.js, css «стрим рядом с боем»).
+         Пока стрим не показан, .arena — просто обёртка поля. -->
+    <div class="arena" id="arena">
+    <div class="twbg" id="twbg" hidden><div id="twplayer"></div></div>
     <div class="field" id="field">
-      <div class="twbg" id="twbg" hidden><div id="twplayer"></div></div>
-      <button class="btn twplay" id="twplay" hidden>▶ Включить стрим</button>
-      <button class="btn ghost twback" id="twback" hidden>К игре</button>
       <div class="skyline" id="rushLines"></div>
       <canvas id="fxc"></canvas>
 
@@ -139,8 +141,9 @@
       </div>
       <img class="cursor" id="cursor" data-art="whip-cursor" alt="">
     </div>
+    </div>
 
-    <!-- Стрим фоном: счёт душ, комбо, цифры и Душка переезжают с картинки сюда (js/fx.js, setDock) -->
+    <!-- Стрим рядом с боем: счёт душ, комбо, цифры и Душка переезжают с поля сюда (js/fx.js, setDock) -->
     <div class="dock" id="dock" hidden>
       <div class="twctl" id="twctl" hidden>
         <button class="twsnd" id="btnStreamSound" type="button" aria-label="Звук стрима"></button>
@@ -225,7 +228,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-4c357632/main.js"></script>
+<script type="module" src="js-9359109b/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

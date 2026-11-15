@@ -12,6 +12,7 @@ let S = null, el = {}, W = 1, H = 1, FW = 1, FH = 1, ctx = null, dpr = 1;   // W
 let away = false, strike = null, notice = null;             // трупер вынесен с линии: эффекты рисуются в рамке вокруг него
 const PHONE = window.matchMedia("(max-width: 720px)");      // телефон: поле короткое и чистое, трупер с линии не снимается
 let askDock = false;                                         // просил ли полосу под полем стрим (на телефоне она есть всегда)
+let placing = false;                                         // трупера как раз выносят с линии, его место ещё не поставлено
 let docked = false, wantDock = false;                       // стрим фоном: счёт душ, комбо, цифры и Душка стоят в полосе под картинкой
 const pv = { x: -999, y: -999 };                            // указатель в координатах окна
 let parts = [], rings = [], orbs = [], flies = 0;
@@ -25,14 +26,14 @@ export function mount(state) {
   S = state;
   for (const id of ["field", "fxc", "enemy", "q1", "q2", "plate", "hp", "hpText", "enemyName", "enemyCount", "facDot", "crown", "lash", "lashGlow",
     "lashLine", "bossRing", "bossArc", "bossT", "combo", "comboN", "comboName", "wisp", "banner", "hint", "pops", "dushka", "say", "cursor",
-    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome", "stats", "dock", "twctl"]) el[id] = $(id);
+    "bankBox", "rushLines", "pet", "crate", "statue", "urn", "weak", "fxl", "fxo", "foeGrip", "foeHome", "stats", "dock", "twctl", "arena", "twbg", "draft"]) el[id] = $(id);
   ctx = el.fxc.getContext("2d");
   el.weak.style.backgroundImage = "url(" + art("fx-weak") + ")";
   refreshLine();
   el.facDot.className = "fac " + (S.set.faction === "sapphire" ? "fac-amber" : "fac-sapphire");
   resize();
   window.addEventListener("resize", resize);
-  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(el.field);   // поле меняет размер и без смены окна: стрим фоном делает его 16:9
+  if (window.ResizeObserver) { const ro = new ResizeObserver(() => resize()); ro.observe(el.field); ro.observe(el.arena); }   // поле меняет размер и без смены окна: рядом встаёт картинка стрима
   el.field.addEventListener("pointermove", onPtr);
   el.field.addEventListener("pointerdown", onPtr);
   el.field.addEventListener("pointerleave", () => { ptr.inside = false; });
@@ -51,9 +52,13 @@ export function setCalm(v) { calm = !!v; document.body.classList.toggle("calm", 
 function resize() {
   const r = el.field.getBoundingClientRect();
   FW = Math.max(1, r.width); FH = Math.max(1, r.height);
-  el.field.style.setProperty("--fh", Math.round(FH) + "px");  // от высоты поля считается рост трупера, когда стрим на фоне
-  el.dock.classList.toggle("wide", FW >= 1150); el.dock.classList.toggle("slim", FW < 800); el.dock.classList.toggle("tiny", FW < 600);   // полоса под картинкой подстраивается под ширину поля
-  el.field.parentNode.classList.toggle("mid", FW < 900); el.field.parentNode.classList.toggle("narrow", FW < 760);   // и блоки вокруг: полоса волны, умения
+  el.field.style.setProperty("--fh", Math.round(FH) + "px"); el.field.style.setProperty("--fw", Math.round(FW) + "px");   // от размеров поля считается рост трупера, когда рядом стрим
+  // Ширина всего блока «картинка стрима + бой»: когда стрим показан, само поле — узкий столбец, и мерить по нему нельзя.
+  const ar = el.arena.getBoundingClientRect(), AW = Math.max(1, ar.width), stage = el.arena.parentNode;
+  el.dock.classList.toggle("wide", AW >= 1150); el.dock.classList.toggle("slim", AW < 800); el.dock.classList.toggle("tiny", AW < 600);   // полоса под ними подстраивается под ширину
+  stage.classList.toggle("mid", AW < 900); stage.classList.toggle("narrow", AW < 760);   // и блоки вокруг: полоса волны, умения
+  stage.style.setProperty("--under", Math.max(120, Math.round(stage.getBoundingClientRect().bottom - ar.bottom)) + "px");   // сколько места под ними: туда встаёт выбор предмета
+  if (away && !placing && el.float && !el.float.hidden) keepOffStream();
   W = away ? Math.max(1, el.fxbox.clientWidth) : FW; H = away ? Math.max(1, el.fxbox.clientHeight) : FH;
   dpr = Math.min(2, window.devicePixelRatio || 1);
   el.fxc.width = Math.round(W * dpr); el.fxc.height = Math.round(H * dpr);
@@ -120,7 +125,7 @@ function setAway(on) {
   fxm = null; wasOver = false;
   if (on) fitBox(); else resize();
 }
-const chatFrames = () => [...document.querySelectorAll("#chatBox iframe")].map((n) => n.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0);
+const chatFrames = () => [...document.querySelectorAll("#chatBox iframe, #twbg")].map((n) => n.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0);   // окна Twitch, которые нельзя накрывать: чат и картинка стрима
 function fitBox() {                                          // рамка эффектов: поля вокруг трупера, подрезанные там, где они накрыли бы чат Twitch
   if (!away) return;
   const f = el.float.getBoundingClientRect(), m = { l: FXM.l, t: FXM.t, r: FXM.r, b: FXM.b };
@@ -170,6 +175,8 @@ export function onNotice(fn) { notice = fn; }                // ui.js: чем п
 // сам бой: трупер с полоской здоровья и то, что нужно бить. Зовёт js/stream.js через UI при каждом появлении и уходе картинки.
 export function setDock(on) {
   askDock = !!on;
+  // выбор предмета: рядом со стримом поле — узкий столбец, три карточки в него не помещаются; встают под картинкой
+  if (el.draft) { const home = askDock ? el.arena.parentNode : el.field; if (el.draft.parentNode !== home) { if (askDock) home.appendChild(el.draft); else home.insertBefore(el.draft, el.hint); } }
   wantDock = askDock || PHONE.matches;                       // телефон: счёт, комбо, цифры и Душка — всегда под полем
   if (!el.field || wantDock === docked) return;
   docked = wantDock;
@@ -187,10 +194,43 @@ function bankSpot() {                                        // куда лет�
   // полоса лежит под полем: души уходят за нижний край картинки, а у вынесенного трупера — за край его рамки
   return { x, y: away ? y : Math.min(y, H + 34), px: Math.min(Math.max(12, b.left - f.left), W - 170), py: H - 46 };
 }
-function placeFoe(x, y) {                                    // поставить вынесенного трупера: левый верхний угол, в пределах окна
+// Вынесенный трупер не должен лечь на картинку стрима: плеер Twitch нельзя накрывать (как и чат).
+//   — игрок тащит трупера сам: на картинку его не затащить, он упирается в её ближайший край;
+//   — игра ставит его сама (место из настроек при запуске; картинка появилась под стоящим трупером): на свободное место
+//     у ближайшего края картинки, но не на окно чата. Если такого места нет — трупер возвращается на линию.
+function offStream(x, y, w, h) {                             // куда поставить; null — некуда
+  if (!el.twbg || el.twbg.hidden) return [x, y];
+  // запас вокруг трупера: слева торчит кольцо таймера босса (46 пикс.), сверху — кнопки «вернуть», плюс тени и свечение
+  const p = el.twbg.getBoundingClientRect(), gl = 60, gt = 44, gr = 44, gb = 44;
+  if (!p.width || x + w + gr <= p.left || x - gl >= p.right || y + h + gb <= p.top || y - gt >= p.bottom) return [x, y];
+  const fit = (o) => o[0] >= 6 && o[1] >= 6 && o[0] + w <= window.innerWidth - 6 && o[1] + h <= window.innerHeight - 6;
+  const chats = [...document.querySelectorAll("#chatBox iframe")].map((n) => n.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0);
+  const onChat = (o) => chats.some((c) => !(o[0] + w + 8 <= c.left || o[0] - 8 >= c.right || o[1] + h + 8 <= c.top || o[1] - 8 >= c.bottom));
+  let opts = [[p.right + gl, y], [p.left - gr - w, y], [x, p.bottom + gt], [x, p.top - gb - h]].filter(fit);
+  if (!dragging) opts = opts.filter((o) => !onChat(o));       // сама игра трупера на чат не ставит
+  if (!opts.length) { if (!dragging) return null; const r = el.float.getBoundingClientRect(); return [r.left, r.top]; }   // тащат, а встать некуда — стоит, где стоял
+  opts.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
+  return opts[0];
+}
+function sendHome() {                                        // рядом с картинкой места нет — на линию
+  attach(); delete S.set.foe;
+  if (notice) notice("Рядом с картинкой стрима трупера поставить некуда — он вернулся на линию");
+}
+function keepOffStream() {                                   // картинка появилась или сдвинулась — проверить, не под трупером ли она
+  if (dragging) return;
+  const r = el.float.getBoundingClientRect();
+  const q = offStream(r.left, r.top, r.width, r.height);
+  if (!q) { sendHome(); return; }
+  if (Math.abs(q[0] - r.left) > 0.5 || Math.abs(q[1] - r.top) > 0.5) { el.float.style.left = Math.round(q[0]) + "px"; el.float.style.top = Math.round(q[1]) + "px"; fitBox(); }
+}
+function placeFoe(x, y) {                                    // поставить вынесенного трупера: левый верхний угол, в пределах окна и не на картинке стрима
+  if (!away) return;
   const r = el.float.getBoundingClientRect();
   x = Math.max(6, Math.min(window.innerWidth - r.width - 6, x));
   y = Math.max(6, Math.min(window.innerHeight - r.height - 6, y));
+  const q = offStream(x, y, r.width, r.height);
+  if (!q) { sendHome(); return; }
+  [x, y] = q;
   el.float.style.left = Math.round(x) + "px"; el.float.style.top = Math.round(y) + "px";
   fitBox();
 }
@@ -208,7 +248,7 @@ function detach(x, y) {
   el.foeHome.hidden = false;
   el.foeGrip.title = "Перетащи трупера куда удобно";
   C.achMark(S, "away");
-  setAway(true);
+  placing = true; setAway(true); placing = false;            // место трупера ещё не задано: проверку «не на картинке ли он» делает placeFoe ниже
   placeFoe(x, y);
 }
 function attach() {                                          // вернуть на линию
@@ -227,7 +267,7 @@ function savePos() {                                         // место за�
 function syncFoe() {                                         // при запуске, смене игры и размера окна
   if (PHONE.matches) { if (away) attach(); return; }         // на телефоне вынесенный трупер закрывал бы сетку отряда: он всегда на линии
   const p = S.set.foe;
-  if (p && typeof p.x === "number" && typeof p.y === "number") { if (!away) detach(0, 0); placeFoe(p.x * window.innerWidth, p.y * window.innerHeight); }
+  if (p && typeof p.x === "number" && typeof p.y === "number") { if (!away) detach(p.x * window.innerWidth, p.y * window.innerHeight); else placeFoe(p.x * window.innerWidth, p.y * window.innerHeight); }
   else if (away) attach();
 }
 function bindFoe() {

@@ -450,10 +450,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .chatbox { flex: 1; min-height: 420px; margin: 8px; border-radius: var(--r-3); overflow: hidden; background: #0e0e10; }
 .chatbox iframe { width: 100%; height: 100%; min-height: 420px; border: 0; display: block; }
 
-/* стрим Twitch фоном линии: плеер под игрой, клики идут в игру. Как выглядит поле со стримом — в конце файла */
-.twbg { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: #000; pointer-events: none; }
-.twbg #twplayer { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-.twbg iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; }
+/* стрим Twitch рядом с боем: картинка — отдельный чистый блок слева от поля. Как это выглядит — в конце файла */
+.twbg { position: relative; z-index: 0; overflow: hidden; background: #000; }
+.twbg #twplayer { position: absolute; inset: 0; }
+.twbg iframe { width: 100%; height: 100%; border: 0; display: block; }
 .ibtn.tw.on { color: #fff; background: #9146ff; box-shadow: 0 3px 0 #5a23b3, 0 0 14px rgba(145,70,255,.6); }
 .ibtn.tw.off { opacity: .5; }
 
@@ -466,12 +466,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .tab { padding: 9px 3px; font-size: 11px; }
 }
 
-.twplay { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 9; color: #fff; background: linear-gradient(180deg, #b48cff, #9146ff); box-shadow: 0 4px 0 #5a23b3, 0 8px 18px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.4); cursor: pointer; animation: nudge 1.4s var(--ease-pop) infinite; }
-.twback { position: absolute; right: 14px; top: 14px; z-index: 31; background: rgba(12,12,34,.8); cursor: pointer; }
-.field.twfront { cursor: default; }
-.field.twfront .twbg { z-index: 30; pointer-events: auto; }
-.field.twfront .twbg iframe { pointer-events: auto; }
-.field.twfront .cursor { display: none; }
+
 
 /* ---------- события на линии: ящик, статуя, урна, жертвенник, элита, слабое место ---------- */
 .lnobj { position: absolute; z-index: 7; pointer-events: auto; cursor: none; -webkit-user-drag: none; filter: drop-shadow(0 8px 10px rgba(5,6,20,.6)); }
@@ -650,33 +645,62 @@ body.foedrag, body.foedrag * { cursor: grabbing !important; user-select: none; -
 .foe-fx > canvas, .foe-fx > svg { width: 100%; height: 100%; }
 body.foegrab iframe { pointer-events: none !important; }     /* пока трупера тащат, окна Twitch не перехватывают мышь */
 
-/* ---------- стрим фоном: его должно быть удобно смотреть ----------
-   Поле становится картинкой 16:9 без затемнения и виньеток. Всё, что закрывало её постоянно (счёт душ, комбо, цифры
-   урона, Душка, звук стрима), стоит в полосе под картинкой: туда их переносит js/fx.js (setDock). На картинке остаётся
-   только бой: трупер на своей табличке в правом нижнем углу и то, что нужно бить. Страница при этом раздвигается так,
-   чтобы картинка была как можно больше, но помещалась на экран вместе с полосой и умениями. */
-body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh - 388px, 1080px) * 16 / 9 + 56px + var(--side-w))); }
-.field.tw { height: auto; aspect-ratio: 16 / 9; min-height: 300px; max-height: calc(100vh - 110px); background-image: none !important; background-color: #000; border-radius: var(--r-5) var(--r-5) 0 0;
-  --ew: clamp(150px, calc(var(--fh, 500px) * .34), 270px); --pw: calc(var(--ew) + 44px); }
-.field.tw::after, .field.tw.dark::before { display: none; }
+/* ---------- стрим рядом с боем (15.11) ----------
+   Плеер Twitch нельзя ничем накрывать (правила встраивания, п. 1.3): раньше он лежал под игрой, и поверх него шёл весь бой.
+   Теперь картинка стоит слева чистым прямоугольником 16:9 — на ней нет ни одного слоя игры, и по ней можно нажимать
+   (показ запускает сам зритель). Бой идёт справа, в узком столбце (.field.tw): трупер внизу на своей табличке, события
+   линии — над ним. Счёт душ, комбо, цифры и Душка стоят в полосе под ними (js/fx.js, setDock), выбор предмета — там же,
+   под картинкой (.stage > .draft). Страница при этом раздвигается так, чтобы картинка была как можно больше, но
+   помещалась на экран вместе с полосой и умениями. */
+body.twon .main, body.twon .top { max-width: max(1100px, calc(clamp(56vh, 100vh - 388px, 1080px) * 16 / 9 + 306px + var(--side-w))); }
+.arena.tw { display: flex; align-items: stretch; gap: 10px; }
+.arena.tw .twbg { flex: 1 1 0; min-width: 0; aspect-ratio: 16 / 9; min-height: 300px; max-height: calc(100vh - 110px); border-radius: var(--r-5) 0 0 0; }
+.arena.tw .field { flex: 0 0 clamp(170px, 20%, 240px); width: auto; height: auto; min-height: 0; overflow: hidden; border-radius: 0 var(--r-5) 0 0;
+  --ew: max(96px, min(calc(var(--fw, 200px) - 44px), calc(var(--fh, 400px) * .42))); }
+/* Тени соседей на картинку ложиться не должны: браузер считает плеер накрытым, даже если его задела чужая тень. У поля
+   рядом с картинкой внешней тени нет, у полосы под ней тень уходит только вниз, и между полосой и картинкой есть зазор. */
+.arena.tw .field { box-shadow: inset 0 0 0 2px rgba(169,155,255,.18); }
+.arena.tw ~ .dock { margin-top: -8px; box-shadow: 0 34px 30px -22px rgba(5,6,20,.45); clip-path: inset(0 -80px -600px -80px); }   /* сверху полоса обрезана: свечения значков и облачко Душки не выступают на картинку */
+.arena.tw ~ .dock .twqmenu { bottom: auto; top: calc(100% + 8px); }   /* меню качества открывается вниз, а не на картинку и бой */
 .field.tw.shake { animation: none; }
 .field.tw .skyline, .field.tw .q1, .field.tw .q2 { display: none; }
-.field.tw .enemy { right: calc(3% + 22px); bottom: 66px; width: var(--ew); }
-.field.tw .enemy.boss { right: calc(3% + 22px - var(--ew) * .15); bottom: 62px; width: calc(var(--ew) * 1.3); }
-.field.tw .enemy.elite, .field.tw .enemy.altar { right: calc(3% + 22px - var(--ew) * .08); width: calc(var(--ew) * 1.16); }
-.field.tw .plate-enemy { right: 3%; top: auto; bottom: 10px; width: var(--pw); padding: 8px 10px; background: rgba(12,12,34,.8); backdrop-filter: none; box-shadow: 0 6px 16px rgba(5,6,20,.45); }
-.field.tw .plate-enemy.boss { box-shadow: 0 6px 16px rgba(5,6,20,.45), inset 0 0 0 2px rgba(255,90,110,.55); }
-.field.tw .plate-enemy.gold { box-shadow: 0 6px 16px rgba(5,6,20,.45), inset 0 0 0 2px rgba(255,197,61,.6); }
-.field.tw .plate-enemy .nameplate { margin-bottom: 6px; }
-.field.tw .bossring { right: calc(3% + var(--pw) + 2px); top: auto; bottom: 0; transform: scale(.8); transform-origin: 100% 100%; }
-.field.tw .hint { right: calc(3% + var(--pw) + 16px); top: auto; bottom: 30%; font-size: 34px; }
-.field.tw .banner { top: 16px; }
-.field.tw .banner b { font-size: 24px; text-shadow: 0 3px 0 var(--outline), 2px 0 0 var(--outline), -2px 0 0 var(--outline), 0 -2px 0 var(--outline), 0 0 20px rgba(169,155,255,.7); }
-.field.tw .banner.boss b { text-shadow: 0 3px 0 #4a0714, 2px 0 0 #4a0714, -2px 0 0 #4a0714, 0 -2px 0 #4a0714, 0 0 22px rgba(255,90,110,.9); }
-.field.tw .banner.gold b { text-shadow: 0 3px 0 #6a3500, 2px 0 0 #6a3500, -2px 0 0 #6a3500, 0 -2px 0 #6a3500, 0 0 22px rgba(255,197,61,.9); }
-.field.tw .banner small { margin-top: 5px; font-size: 11px; }
-.field.tw .banner.wave b { font-size: 16px; }
-.field.tw .draft { background: rgba(8,8,26,.4); backdrop-filter: none; }
+.field.tw .enemy { right: calc(50% - var(--ew) / 2); bottom: 74px; width: var(--ew); }
+.field.tw .enemy.boss { right: calc(50% - var(--ew) * .56); bottom: 72px; width: calc(var(--ew) * 1.12); }
+.field.tw .enemy.elite, .field.tw .enemy.altar { right: calc(50% - var(--ew) * .53); width: calc(var(--ew) * 1.06); }
+.field.tw .plate-enemy { left: 6px; right: 6px; top: auto; bottom: 8px; width: auto; padding: 7px 8px; background: rgba(12,12,34,.82); backdrop-filter: none; }
+.field.tw .plate-enemy .nameplate { margin-bottom: 5px; font-size: 11px; gap: 4px; overflow: hidden; }
+.field.tw .plate-enemy .nameplate .who2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.field.tw .foe-tools { right: -2px; }
+.field.tw .bossring { right: 2px; top: 2px; bottom: auto; transform: scale(.62); transform-origin: 100% 0; }
+.field.tw .hint { left: 14%; right: 14%; top: 34%; bottom: auto; text-align: center; font-size: 22px; }
+.field.tw .banner { top: 10px; left: 6px; right: 6px; }
+.field.tw .banner b { font-size: 16px; line-height: 1.1; text-shadow: 0 2px 0 var(--outline), 2px 0 0 var(--outline), -2px 0 0 var(--outline), 0 -2px 0 var(--outline), 0 0 14px rgba(169,155,255,.7); }
+.field.tw .banner.boss b { text-shadow: 0 2px 0 #4a0714, 2px 0 0 #4a0714, -2px 0 0 #4a0714, 0 -2px 0 #4a0714, 0 0 16px rgba(255,90,110,.9); }
+.field.tw .banner.gold b { text-shadow: 0 2px 0 #6a3500, 2px 0 0 #6a3500, -2px 0 0 #6a3500, 0 -2px 0 #6a3500, 0 0 16px rgba(255,197,61,.9); }
+.field.tw .banner small { margin-top: 4px; font-size: 9.5px; letter-spacing: .08em; line-height: 1.15; }
+.field.tw .banner.wave b { font-size: 13px; }
+.field.tw .lnobj.crate { left: 6%; bottom: auto; top: 21%; width: min(58px, 30%); }
+.field.tw .lnobj.statue { left: auto !important; right: 6%; bottom: auto; top: 21%; width: min(60px, 31%); }
+.field.tw .lnobj.urn { width: 54px; margin-left: -27px; }
+/* Душка говорит внутри полосы: её облачко раньше поднималось над полосой — теперь там картинка стрима */
+.arena.tw ~ .dock .say { left: 42px; bottom: auto; top: -3px; z-index: 6; width: max-content; max-width: min(560px, 44vw); max-height: 54px; margin: 0; padding: 6px 12px; overflow: hidden; border-radius: 14px 14px 14px 4px; font-size: 12.5px; line-height: 1.25; }
+/* выбор предмета — под картинкой, поверх полосы и умений: в узкий столбец боя три карточки не помещаются */
+.stage { position: relative; }
+.stage > .draft { inset: auto 0 0 0; height: calc(var(--under, 204px) - 6px); clip-path: inset(0 -60px -60px -60px); animation: none; z-index: 12; flex-direction: row; gap: 12px; padding: 8px 12px; border-radius: var(--r-4); background: rgba(8,8,26,.93); backdrop-filter: none; }
+.stage > .draft h3 { flex: none; width: 104px; font-size: 16px; line-height: 1.15; text-align: center; }
+.stage > .draft .dhint { position: absolute; left: 0; right: 0; bottom: 3px; margin: 0; min-height: 0; text-align: center; font-size: 11.5px; line-height: 14px; }
+.stage > .draft .more { position: absolute; left: 12px; bottom: 8px; width: 104px; text-align: center; line-height: 1.2; }
+.stage > .draft .dcards { flex: 1 1 auto; min-width: 0; gap: 10px; align-items: stretch; justify-content: center; height: calc(100% - 22px); align-self: flex-start; }
+.stage > .draft .dcard { flex: 1 1 0; min-width: 0; max-width: 340px; width: auto; padding: 8px 10px; border-radius: 16px; display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-auto-rows: min-content; align-content: center; column-gap: 10px; text-align: left; }
+.stage > .draft .dcard img { grid-row: 1 / span 4; align-self: center; width: 64px; height: 64px; margin: 0; }
+.stage > .draft .dcard h4 { min-height: 0; justify-content: flex-start; font-size: 13px; }
+.stage > .draft .dcard .br { justify-self: start; margin: 3px 0; }
+.stage > .draft .dcard p { min-height: 0; font-size: 12px; line-height: 1.22; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.stage > .draft .dcard .rk { margin-top: 3px; font-size: 10px; }
+.stage > .draft .dcard:hover { transform: translateY(-3px) scale(1.02); }
+.stage.narrow > .draft h3, .stage.narrow > .draft .more { display: none; }
+.stage.narrow > .draft .dcard { grid-template-columns: 40px minmax(0, 1fr); column-gap: 8px; padding: 6px 8px; }
+.stage.narrow > .draft .dcard img { width: 40px; height: 40px; }
 
 /* Полоса под картинкой. Её высота не должна меняться во время игры, иначе всё под ней прыгает: под комбо место
    держится всегда, а цифры урона показывают столько, сколько помещается в строку. Узкое поле (классы slim и tiny ставит
@@ -992,7 +1016,7 @@ html { scrollbar-gutter: stable; }
    фоне ширина страницы по-прежнему считается от высоты окна (картинка 16:9 должна помещаться), панель прибавляется к ней. */
 :root { --side-w: clamp(448px, 37vw, 708px); }
 /* стрим на фоне, окно невысокое: линия узкая (её держит высота картинки) — панель забирает освободившуюся ширину */
-body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 388px, 1080px) * 16 / 9 - 130px)), 708px); }
+body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 388px, 1080px) * 16 / 9 - 380px)), 708px); }
 /* все герои видны сразу, без прокрутки: сетка занимает всё место между переключателем покупки и итогом; число столбцов и
    размер плитки подбирает js/ui.js (fitGrid) и кладёт в --hg-c, --hg-r, --hg-s */
 #paneSquad { overflow: hidden; }

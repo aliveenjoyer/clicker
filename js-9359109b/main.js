@@ -132,7 +132,7 @@ async function boot() {
     if (e && e.isTrusted === false && !LOCAL) return;        // события из консоли не бьют (проверки на своём компьютере — бьют)
     audioUnlock(); TW.nudge();
     if (e.target.closest("#draft")) return;                 // идёт выбор предмета — удары не считаются
-    if (TW.isFront() || e.target.closest("#twplay, #twback, #twctl, .foe-tools")) return;   // плеер стрима выведен вперёд
+    if (e.target.closest("#twctl, .foe-tools")) return;   // плеер стрима выведен вперёд
     if (e.target.closest("#wisp")) { C.takeWisp(S); return; }
     if (e.target.closest("#crate")) { C.breakCrate(S); return; }
     if (e.target.closest("#statue")) { C.breakStatue(S); return; }

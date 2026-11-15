@@ -1,6 +1,7 @@
-// Стрим Twitch фоном линии. Плеер лежит под игрой и не ловит клики: все удары идут труперам.
-// Пока стрим на фоне, его должно быть удобно смотреть: поле становится картинкой 16:9 без затемнения, а счёт душ,
-// комбо, цифры урона, Душка и звук стрима уезжают в полосу под картинкой (hooks.stage → js/fx.js, setDock).
+// Стрим Twitch рядом с боем. Картинка стоит слева от поля отдельным чистым блоком (#twbg в .arena): правила встраивания
+// Twitch не разрешают ничем накрывать плеер, поэтому на ней нет ни одного слоя игры и по ней можно нажимать. До 15.11
+// плеер лежал под игрой («стрим фоном линии»), и поверх него шёл бой. Пока стрим показан, поле — узкий столбец справа,
+// а счёт душ, комбо, цифры урона, Душка и звук стрима стоят в полосе под ними (hooks.stage → js/fx.js, setDock).
 // Показываем свой канал, а когда он не в эфире — первый живой из списка друзей, по порядку. Как только свой стрим
 // начинается, фон возвращается на него. Бонус «эфир ×2» (души) даёт только свой канал — всем, пока он в эфире.
 // «Всё ×2» и сундук эфира плеер больше не даёт (15.11): их получает тот, кто сидит в чате стрима на Twitch (js/chat.js).
@@ -37,12 +38,12 @@ function applySound() {                                      // передать
   const on = sound() && !hush;
   try { player.setVolume(vol() / 100); if (on && player.getMuted()) unmutedAt = performance.now(); player.setMuted(!on); } catch (e) { /* плеер ещё не готов */ }
 }
-let playing = false, askT = 0;                              // идёт ли показ; когда предложить кнопку «Включить стрим»
+let playing = false;                                        // идёт ли показ
 // Показ запускает только сам зритель (15.11). До этого здесь стоял «сторож»: он каждые 2 секунды звал play(), включал
 // показ без звука и пересоздавал плеер, если картинка не шла. Для игрока удобно, а для Twitch это вкладка, которая сама
 // держит просмотр: такие просмотры идут в онлайн канала, а за накрутку онлайна Twitch с мая 2026 ограничивает его каналу.
-// Теперь плеер создаётся без автозапуска и сам ничего не возобновляет: встал (реклама кончилась, пауза, обрыв) — на
-// картинке появляется кнопка «Включить стрим», её жмёт человек. Игра к play() не обращается вообще.
+// Теперь плеер создаётся без автозапуска и сам ничего не возобновляет: встал (реклама кончилась, пауза, обрыв) — зритель
+// сам нажимает ▶ на картинке (она ничем не накрыта, кнопка — самого Twitch). Игра к play() не обращается вообще.
 //   — браузер остановил показ, потому что звук сняли без нажатия, — дальше без звука (hush), пока игрок не нажмёт сам.
 let hush = false, unmutedAt = 0;
 // Качество стрима: S.set.twQ — что выбрал игрок: "auto" или группа Twitch ("chunked" — исходное, "720p60", "480p30"…),
@@ -119,11 +120,9 @@ function loadScript() {
   }
   return scriptP;
 }
-function fits() { const f = $("field").getBoundingClientRect(); return f.width >= 400 && f.height >= 300; }   // меньше Twitch не разрешает
-function fit() {                                             // плеер 16:9 закрывает всё поле; поле само 16:9, так что картинка видна целиком
-  const f = $("field").getBoundingClientRect(), w = Math.max(f.width, f.height * 16 / 9);
-  const p = $("twplayer"); p.style.width = Math.ceil(w) + "px"; p.style.height = Math.ceil(w * 9 / 16) + "px";
-}
+// Помещается ли картинка рядом с боем. Twitch не разрешает плеер меньше 400×300; высоту 300 держит css, ширина — то, что
+// остаётся от блока после столбца боя (clamp(170px, 20 %, 240px), как в css) и зазора.
+function fits() { const w = $("arena").getBoundingClientRect().width; return w - Math.max(170, Math.min(240, w * 0.2)) - 10 >= 400; }
 
 async function probe(ch) {                                   // идёт ли стрим на канале
   try {
@@ -190,30 +189,30 @@ async function start() {
   const ch = cur;
   try { await loadScript(); } catch (e) { player = null; return; }
   if (player !== "loading" || ch !== cur || !cur || !S.set.stream) { if (player === "loading") player = null; return; }
-  fit();
   const T = window.Twitch.Player;
   player = new T("twplayer", { channel: ch, width: "100%", height: "100%", parent: [location.hostname], muted: true, autoplay: false, controls: false });
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
+  player.addEventListener(T.PLAYING, () => { playing = true; applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
   player.addEventListener(T.PAUSE, () => {
-    playing = false; askT = performance.now() + 1500;        // кнопка «Включить стрим» — чуть погодя, чтобы не мигала на смене качества
+    playing = false;
     if (performance.now() - unmutedAt < 3000) hush = true;   // включили звук — и браузер тут же остановил показ: дальше без звука до нажатия
-    setTimeout(draw, 1600); draw();
+    draw();
   });
   if (T.PLAYBACK_BLOCKED) player.addEventListener(T.PLAYBACK_BLOCKED, () => { hush = true; draw(); });
-  playing = false; askT = performance.now() + 800; setTimeout(draw, 900);   // плеер без автозапуска: кнопка — почти сразу
+  playing = false;
 }
 function stop() {
   if (player && player !== "loading") { try { player.pause(); } catch (e) { /* плеер уже снят */ } }
-  player = null; playing = false; front(false);
+  player = null; playing = false;
   quals = []; setQ = ""; openMenu(false);
   $("twplayer").textContent = "";
 }
-function show(on) {                                          // картинка стрима на поле: поставить или убрать
+function show(on) {                                          // картинка стрима рядом с боем: поставить или убрать
   shown = on;
   $("twbg").hidden = !on;
+  $("arena").classList.toggle("tw", on);
   $("field").classList.toggle("tw", on);
   if (hooks && hooks.stage) hooks.stage(on);                 // счёт душ, цифры и Душка — в полосу под картинкой и обратно
   if (on) start(); else stop();
@@ -232,8 +231,6 @@ export function draw() {
   b.classList.toggle("off", !S.set.stream);
   b.title = !S.set.stream ? "Стрим фоном выключен" : cur === LOFI && !live ? "Фоном линии идёт LoFi-музыка. Нажми, чтобы убрать" : cur ? "Фоном линии идёт стрим " + nice(cur) + ". Нажми, чтобы убрать"
     : "Сейчас никто не в эфире. Нажми — фоном пойдёт LoFi-музыка";
-  // показ не идёт — кнопка «Включить стрим»: она выводит плеер вперёд, и зритель сам жмёт его ▶
-  $("twplay").hidden = !(shown && !playing && player && player !== "loading" && performance.now() > askT) || $("field").classList.contains("twfront");
   // звук стрима: значок и ползунок в полосе под картинкой, пока стрим на фоне
   $("twctl").hidden = !shown;
   if (shown) {
@@ -263,16 +260,10 @@ export function draw() {
   }
 }
 
-function front(on) {                                         // плеер вперёд: по нему можно кликнуть; назад — он снова под игрой
-  $("field").classList.toggle("twfront", !!on);
-  $("twback").hidden = !on;
-}
-export const isFront = () => $("field").classList.contains("twfront");
+export const isFront = () => false;                         // плеер больше не выводится «вперёд»: он и так ничем не накрыт
 
 export function mount(state, h) {
   S = state; hooks = h;
-  $("twplay").addEventListener("click", () => { front(true); draw(); });
-  $("twback").addEventListener("click", () => { front(false); askT = performance.now() + 8000; draw(); });
   if (S.set.stream === undefined) S.set.stream = true;
   $("btnStream").addEventListener("click", () => {
     if (S.set.stream && !cur) { S.set.twPick = "lofi"; hooks.changed(); setChannel(LOFI); check(); return; }   // никто не в эфире — включаем LoFi-музыку
@@ -322,8 +313,7 @@ export function mount(state, h) {
   });
   document.addEventListener("pointerdown", (e) => { if (menuOpen && !e.target.closest("#twQMenu, #btnStreamQ")) openMenu(false); }, true);
   document.addEventListener("keydown", (e) => { if (menuOpen && e.code === "Escape") { openMenu(false); $("btnStreamQ").focus(); } });
-  window.addEventListener("resize", () => { if (shown) fit(); sync(); });
-  if (window.ResizeObserver) new ResizeObserver(() => { if (shown) fit(); }).observe($("field"));   // поле меняет высоту без смены окна
+  window.addEventListener("resize", () => sync());
   check();
 }
 export function setState(state) { S = state; if (S.set.stream === undefined) S.set.stream = true; C.setLive(S, live); sync(); }
@@ -337,7 +327,7 @@ export function info() {                                     // для пров�
   if (on) { try { q = player.getQuality(); list = player.getQualities() || []; } catch (e) { /* плеер не готов */ } }
   return { channel: cur, shown, playing, want: S.set.twQ || "", sent: setQ, quality: q, qualities: list.map((x) => (typeof x === "string" ? x : x.group + "=" + x.name)) };
 }
-// Удар по линии показ не запускает (его включает только кнопка «Включить стрим» и нажатие по самому плееру). Но удар — это
+// Удар по линии показ не запускает (его включает только нажатие по самому плееру). Но удар — это
 // нажатие: если показ уже идёт без звука из-за запрета браузера, звук можно вернуть.
 export function nudge() {
   if (!shown || !player || player === "loading" || !playing) return;
