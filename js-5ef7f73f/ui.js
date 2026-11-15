@@ -1,6 +1,6 @@
 // Интерфейс: полоса волны, счётчик душ, отряд, предметы и коллекция, реликвии, путь, чат, умения, бафы, окна.
 // Правило экрана: всё, что можно открыть, видно с первой секунды — закрытое показано с условием.
-import { CFG, DEEP, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
+import { CFG, DEEP, HEROES, HIRE, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
 import { sfx, setSound, setHitSound } from "./audio.js";
@@ -249,6 +249,12 @@ let tapN = 0, gridBuys = 0;                                 // которая п
 let swipeDone = false;                                      // мышь только что купила (нажатием или свайпом): щелчок после этого не считается
 let hgShow = -1, hgInfoKey = "", hgFit = "";                // про кого рассказывает строка над сеткой (-1 — подсказка); что в ней сейчас; под какой размер подобрана сетка
 const TILES = HEROES.length + 1;                            // Хлыст и все наёмники
+// Обычный порядок плиток — Хлыст и наёмники по порядку найма (по силе), а не по номерам в списке: «Лесной крип» записан
+// в конце списка, а стоит вторым. Плитки кладутся в страницу в этом порядке; rows[номер героя] — его плитка.
+const ORDER = [0].concat(HIRE);                             // ORDER[место на сетке] — герой
+const HOME = []; ORDER.forEach((h, q) => { HOME[h] = q; });  // HOME[герой] — его место в обычном порядке
+// Урон наёмников меньше десяти — с десятыми: «Лесной крип» первого уровня бьёт на 0,5 в секунду, а не на «0».
+const dmgT = (lg) => (lg !== NEG && lg < 1 ? String(Math.round(Math.pow(10, lg) * 10) / 10).replace(".", ",") : txt(lg));
 function rowHtml(i) {                                       // плитка героя: портрет, уровень, сколько уровней купит нажатие, полоска до вехи, цена
   const whip = i === 0, h = whip ? null : HEROES[i - 1];
   const sid = whip ? "lesh" : h.id;                          // скин из RPG ложится на портрет; у хлыста — скин Лэша
@@ -258,16 +264,19 @@ function rowHtml(i) {                                       // плитка ге
 }
 function ensureRows() {                                     // плитки ставятся все сразу: сетка не перестраивается, когда нанят новый герой
   const list = $("mercList");
-  while (rows.length < TILES) {
-    const i = rows.length, d = document.createElement("div"), sid = i === 0 ? "lesh" : HEROES[i - 1].id;
+  if (rows.length) return;
+  const made = [];
+  for (const i of ORDER) {
+    const d = document.createElement("div"), sid = i === 0 ? "lesh" : HEROES[i - 1].id;
     d.className = "hg" + (i === 0 ? " whip" : "") + porCls(sid);
     d.dataset.i = i;
     d.innerHTML = rowHtml(i);
     const f = {}; d.querySelectorAll("[data-f]").forEach((n) => { f[n.dataset.f] = n; });
     list.appendChild(d);
-    rows.push({ root: d, f, bar: d.querySelector(".hg-ms u"), st: "" });
-    if (rows.length === TILES) fitGrid();
+    made[i] = { root: d, f, bar: d.querySelector(".hg-ms u"), st: "" };
   }
+  rows = made;
+  fitGrid();
 }
 // Сетка без прокрутки: сколько столбцов взять, чтобы все плитки влезли в отведённое место и вышли покрупнее. На телефоне
 // панель не имеет своей высоты — там столбцов столько, сколько помещается по ширине, а страница листается как обычно.
@@ -482,12 +491,14 @@ const figWanted = () => figOn && S.set.fig !== false;       // рисунки м
 // на отмеченные места встают те, чья покупка сейчас прибавит больше всего урона (в выбранном режиме покупки; веха —
 // намного ценнее; на кого душ не хватает — в конце), а прежние жильцы этих мест пересаживаются на их места.
 // Пока кто-то закрыт — сетка в обычном порядке. Порядок плиток — свойством order, сами плитки на месте.
-let slotOf = null;                                          // slotOf[герой] — место на сетке; null — обычный порядок
+let slotOf = null;                                          // slotOf[герой] — место на сетке; null — обычный порядок (HOME)
+const spotOf = (h) => (slotOf ? slotOf[h] : HOME[h]);       // где на сетке стоит герой
+const heroOn = (q) => (slotOf ? slotOf.indexOf(q) : ORDER[q]);   // кто стоит на этом месте
 function seat(spots) {                                      // Map: место → герой; .best — сколько лучших героев подставлено
   const who = new Map(); who.best = 0;
   let allOpen = true; for (let i = 1; i < TILES; i++) if (!S.lv[i]) { allOpen = false; break; }
-  if (!allOpen) { if (slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; } for (const q of spots) who.set(q, q); return who; }
-  if (!slotOf) { slotOf = Array.from({ length: TILES }, (_, i) => i); rows.forEach((r, h) => { r.root.style.order = h; }); }   // порядок задаём всем плиткам сразу: иначе плитки без него встали бы первыми
+  if (!allOpen) { if (slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; } for (const q of spots) who.set(q, ORDER[q]); return who; }
+  if (!slotOf) { slotOf = HOME.slice(); rows.forEach((r, h) => { r.root.style.order = slotOf[h]; }); }   // порядок задаём всем плиткам сразу: иначе плитки без него встали бы первыми
   const heroAt = []; slotOf.forEach((q, h) => { heroAt[q] = h; });
   const worth = (i) => {
     const b = C.buyInfo(S, i, buyMode); if (!b.can) return -Infinity;
@@ -612,7 +623,7 @@ function spawnFig(from) {
         }
         if (opts.length) {
           const spot = opts[Math.floor(Math.random() * opts.length)];
-          fig.spark = slotOf ? slotOf.indexOf(spot) : spot;
+          fig.spark = heroOn(spot);
           fig.sparkEl = document.createElement("i"); fig.sparkEl.className = "dp-spark"; lay.appendChild(fig.sparkEl);
           rows[fig.spark].root.classList.add("dp-sp");
         }
@@ -816,7 +827,7 @@ function rankUp(r) {
   }, max ? 1500 : 800);
 }
 function figTouch(i) {                                      // по плитке провели или нажали: отметка рисунка, лишняя плитка или ничего
-  const spot = slotOf ? slotOf[i] : i;                       // где на сетке эта плитка (герои могут быть пересажены)
+  const spot = spotOf(i);                                    // где на сетке эта плитка (герои могут быть пересажены)
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
   if (!fig) return;
   const at = fig.cells.indexOf(i);
@@ -1051,7 +1062,7 @@ export function cloudNote(was, now, first, meta) {          // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? (slotOf ? slotOf[fig.spark] : fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: (slotOf || HOME).slice(), spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? spotOf(fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s, deep: f.deep || 0, gate: f.gate || 0 }));
 export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
@@ -1066,11 +1077,11 @@ function drawRows() {
   const shown = C.heroesShown(S);                            // до какого героя можно покупать: нанятые и следующий
   let hired = 0;
   for (let i = 0; i < rows.length; i++) {
-    const r = rows[i], lv = S.lv[i], lock = i > shown, b = lock ? null : C.buyInfo(S, i, buyMode);
+    const r = rows[i], lv = S.lv[i], lock = !C.heroOpen(S, i), b = lock ? null : C.buyInfo(S, i, buyMode);
     if (i && lv) hired++;
     const nm = C.nextMs(lv), hire = !lock && i > 0 && lv === 0;
     const lvT = lv ? group(lv) : "", qT = lock ? "" : hire ? "нанять" : buyMode === "ms" ? "до " + group(nm) : "×" + group(b.n);
-    const priceT = lock ? (i <= shown + 3 ? txt(heroCost0(i)) : "") : txt(b.cost);
+    const priceT = lock ? (C.heroRank(i) <= shown + 3 ? txt(heroCost0(i)) : "") : txt(b.cost);
     const st = lock ? "hg-lock" + (priceT ? "" : " hg-far") : (b.can ? "hg-can" : "hg-no") + (hire ? " hg-hire" : "") + (b.can && (lv + b.n >= nm || hire) ? " hg-hot" : "");
     if (r.f.lv.textContent !== lvT) r.f.lv.textContent = lvT;
     if (r.f.q.textContent !== qT) r.f.q.textContent = qT;
@@ -1079,20 +1090,20 @@ function drawRows() {
     if (r.st !== st) { for (const k of ["hg-lock", "hg-far", "hg-can", "hg-no", "hg-hire", "hg-hot"]) r.root.classList.toggle(k, (" " + st + " ").indexOf(" " + k + " ") >= 0); r.st = st; }
   }
   $("footN").textContent = hired + " из " + HEROES.length;
-  $("footDps").textContent = S.d.dps === NEG ? "0" : txt(C.dpsLg(S)) + "/с";
+  $("footDps").textContent = S.d.dps === NEG ? "0" : dmgT(C.dpsLg(S)) + "/с";
   drawInfo();
 }
 // Строка над сеткой: про героя под курсором или про того, кого только что купили; никого — подсказка про свайп.
 function drawInfo() {
-  const i = hgShow, shown = C.heroesShown(S);
+  const i = hgShow;
   let h;
   if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(pointer: coarse)").matches ? "Веди пальцем по героям — купится каждый по пути" : figFree() ? "Веди мышью по отметкам рисунка — кнопку держать не надо" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
   else {
     const whip = i === 0, name = whip ? "Хлыст Лэша" : HEROES[i - 1].name, lv = S.lv[i], nm = C.nextMs(lv);
     const skin = C.hasRpgSkin(S, whip ? "lesh" : HEROES[i - 1].id) ? '<span>скин из RPG: урон <b>×' + String(C.rpgSkinMul(whip ? "lesh" : HEROES[i - 1].id)).replace(".", ",") + "</b></span>" : "";
-    if (i > shown) h = "<b>" + name + "</b><span>откроется, когда наймёшь предыдущего</span><span>цена <b>" + txt(heroCost0(i)) + "</b></span>";
+    if (!C.heroOpen(S, i)) h = "<b>" + name + "</b><span>откроется, когда наймёшь предыдущего</span><span>цена <b>" + txt(heroCost0(i)) + "</b></span>";
     else if (!whip && lv === 0) h = "<b>" + name + "</b><span>нанять за <b>" + txt(C.buyInfo(S, i, 1).cost) + "</b></span><span>бьёт сам, даже когда тебя нет</span>" + skin;
-    else h = "<b>" + name + "</b><span>ур. <b>" + group(lv) + "</b></span><span>" + (whip ? "удар <b>" + txt(C.clickLg(S)) : "урон <b>" + txt(S.d.hero[i]) + "/с") + "</b></span><span>до вехи " + group(nm) + ": <b>×" + C.msGain(lv) + "</b></span>" + skin;
+    else h = "<b>" + name + "</b><span>ур. <b>" + group(lv) + "</b></span><span>" + (whip ? "удар <b>" + txt(C.clickLg(S)) : "урон <b>" + dmgT(S.d.hero[i]) + "/с") + "</b></span><span>до вехи " + group(nm) + ": <b>×" + C.msGain(lv) + "</b></span>" + skin;
   }
   drawFigChip();
   if (h === hgInfoKey) return;
@@ -1263,7 +1274,7 @@ function drawRoad() {
   }
   for (const x of ROAD_EXTRA) {
     const dn = x.key && x.key.indexOf("deep") === 0 ? Number(x.key.slice(4)) : 0;   // уровень глубины комбо
-    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : false;
+    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : x.key === "line" ? (S.stats.hired || 0) >= HEROES.length : false;
     const extra = x.key === "finds" ? '<div class="dp-finds">' + C.FINDS.map((f, i) => (S.finds[f] ? '<span class="dp-has">' + f + " ×" + group(S.finds[f]) : "<span>??? · " + DEEP[1 + Math.floor(i / 3)].name) + "</span>").join("") + "</div>" : "";
     h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div>" + (dn ? '<img class="dp-remb" alt="" src="' + DP.emblem(dn) + '">' : "") + "<b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p>" + extra + "</div></div>";
   }
@@ -1592,7 +1603,7 @@ function drawSlow() {
     sc.title = tired ? "Рука устала: удары чаще 6 в секунду дольше двух минут подряд. Сейчас проходит до " + Math.round(C.hitCap(S)) + " ударов в секунду. Передохни — за минуту-две пройдёт" : "";
   }
   $("stDpsBox").hidden = S.d.dps === NEG;
-  if (S.d.dps !== NEG) $("stDps").textContent = txt(C.dpsLg(S)) + "/с";
+  if (S.d.dps !== NEG) $("stDps").textContent = dmgT(C.dpsLg(S)) + "/с";
   $("stCrit").textContent = Math.round(C.critChance(S) * 100) + " %";
   if (!!S.un.bulk !== bulkShown) { bulkShown = !!S.un.bulk; drawBuySeg(); }
   if (tab === "squad") drawRows();

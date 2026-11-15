@@ -2,9 +2,10 @@
 // Этот модель потом переедет на сервер (PLAN.md § 19): клиент шлёт намерения, сервер считает то же самое.
 // Все большие числа — lg (см. num.js). События для картинки и звука складываются в S.ev, их забирает main.js.
 import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
-import { CFG, DEEP, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
+import { CFG, DEEP, MILESTONES, HEROES, HIRE, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
 
 const N = HEROES.length;
+const RANK = [0]; HIRE.forEach((i, r) => { RANK[i] = r + 1; });   // RANK[номер наёмника] — который он по счёту в порядке найма (1 — первый)
 // Часы правил: Затмение, задания дня, сохранение. По умолчанию — часы компьютера (так считают проверки и бот),
 // в игре main.js подставляет часы, сверенные с сервером (js/clock.js): перевод часов компьютера на правила не влияет.
 let clock = () => Date.now();
@@ -656,7 +657,7 @@ export function buyInfo(S, i, mode) {                       // mode: 1 | 10 | "m
   return { n, cost, can: cost <= S.souls };
 }
 export function buy(S, i, mode) {
-  if (i > heroesShown(S)) return false;                     // наёмники нанимаются по порядку: дальше следующего не купить
+  if (!heroOpen(S, i)) return false;                        // наёмники нанимаются по порядку: дальше следующего не купить
   const b = buyInfo(S, i, mode);
   if (!b.can) return false;
   const before = S.lv[i];
@@ -673,7 +674,7 @@ export function buy(S, i, mode) {
 export function loginGift(S, rnd) {
   if (S.gift) return null;
   const r = rnd || Math.random, free = [];
-  for (let i = 1; i <= N && free.length < CFG.giftFrom; i++) if (!S.lv[i]) free.push(i);
+  for (const i of HIRE) { if (free.length >= CFG.giftFrom) break; if (!S.lv[i]) free.push(i); }   // ближайшие — по порядку найма
   const fresh = free.length > 0, pool = fresh ? free : Array.from({ length: N }, (_, k) => k + 1), got = [];
   while (got.length < CFG.giftHeroes && pool.length) got.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
   got.sort((a, b) => a - b);
@@ -683,10 +684,20 @@ export function loginGift(S, rnd) {
   ev(S, { t: "gift_login", heroes: got, fresh, lv: fresh ? CFG.giftLv : CFG.giftMore });
   return got;
 }
-export function heroesShown(S) {                            // сколько строк показывать: нанятые + следующий
+// Порядок найма — по ступеням силы (HIRE в js/data.js), а не по номерам в списке: новые наёмники дописаны в конец списка,
+// а нанимаются на своём месте по силе («Лесной крип» — первым, перед Абрамсом).
+export function heroesShown(S) {                            // сколько наёмников по порядку найма открыто: до самого дальнего нанятого и следующий за ним
   let n = 0;
-  for (let i = 1; i <= N; i++) if (S.lv[i]) n = i;
+  for (let i = 1; i <= N; i++) if (S.lv[i] && RANK[i] > n) n = RANK[i];
   return Math.min(N, n + 1);
+}
+export const heroRank = (i) => RANK[i] || 0;                // который по счёту в порядке найма (Хлыст — 0)
+export const heroOpen = (S, i) => i === 0 || (RANK[i] > 0 && RANK[i] <= heroesShown(S));   // можно ли покупать: Хлыст — всегда
+export function openHeroes(S) {                             // кого сейчас можно покупать, от самого сильного к Хлысту (для ботов и проверок)
+  const out = [];
+  for (let r = heroesShown(S); r >= 1; r--) out.push(HIRE[r - 1]);
+  out.push(0);
+  return out;
 }
 
 // ---------- умения и огонёк ----------
@@ -1309,8 +1320,8 @@ export function nextUp(S) {
   if (S.wall && eclOpen(S) && eclWait(S) <= 0 && S.cycRb >= 3 && shardsGain(S) >= Math.max(15, 0.5 * S.shards)) return { k: "eclipse", text: "Пора в Затмение: осколков выйдет " + shardsGain(S) + ". Кнопка — во вкладке «Реликвии»" };
   if (S.un.rebirth && ashGain(S) !== NEG && (S.ashAll === NEG || ashGain(S) >= S.ashAll) && S.wall) return { k: "rebirth", text: "Пора возрождаться: пепла выйдет не меньше, чем у тебя было" };
   let best = null;
-  for (let i = 0; i <= Math.min(N, heroesShown(S)); i++) {
-    const b = buyInfo(S, i, "ms");
+  for (let r = 0, shown = heroesShown(S); r <= shown; r++) {
+    const i = r ? HIRE[r - 1] : 0, b = buyInfo(S, i, "ms");
     if (b.can && S.lv[i] > 0) { best = { k: "ms", i, text: "Хватает на веху: " + (i ? HEROES[i - 1].name : "Хлыст") + " ×" + msGain(S.lv[i]) }; break; }
   }
   if (best) return best;
