@@ -12,7 +12,7 @@ function ac() {
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
 }
-export function setSound(v) { on = !!v; }
+export function setSound(v) { on = !!v; if (!on) droneStop(); else if (deepLv) droneStart(deepLv); }
 let hitOn = true;                                            // звук ударов по труперу (хлыст, крит, смерть трупера) — своя настройка
 export function setHitSound(v) { hitOn = !!v; }
 export function unlock() { ac(); }
@@ -49,6 +49,42 @@ const semi = (base, n) => base * Math.pow(2, n / 12);
 // и аккорд сбора складываются в мелодию, а не в шум. Слои сбора рисунка идут разом, поэтому им разрешено больше голосов.
 const GRID = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const loud = (fn) => { const was = cap; cap = 16; try { fn(); } finally { cap = was; } };
+// Глубина комбо (js/deep.js): у каждого уровня свой строй сетки и свой тихий гул под ним. Улица — мажорная пентатоника,
+// «Подземка» — минорная и на тон ниже, «Изнанка» — тревожный лад с малой секундой, «Пустота» — пустые квинты и кварты.
+const SCALES = [GRID, [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24], [0, 1, 5, 7, 8, 12, 13, 17, 19, 20, 24], [0, 2, 7, 9, 12, 14, 19, 21, 24, 26, 31]];
+const DOWN = [0, -2, -4, -7];                                // на сколько полутонов ниже звучит сетка на уровне
+let deepLv = 0, drone = null;
+const grid = () => SCALES[deepLv] || GRID;
+const deepF = (f) => f * Math.pow(2, (DOWN[deepLv] || 0) / 12);
+function droneStop() {
+  if (!drone || !ctx) { drone = null; return; }
+  const d = drone, t = ctx.currentTime; drone = null;
+  try { d.g.gain.cancelScheduledValues(t); d.g.gain.setTargetAtTime(0.0001, t, 0.3); for (const n of d.nodes) n.stop(t + 1.6); } catch (e) { /* уже остановлен */ }
+}
+function droneStart(lv) {                                    // гул места: два-три тихих голоса с медленным дыханием
+  droneStop();
+  if (!on || !lv || (typeof document !== "undefined" && document.hidden)) return;
+  const c = ac(); if (!c) return;
+  const t = c.currentTime, g = c.createGain(), lp = c.createBiquadFilter(), nodes = [];
+  g.gain.setValueAtTime(0.0001, t); g.gain.setTargetAtTime([0, 0.13, 0.12, 0.14][lv] || 0.12, t, 1.2);
+  lp.type = "lowpass"; lp.frequency.value = [0, 380, 520, 1400][lv] || 500; lp.connect(g); g.connect(master);
+  const voice = (freq, type, vol, lfoHz) => {
+    const o = c.createOscillator(), v = c.createGain();
+    o.type = type; o.frequency.value = freq; v.gain.value = vol; o.connect(v); v.connect(lp); o.start(t); nodes.push(o);
+    if (lfoHz) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = lfoHz; lg.gain.value = vol * 0.7; l.connect(lg); lg.connect(v.gain); l.start(t); nodes.push(l); }
+  };
+  if (lv === 1) { voice(55, "sawtooth", 0.5, 0.11); voice(82.4, "triangle", 0.35, 0.07); voice(110.6, "sine", 0.3, 0.19); }          // гул тоннеля
+  else if (lv === 2) { voice(51.9, "sawtooth", 0.4, 0.09); voice(73.4, "triangle", 0.4, 0.23); voice(155.6, "sine", 0.18, 0.31); }   // тритон: тревога
+  else { voice(41.2, "sine", 0.7, 0.05); voice(61.7, "sine", 0.4, 0.08); voice(987.8, "sine", 0.05, 0.13); voice(1318.5, "sine", 0.03, 0.21); }   // пустота: низ и далёкий звон
+  drone = { g, nodes, lv };
+}
+export function setDeep(lv) {                                // уровень глубины сменился: другой строй и гул
+  lv = Math.max(0, Math.min(SCALES.length - 1, Math.floor(lv) || 0));
+  if (lv === deepLv && (!!drone === !!lv || !on)) return;
+  deepLv = lv;
+  if (lv) droneStart(lv); else droneStop();
+}
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden) droneStop(); else if (deepLv && on) droneStart(deepLv); });
 
 export const sfx = {
   whip(step) {                                               // щелчок хлыста; step — ступень комбо, поднимает тон
@@ -75,22 +111,23 @@ export const sfx = {
   deny() { tone(150, 0.08, "square", 0.06); },
   // ---- сетка отряда ----
   tap(n) {                                                   // покупка плитки; n — которая по счёту в этом свайпе: каждая следующая выше
-    const i = n < 11 ? Math.max(0, n) : 5 + (n - 5) % 6, f = semi(392, GRID[i]);
+    const i = n < 11 ? Math.max(0, n) : 5 + (n - 5) % 6, f = deepF(semi(392, grid()[i]));
     tone(f, 0.075, "triangle", 0.1); tone(f * 2, 0.05, "sine", 0.045, 1, 0.004); noise(0.018, 0.05, 5200, 1.2);
   },
   mile() { [0, 7, 12, 16].forEach((x, i) => tone(semi(784, x), 0.2, "triangle", 0.13, 1, i * 0.055)); noise(0.12, 0.08, 6500, 2, 0.02); },   // куплена веха
   mark(i, n, lvl) {                                          // отметка рисунка: i — которая по счёту из n; к последней нота доходит до верха
-    const top = GRID.length - 1, at = n > 1 ? Math.round(i / (n - 1) * Math.min(top, n + 2)) : 0;
-    const f = semi(523.25 * Math.pow(2, (lvl || 0) / 12), GRID[Math.min(top, at)]);
+    const G = grid(), top = G.length - 1, at = n > 1 ? Math.round(i / (n - 1) * Math.min(top, n + 2)) : 0;
+    const f = deepF(semi(523.25 * Math.pow(2, (lvl || 0) / 12), G[Math.min(top, at)]));
     tone(f, 0.16, "sine", 0.13); tone(f * 3, 0.07, "sine", 0.03); tone(f * 0.5, 0.06, "triangle", 0.05);
   },
   boom(lvl, plus) {                                          // рисунок собран: удар, аккорд и россыпь вверх; lvl 0…4 — по комбо, plus — сколько он прибавил
-    const root = semi(261.63, [0, 2, 4, 7, 9][Math.max(0, Math.min(4, lvl || 0))]);
+    const G = grid(), root = deepF(semi(261.63, G[Math.max(0, Math.min(4, lvl || 0))]));
+    const chord = deepLv ? [G[0], G[2], G[4], G[5]] : [0, 4, 7, 12], run = deepLv ? [G[5], G[6], G[7], G[8], G[9]] : [12, 16, 19, 24, 28];   // на глубине аккорд и россыпь — в строе уровня
     loud(() => {
       tone(170, 0.26, "sine", 0.34, 0.24);
       noise(0.11, 0.2, 1700, 0.7);
-      [0, 4, 7, 12].forEach((x, i) => tone(semi(root * 2, x), 0.3 + lvl * 0.04, i % 2 ? "triangle" : "sawtooth", 0.085, 1, 0.012 * i));
-      [12, 16, 19, 24, 28].slice(0, 3 + Math.min(2, lvl)).forEach((x, i) => tone(semi(root * 2, x), 0.12, "sine", 0.09, 1, 0.07 + i * 0.045));
+      chord.forEach((x, i) => tone(semi(root * 2, x), 0.3 + lvl * 0.04, i % 2 ? "triangle" : "sawtooth", 0.085, 1, 0.012 * i));
+      run.slice(0, 3 + Math.min(2, lvl)).forEach((x, i) => tone(semi(root * 2, x), 0.12, "sine", 0.09, 1, 0.07 + i * 0.045));
       if (lvl >= 2) noise(0.34, 0.12, 900 + lvl * 500, 0.5, 0.02);
       if (lvl >= 3) tone(root, 0.5, "square", 0.05, 2, 0.03);
       for (let j = 1; j < (plus || 1); j++) tone(semi(root * 4, 7 + j * 2), 0.08, "sine", 0.07, 1, 0.2 + j * 0.05);
@@ -107,5 +144,25 @@ export const sfx = {
   },
   down() { tone(520, 0.2, "triangle", 0.09, 0.55); },        // ранг комбо упал на ступень
   drop() { tone(330, 0.5, "sawtooth", 0.09, 0.22); tone(165, 0.6, "sine", 0.13, 0.3); noise(0.3, 0.1, 320, 0.5); },   // комбо оборвалось
+  // ---- глубина комбо ----
+  gate() {                                                   // разлом открылся: тревожный подъём и три стука
+    loud(() => {
+      tone(98, 0.8, "sawtooth", 0.11, 3.4); tone(196, 0.8, "sine", 0.09, 2.5, 0.04); noise(0.7, 0.13, 800, 0.5);
+      [0, 6, 12].forEach((x, i) => tone(semi(587.3, x), 0.11, "square", 0.05, 1, 0.12 + i * 0.1));
+    });
+  },
+  gateFail() { tone(233, 0.5, "sawtooth", 0.1, 0.3); tone(98, 0.6, "sine", 0.15, 0.5); noise(0.3, 0.13, 420, 0.5); },   // разлом закрылся
+  dive(lv) {                                                 // провал на уровень глубже: удар, гул вниз и аккорд нового места
+    const G = SCALES[lv] || GRID, root = [0, 146.83, 130.81, 110][lv] || 146.83;
+    loud(() => {
+      tone(150, 1.2, "sine", 0.42, 0.16); tone(75, 1.4, "sawtooth", 0.12, 0.3);
+      noise(1.0, 0.3, 1300, 0.4); noise(0.5, 0.15, 5200, 1.2, 0.04);
+      [0, 2, 4, 6].forEach((i, n) => tone(semi(root * 2, G[i]), 1.2, n % 2 ? "triangle" : "sine", 0.1, 1, 0.45 + n * 0.12));
+      [7, 9].forEach((i, n) => tone(semi(root * 2, G[i]), 0.8, "sine", 0.07, 1, 1.0 + n * 0.14));
+    });
+  },
+  rise() { tone(170, 0.7, "sine", 0.13, 2.8); noise(0.55, 0.11, 2400, 0.6); tone(415, 0.3, "triangle", 0.06, 0.7, 0.34); },   // всплыл на уровень выше
+  spark() { [0, 7, 12].forEach((x, i) => tone(semi(1568, x), 0.15, "sine", 0.09, 1, i * 0.035)); noise(0.05, 0.08, 7200, 2); },   // поймана искра
+  find() { const G = grid(); [0, 2, 4, 6, 8, 10].forEach((i, n) => tone(deepF(semi(659.3, G[i])), 0.28, n % 2 ? "sine" : "triangle", 0.11, 1, n * 0.07)); noise(0.3, 0.07, 6000, 1.6, 0.3); },   // находка глубины
   hurry(last) { tone(last ? 1568 : 1175, 0.045, "square", 0.045); if (last) tone(1568, 0.045, "square", 0.045, 1, 0.09); },   // время на рисунок кончается
 };

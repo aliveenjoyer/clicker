@@ -1,6 +1,6 @@
 // Интерфейс: полоса волны, счётчик душ, отряд, предметы и коллекция, реликвии, путь, чат, умения, бафы, окна.
 // Правило экрана: всё, что можно открыть, видно с первой секунды — закрытое показано с условием.
-import { CFG, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
+import { CFG, DEEP, HEROES, SKILLS, BUFFS, RELICS, UNLOCKS, ROAD_EXTRA, bossOf, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, heroCost0, ACH_GROUPS, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS, RPG_RAR } from "./data.js";
 import * as C from "./core.js";
 import { NEG, fmt, txt, tierOf, group, setSci } from "./num.js";
 import { sfx, setSound, setHitSound } from "./audio.js";
@@ -11,6 +11,7 @@ import * as TOP from "./top.js";
 import * as SWAP from "./swap.js";
 import * as ACCT from "./acct.js";
 import * as CLOCK from "./clock.js";
+import * as DP from "./deep.js";
 import * as CHAT from "./chat.js";
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // проверки на своём компьютере шлют события из кода
 
@@ -377,6 +378,21 @@ const FIGS = [
   { name: "Очереди", s: [[[0, 0], [1, 0], [2, 0], [2, 2], [3, 2], [4, 2], [2, 4], [1, 4], [0, 4]]] },
   { name: "Длинная змейка", s: [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]]] },
   { name: "Спираль наружу", s: [[[2, 1], [3, 1], [3, 2], [2, 2], [1, 2], [1, 1], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2]]] },
+  // Находки глубины (15.11): выпадают только на своём уровне — deep: 1 «Подземка», 2 «Изнанка», 3 «Пустота». Имена — FINDS в js/core.js.
+  { name: "Вагон", deep: 1, fix: 1, s: [[[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1]], [[1, 2]], [[2, 2]]] },
+  { name: "Рельсы", deep: 1, s: [[[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]], [[2, 4], [2, 3], [2, 2], [2, 1], [2, 0]]] },
+  { name: "Тоннель", deep: 1, fix: 1, s: [[[0, 3], [0, 2], [0, 1], [1, 0], [2, 0], [3, 1], [3, 2], [3, 3]]] },
+  { name: "Глаз", deep: 2, s: [[[0, 1], [1, 0], [2, 0], [3, 0], [4, 1], [3, 2], [2, 2], [1, 2]], [[2, 1]]] },
+  { name: "Перевёртыш", deep: 2, fix: 1, s: [[[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [1, 3], [0, 2], [0, 1]]] },
+  { name: "Трещина", deep: 2, s: [[[0, 0], [1, 1], [2, 0], [3, 1], [2, 2], [3, 3], [2, 4], [1, 3], [0, 4]]] },
+  { name: "Чёрное солнце", deep: 3, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1]], [[1, 1], [2, 2]]] },
+  { name: "Комета", deep: 3, s: [[[0, 4], [1, 3], [2, 2], [3, 1], [4, 0], [3, 0], [4, 1]]] },
+  { name: "Сверхновая", deep: 3, s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [3, 2], [4, 2]]] },
+  // «Разлом» — ворота на уровень глубже (gate — куда ведёт). Берётся строго по номерам, поэтому рядом с диагональными
+  // переходами нет более поздних отметок: задеть «чужой» номер углом курсора нельзя.
+  { name: "Разлом", gate: 1, s: [[[1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 3], [1, 4], [2, 4]]] },
+  { name: "Разлом", gate: 2, s: [[[3, 0], [2, 0], [1, 0], [0, 1], [1, 2], [2, 2], [3, 3], [2, 4], [1, 4], [0, 4]]] },
+  { name: "Разлом", gate: 3, s: [[[0, 0], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 2], [0, 3], [1, 4], [2, 4], [3, 4], [3, 3]]] },
 ];
 // Сложность рисунка — по числу плиток: простой (до 5) прибавляет к комбо 1, дальше 2, 3 и 4. Сложные выходят не сразу:
 // пока комбо меньше 3 — только простые, с 3 — до второй ступени, с 10 — до третьей, с 25 — любые; чем сложнее из
@@ -401,7 +417,7 @@ for (const f of FIGS) {
     if (seen.has(key)) continue;
     seen.add(key);
     const Q = s.flat();
-    VARS.push({ name: f.name, t: f.t, n: f.n, s, w: Math.max(...Q.map((p) => p[0])) + 1, h: Math.max(...Q.map((p) => p[1])) + 1 });
+    VARS.push({ name: f.name, t: f.t, n: f.n, deep: f.deep || 0, gate: f.gate || 0, s, w: Math.max(...Q.map((p) => p[0])) + 1, h: Math.max(...Q.map((p) => p[1])) + 1 });
   }
 }
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
@@ -421,15 +437,21 @@ const figRank = (k) => { if (!(k > 0)) return -1; let r = 0; for (let i = 1; i <
 // Ранг, который игрок держит сейчас. Вверх — как только жар дошёл до порога; вниз — когда остыл заметно ниже него (на 5 %,
 // не меньше 0,6): на самом пороге ранг иначе мигал бы туда-сюда. rankPeak — высший ранг этого комбо: буква нового ранга
 // вылетает только за него, а не каждый раз, когда ранг возвращён.
+// На глубине (S.fig.d ≥ 1) лесенка короче — S, SS, SSS и MAX — и считается внутри уровня: S — с его порога, MAX — там,
+// где открывается разлом (в «Пустоте» — у самого потолка).
+const rankLo = () => (S.fig.d ? 4 : 0);
+const rankAt = (i) => { const d = S.fig.d; return d ? C.figLv(d).at + [0, 0, 0, 0, 0, 33, 66, CFG.figCap][i] * C.figScale(d) : FIG_RANKS[i].k; };
+const rankSlack = (i) => { const d = S.fig.d; return d ? Math.max(0.6 * C.figScale(d), (rankAt(i) - C.figLv(d).at) * 0.05) : Math.max(0.6, FIG_RANKS[i].k * 0.05); };
 let rankIdx = -1, rankPeak = -1;
 function rankSync() {                                       // отдаёт, на сколько ступеней ранг изменился
   const k = figWanted() ? S.fig.k : 0;
   let r = rankIdx;
   if (!(k > 0)) r = -1;
   else {
-    if (r < 0) r = 0;
-    while (r + 1 < FIG_RANKS.length && k >= FIG_RANKS[r + 1].k) r++;
-    while (r > 0 && k < FIG_RANKS[r].k - Math.max(0.6, FIG_RANKS[r].k * 0.05)) r--;
+    const lo = rankLo();
+    if (r < lo) r = lo;
+    while (r + 1 < FIG_RANKS.length && k >= rankAt(r + 1)) r++;
+    while (r > lo && k < rankAt(r) - rankSlack(r)) r--;
   }
   const d = r - rankIdx;
   rankIdx = r;
@@ -439,10 +461,10 @@ function rankSync() {                                       // отдаёт, н�
 // Сколько шкалы залито, 0…1: секция на ранг, внутри ранга — ровно; верхняя секция — запас жара сверх потолка. Первые ранги
 // короткие и пролетают быстро, дальше каждый длиннее, а жар остывает быстрее.
 const figLevel = (k) => {
-  const N = FIG_RANKS.length;
+  const lo = rankLo(), N = FIG_RANKS.length - lo;
   if (!(k > 0)) return 0;
-  for (let i = 1; i < N; i++) if (k < FIG_RANKS[i].k) return (i - 1 + (k - FIG_RANKS[i - 1].k) / (FIG_RANKS[i].k - FIG_RANKS[i - 1].k)) / N;
-  return (N - 1 + Math.min(1, (k - CFG.figCap) / CFG.figOver)) / N;
+  for (let i = lo + 1; i < lo + N; i++) if (k < rankAt(i)) return (i - 1 - lo + Math.max(0, k - rankAt(i - 1)) / (rankAt(i) - rankAt(i - 1))) / N;
+  return (N - 1 + Math.min(1, (k - rankAt(lo + N - 1)) / (CFG.figOver * C.figScale(S.fig.d)))) / N;
 };
 const figLvl = () => [0, 0, 0, 1, 2, 3, 4, 4, 4][rankIdx + 1];   // уровень звука и размера «вылета» — по рангу
 function rankSound(r) {                                     // новый ранг: чем выше, тем длиннее фанфары
@@ -488,6 +510,9 @@ function seat(spots) {                                      // Map: место �
 function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (r) r.root.classList.remove("hg-m", "hg-hit"); }
   if (fig && fig.dots) for (const d of fig.dots.values()) d.remove();
+  if (fig && fig.sparkEl) fig.sparkEl.remove();              // искра и разлом уходят вместе с рисунком
+  if (fig && fig.spark >= 0 && rows[fig.spark]) rows[fig.spark].root.classList.remove("dp-sp");
+  const gw = $("hgWrap"); if (gw && gw.dataset.gate) delete gw.dataset.gate;
   fig = null;
 }
 // Кружки и линия рисунка живут в отдельном слое поверх всей сетки (а не внутри плиток): плитки их не обрезают и не
@@ -514,9 +539,18 @@ function spawnFig(from) {
   clearFig();
   hovLast = null;                                            // «без зажатия»: новый рисунок может лечь прямо под стоящую мышь — первое же движение его заметит
   if (figWanted() && rows.length === TILES && hgC) {
-    const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k);
-    const fits = VARS.filter((v) => v.w <= hgC && v.h <= R && v.t <= top && v.name !== was);
-    const weight = (v) => (v.t === top ? 4 : v.t === top - 1 ? 2 : 1);   // сложные из разрешённых — чаще
+    const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k), deep = S.fig.d;
+    // Жар у потолка уровня — вместо рисунка выходит «Разлом» на уровень глубже (если разлом уже открыт, а рисунок пришлось
+    // поставить заново — сетка сменила размер, — он остаётся разломом и время идёт дальше).
+    let gate = S.fig.gate > 0 || C.figGateReady(S) ? deep + 1 : 0;
+    const room = VARS.filter((v) => v.w <= hgC && v.h <= R);
+    let fits = gate ? room.filter((v) => v.gate === gate) : [];
+    if (!fits.length) { gate = 0; fits = room.filter((v) => !v.gate && v.t <= top && v.name !== was && (!v.deep || v.deep === deep)); }
+    // сложные из разрешённых — чаще; «находки» своего уровня глубины — примерно каждый седьмой рисунок
+    const plainW = (v) => (v.t === top ? 4 : v.t === top - 1 ? 2 : 1);
+    let findW = 0;
+    if (!gate && deep) { let sum = 0, n = 0; for (const v of fits) { if (v.deep) n += 1; else sum += plainW(v); } findW = n ? sum * 0.16 / n : 0; }
+    const weight = (v) => (gate ? 1 : v.deep ? findW : plainW(v));
     const place = (v, ox, oy) => {                           // места на сетке, или null, если рисунок не ложится целиком
       const at = v.s.map((st) => st.map(([x, y]) => [ox + x, oy + y]));
       if (at.some((st) => st.some(([x, y]) => x < 0 || y < 0 || x >= hgC || y >= R || y * hgC + x >= TILES))) return null;
@@ -549,15 +583,40 @@ function spawnFig(from) {
       const { v, at } = pick;
       const who = seat([...new Set(at.flat())]);             // кто из героев стоит на этих местах (лучшие подставлены, если все открыты)
       const segs = at.map((st) => st.map((q) => who.get(q)));
-      fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())], miss: 0, clean: true, allow: figAllow(at) };
-      figLayer().classList.remove("hg-messy");
-      // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
+      fig = { name: v.name, plus: v.t, segs, cells: [...new Set(segs.flat())], hit: new Set(), best: who.best, spots: [...new Set(at.flat())], miss: 0, clean: true, allow: figAllow(at),
+        find: v.deep ? v.name : "", gate: 0, spark: -1, sparkEl: null, sparkHit: false, dark: deep >= 3 && !gate ? CFG.figDark : 0, born: performance.now() };
       const lay = figLayer();
+      lay.classList.remove("hg-messy");
+      if (gate) {                                            // разлом: время пошло (или идёт дальше, если он уже был открыт)
+        if (!(S.fig.gate > 0)) {
+          gateTotal = C.figGateOpen(S, fig.cells.length);
+          if (gateTotal > 0) { sfx.gate(); note("Разлом открыт", "Проведи по отметкам строго по номерам, пока идёт время, — и комбо провалится на глубину " + DP.roman(gate) + ", «" + DEEP[gate].name + "»: души пойдут ×" + (DEEP[gate].at + 1) + " и больше", 9000); }
+        }
+        if (S.fig.gate > 0) { fig.gate = gate; $("hgWrap").dataset.gate = String(gate); gateSecShown = -1; }
+      }
+      // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
       fig.dots = new Map();
       fig.cells.forEach((i, n) => {
         const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : ""); d.dataset.i = i; d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
-        lay.appendChild(d); fig.dots.set(i, d); rows[i].root.classList.add("hg-m");
+        lay.appendChild(d); fig.dots.set(i, d);
       });
+      // искра («Изнанка» и глубже): висит на соседней с рисунком плитке — задень по пути, это не промах
+      if (!fig.gate && deep >= 2 && Math.random() < CFG.figSparkP) {
+        const used = new Set(fig.spots), opts = [], here = from ? from.spot : -1;
+        for (let n = 1; n < fig.spots.length; n++) {
+          const q = fig.spots[n], x = q % hgC, y = Math.floor(q / hgC);
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const tx = x + dx, ty = y + dy, t = ty * hgC + tx;
+            if ((dx || dy) && tx >= 0 && ty >= 0 && tx < hgC && t < TILES && !used.has(t) && t !== here) opts.push(t);
+          }
+        }
+        if (opts.length) {
+          const spot = opts[Math.floor(Math.random() * opts.length)];
+          fig.spark = slotOf ? slotOf.indexOf(spot) : spot;
+          fig.sparkEl = document.createElement("i"); fig.sparkEl.className = "dp-spark"; lay.appendChild(fig.sparkEl);
+          rows[fig.spark].root.classList.add("dp-sp");
+        }
+      }
     }
   } else if (!figWanted() && slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; }   // рисунки выключены — сетка в обычном порядке
   drawFigLines(); drawFigChip(); drawFigBtn();
@@ -569,20 +628,32 @@ function drawFigLines() {                                   // слой рису
   const lay = figLayer(), svg = lay.querySelector("svg");
   const lr = list.getBoundingClientRect(), W = Math.round(lr.width), H = Math.round(list.classList.contains("hg-flow") ? Math.max(lr.height, list.scrollHeight) : lr.height);
   lay.style.width = W + "px"; lay.style.height = H + "px";
+  lay.classList.toggle("dp-gate", !!fig.gate);
   const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]; };
   svg.setAttribute("width", W); svg.setAttribute("height", H);
   for (const [i, d] of fig.dots) { const p = pt(i); d.style.left = p[0].toFixed(1) + "px"; d.style.top = p[1].toFixed(1) + "px"; }
+  if (fig.sparkEl && fig.spark >= 0) { const p = pt(fig.spark); fig.sparkEl.style.left = p[0].toFixed(1) + "px"; fig.sparkEl.style.top = p[1].toFixed(1) + "px"; }
   // Линия идёт от края кружка до края следующего, как в osu, и в кружки не заходит: номера в них остаются видны.
   // Три слоя: тёмная подложка (линию видно и на светлом портрете), широкое свечение и сама линия — сплошная и неподвижная.
+  // У разлома — четвёртый, тёмная сердцевина: линия читается как трещина. data-n — номер дальней отметки отрезка («тьма»).
   const dot = fig.dots.get(fig.cells[0]), rad = (dot ? dot.offsetWidth / 2 : 20) + 8;
   const segs = [];
   for (const st of fig.segs) for (let k = 1; k < st.length; k++) {
     const a = pt(st[k - 1]), b = pt(st[k]), d = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (d <= 2 * rad + 4) continue;                          // кружки почти касаются — линия не нужна
     const ux = (b[0] - a[0]) / d, uy = (b[1] - a[1]) / d;
-    segs.push([a[0] + ux * rad, a[1] + uy * rad, b[0] - ux * rad, b[1] - uy * rad].map((v) => v.toFixed(1)));
+    segs.push([a[0] + ux * rad, a[1] + uy * rad, b[0] - ux * rad, b[1] - uy * rad].map((v) => v.toFixed(1)).concat(Math.max(fig.cells.indexOf(st[k - 1]), fig.cells.indexOf(st[k]))));
   }
-  svg.innerHTML = ["hg-lo", "hg-lg", "hg-ll"].map((c) => segs.map((q) => '<line class="' + c + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
+  svg.innerHTML = (fig.gate ? ["hg-lo", "hg-lg", "hg-ll", "dp-lc"] : ["hg-lo", "hg-lg", "hg-ll"]).map((c) => segs.map((q) => '<line class="' + c + '" data-n="' + q[4] + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
+  darkSync();
+}
+// Какие отметки видны. Обычно — все. В «Пустоте» («тьма») — только ближайшие CFG.figDark: остальные проступают по мере
+// сбора. Отметка на месте и засчитывается, даже если её ещё не видно.
+function darkSync() {
+  if (!fig) return;
+  const lim = fig.dark ? fig.hit.size + fig.dark : 1e9;
+  fig.cells.forEach((i, n) => { const far = n >= lim, d = fig.dots.get(i); if (d) d.classList.toggle("dp-far", far); rows[i].root.classList.toggle("hg-m", !far); });
+  if (fig.dark) { const lay = $("mercList").querySelector(".hg-fig"); if (lay) lay.querySelectorAll("line").forEach((l) => l.classList.toggle("dp-far", Number(l.dataset.n) >= lim)); }
 }
 // Все «вылеты» (искры, кольца, надписи) живут в своём слое поверх сетки — как кружки и линия рисунка: плитки их не
 // перекрывают и не обрезают (на iPhone иначе они уходили под плитки). Слой не ловит касания.
@@ -607,38 +678,65 @@ const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 // кольцо убывает, пока идёт время на следующий рисунок. Внизу — комбо и во сколько раз больше душ. Рисунки выключены —
 // шкалы нет, и сетка занимает её место.
 let meterKey = "?", ringShown = -1, hurryOn = false, ticksDone = false, lvShown = -1, chipBar = null;
+const GATE_GRACE = 700;                                      // мс после появления разлома, когда отметка не по номерам ещё не закрывает его
+let ticksFor = -1, deepShown = 0, gateTotal = 1, gateSecShown = -1;   // для какого уровня глубины собрана лесенка; какой уровень показан страницей; сколько секунд дали на разлом
+const kShow = () => C.figMul(S) - 1;                         // комбо, каким его видит игрок: целое и не выше потолка уровня
+const runMul = () => 1 + CFG.figRun * Math.min(CFG.figRunMax, S.fig.run);   // «разгон»: во сколько раз сильнее согреет следующий рисунок по номерам
+const lootT = (sec) => { const m = Math.round(sec / 60); return sec >= 3600 ? "час" : m <= 1 ? "минута" : m + " " + plural(m, "минута", "минуты", "минут"); };
+const deepOf = (k) => { let L = DEEP[0]; for (const x of DEEP) if (k >= x.at) L = x; return L; };
 function drawMeter() {                                      // то, что меняется редко: виден ли, ранг, слово, комбо числом
   const m = $("hgMeter"), wrap = $("hgWrap");
   if (!m) return;
   const on = figWanted();
   if (!on) { rankIdx = -1; rankPeak = -1; }
-  const k = on ? Math.floor(S.fig.k) : 0, key = (on ? 1 : 0) + "|" + k + "|" + rankIdx;
+  const k = on ? kShow() : 0, key = (on ? 1 : 0) + "|" + k + "|" + rankIdx + "|" + S.fig.d + "|" + (S.fig.gate > 0 ? 1 : 0) + "|" + (S.stats.figDeep || 0) + "|" + S.fig.run;
   if (key === meterKey) return;
   meterKey = key;
   m.hidden = !on;
   const Rk = rankIdx >= 0 ? FIG_RANKS[rankIdx] : null;
   if (Rk) wrap.dataset.rank = Rk.id; else delete wrap.dataset.rank;
   if (!on) return;
-  const N = FIG_RANKS.length, tube = $("hgMTube");
-  if (!ticksDone) {                                          // секция — на ранг, своего цвета; буква ранга стоит у её низа
-    ticksDone = true;
-    $("hgMTicks").innerHTML = FIG_RANKS.map((x, i) => '<span class="tc-' + x.id + '" style="bottom:' + (100 * i / N).toFixed(2) + '%">' + (x.id === "max" ? "★" : x.mark) + "</span>").join("");
-    for (let j = 0; j < N; j++) { const sg = document.createElement("u"); sg.className = "hg-mseg sg-" + FIG_RANKS[j].id + (j === 0 ? " sg-bot" : j === N - 1 ? " sg-top" : ""); sg.innerHTML = "<i></i>"; tube.insertBefore(sg, tube.firstChild); }
+  const lo = rankLo(), LAD = FIG_RANKS.slice(lo), N = LAD.length, tube = $("hgMTube");
+  if (!ticksDone || ticksFor !== S.fig.d) {                  // секция — на ранг, своего цвета; буква ранга стоит у её низа. На глубине лесенка своя: S, SS, SSS, MAX
+    ticksDone = true; ticksFor = S.fig.d; lvShown = -1;
+    $("hgMTicks").innerHTML = LAD.map((x, i) => '<span class="tc-' + x.id + '" style="bottom:' + (100 * i / N).toFixed(2) + '%">' + (x.id === "max" ? "★" : x.mark) + "</span>").join("");
+    tube.querySelectorAll(".hg-mseg").forEach((n) => n.remove());
+    for (let j = 0; j < N; j++) { const sg = document.createElement("u"); sg.className = "hg-mseg sg-" + LAD[j].id + (j === 0 ? " sg-bot" : j === N - 1 ? " sg-top" : ""); sg.innerHTML = "<i></i>"; tube.insertBefore(sg, tube.firstChild); }
   }
-  [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i <= rankIdx));
+  [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i + lo <= rankIdx));
   const mk = $("hgMMark");
   mk.textContent = Rk ? Rk.mark : ""; mk.dataset.n = Rk ? Rk.mark.length : 0;
-  $("hgMWord").textContent = Rk ? Rk.word : "";
+  $("hgMWord").textContent = Rk ? Rk.word + (S.fig.d >= 1 && S.fig.run > 0 ? " · разгон ×" + mulT(runMul()) : "") : "";
   $("hgMNum").textContent = group(k);
   $("hgMMul").textContent = k ? "×" + mulT(C.figMul(S)) : "";
+  const L = DEEP[S.fig.d];
   m.title = "Шкала комбо — жар. Собранный рисунок греет: больше плиток, меньше лишних по пути и отметки по номерам — сильнее. Жар всё время остывает, на высоких рангах быстрее; ранги — от D «" + FIG_RANKS[0].word +
-    "» до MAX «" + FIG_RANKS[N - 1].word + "». Души идут ×(1 + комбо)" + (k ? ", сейчас ×" + mulT(C.figMul(S)) : "") + ". Кольцо вокруг буквы — сколько осталось до быстрого остывания, если не брать отметки";
+    "» до MAX «" + FIG_RANKS[FIG_RANKS.length - 1].word + "». Души идут ×(1 + комбо)" + (k ? ", сейчас ×" + mulT(C.figMul(S)) : "") + ". Кольцо вокруг буквы — сколько осталось до быстрого остывания, если не брать отметки. " +
+    "На MAX открывается «Разлом» — путь на глубину: " + DEEP.slice(1).map((x) => "«" + x.name + "» с комбо " + x.at).join(", ") + (S.fig.d ? ". Сейчас — «" + L.name + "», правило «" + L.rule + "»: " + L.how : "");
+  drawNext();
+}
+// Над трубкой шкалы — следующий уровень глубины: его эмблема и комбо, с которого он открывается. Закрытый (там ещё не
+// бывал) — серый; когда на сетке открыт разлом, эмблема бьётся.
+function drawNext() {
+  const m = $("hgMeter"); if (!m) return;
+  let el = $("dpNext");
+  if (!el) { el = document.createElement("div"); el.id = "dpNext"; el.className = "dp-next"; el.innerHTML = '<img alt="" draggable="false"><b></b>'; m.insertBefore(el, m.querySelector(".hg-mbody")); }
+  const d = S.fig.d, nx = d + 1, last = nx >= DEEP.length, L = last ? null : DEEP[nx], rec = S.stats.figDeep || 0;
+  el.dataset.lv = last ? 4 : nx;
+  el.classList.toggle("dp-locked", !last && rec < nx);
+  el.classList.toggle("dp-ready", S.fig.gate > 0);
+  const src = DP.emblem(last ? d : nx), im = el.querySelector("img");
+  if (im.getAttribute("src") !== src) im.src = src;
+  el.querySelector("b").textContent = last ? String(CFG.figTop) : String(L.at);
+  el.title = last ? "Глубже некуда: потолок комбо — " + CFG.figTop + ", души ×" + (CFG.figTop + 1)
+    : "Дальше — глубина " + DP.roman(nx) + ", «" + L.name + "», с комбо " + L.at + (rec >= nx ? " (ты там уже бывал)" : " (ещё не открыта)") + ". Догрей комбо до MAX — на сетке откроется «Разлом»: проведи по нему строго по номерам, пока идёт время. " +
+      "Правило уровня — «" + L.rule + "»: " + L.how + ". Все уровни: " + DEEP.slice(1).map((x) => "«" + x.name + "» — " + x.at).join(", ");
 }
 function drawFill() {                                       // заливка лесенки — по дробному жару: видно, как он остывает
   const lv = figLevel(figWanted() ? S.fig.k : 0);
   if (Math.abs(lv - lvShown) < 0.0012) return;
   lvShown = lv;
-  const N = FIG_RANKS.length, tube = $("hgMTube");
+  const N = FIG_RANKS.length - rankLo(), tube = $("hgMTube");
   tube.querySelectorAll(".hg-mseg").forEach((sg, n) => {      // в разметке секции идут сверху вниз
     const f = Math.max(0, Math.min(1, lv * N - (N - 1 - n))).toFixed(3);
     if (sg.dataset.f !== f) { sg.dataset.f = f; sg.style.setProperty("--f", f); }
@@ -651,6 +749,14 @@ function dropLetter(mark) {                                 // буква ран
   const f = document.createElement("b"); f.className = "hg-mfall"; f.textContent = mark; f.dataset.n = mark.length;
   box.appendChild(f); setTimeout(() => f.remove(), 700);
 }
+// Вид страницы идёт за уровнем глубины. Провал и всплытие ставят его сами, с переходом; здесь — всё остальное: прогресс
+// стёрли или подхватили с другого устройства, рисунки выключили, вкладка простояла свёрнутой.
+function deepSync() {
+  const d = figWanted() ? S.fig.d : 0;
+  if (d !== deepShown) { deepShown = d; DP.set(d, ""); rankIdx = -1; meterKey = "?"; figChipKey = "?"; }
+  if ((S.stats.figDeep || 0) !== DP.knownMax()) { DP.setKnown(S.stats.figDeep || 0); meterKey = "?"; roadKey = ""; }
+  if (d < DEEP.length - 1 && S.fig.k > 0 && C.figLocal(S) > 55) DP.warm(d + 1);   // картинки следующего уровня — заранее
+}
 function stepMeter() {                                      // каждый кадр: ранг, заливка, кольцо и «жар уходит»
   if (meterKey.charAt(0) !== "1") return;
   const was = rankIdx, d = rankSync();
@@ -658,14 +764,19 @@ function stepMeter() {                                      // каждый ка
   if (d > 0) rankPeak = Math.max(rankPeak, rankIdx);
   if (d) { drawMeter(); figChipKey = "?"; }
   if (ticksDone) drawFill();
-  // кольцо: сколько осталось до быстрого остывания, если не брать отметки
-  const k = S.fig.k, f = k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240);
+  // кольцо: сколько осталось до быстрого остывания, если не брать отметки; пока открыт разлом — сколько осталось ему
+  const k = S.fig.k, gate = S.fig.gate > 0 && fig && fig.gate;
+  const f = gate ? Math.max(0, Math.min(1, S.fig.gate / gateTotal)) : k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240) + (gate ? 1000 : 0);
   if (v !== ringShown) {
     ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1);
     if (chipBar && chipBar.isConnected) chipBar.style.transform = "scaleX(" + f.toFixed(3) + ")";
   }
-  const h = k > 0 && S.fig.idle >= CFG.figIdleAt;
-  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); if (h) sfx.hurry(false); figChipKey = "?"; }
+  if (gate) {                                                // секунды разлома — в плашке над сеткой; последние три тикают
+    const sec = Math.ceil(S.fig.gate);
+    if (sec !== gateSecShown) { if (gateSecShown >= 0 && sec <= 3) sfx.hurry(sec <= 1); gateSecShown = sec; figChipKey = "?"; drawFigChip(); }
+  }
+  const h = gate ? S.fig.gate < 3 : k > 0 && S.fig.idle >= CFG.figIdleAt;
+  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); if (h && !gate) sfx.hurry(false); figChipKey = "?"; }
 }
 // Новый ранг: буква врезается в сетку (в ту её половину, где нет следующего рисунка), под ней слово; потом буква улетает
 // в шкалу и встаёт там в кольцо. На потолке по сетке ещё и хлещет хлыст.
@@ -709,8 +820,16 @@ function figTouch(i) {                                      // по плитке
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
   if (!fig) return;
   const at = fig.cells.indexOf(i);
-  if (at < 0) { if (fig.hit.size) fig.miss += 1; return; }   // лишняя плитка по пути (дорога к первой отметке не в счёт)
+  if (at < 0) {
+    if (i === fig.spark && !fig.sparkHit) { sparkTake(); return; }   // искра рядом с рисунком — не промах, а подарок
+    if (fig.hit.size) fig.miss += 1;                         // лишняя плитка по пути (дорога к первой отметке не в счёт)
+    return;
+  }
   if (fig.hit.has(i)) return;                                // по уже взятой отметке ходить можно
+  if (fig.gate && at !== fig.hit.size) {                     // разлом берут строго по номерам: сбился — закрылся
+    if (performance.now() - fig.born < GATE_GRACE) return;   // …но не в первый миг: рука ещё летит по прошлому рисунку и разлома не видела
+    gateLost("order"); return;
+  }
   if (at !== fig.hit.size && fig.clean) {                    // взята не по номерам: прибавки «по номерам» за этот рисунок не будет
     fig.clean = false; figLayer().classList.add("hg-messy");
     for (const d of fig.dots.values()) d.classList.remove("hg-go");
@@ -725,20 +844,101 @@ function figTouch(i) {                                      // по плитке
     if (!still()) fxAdd("hg-hitr", parseFloat(dot.style.left) || 0, parseFloat(dot.style.top) || 0, 380);   // кольцо от отметки, как от попадания в osu
   }
   if (fig.clean && fig.hit.size < fig.cells.length) { const nx = fig.dots.get(fig.cells[fig.hit.size]); if (nx) nx.classList.add("hg-go"); }   // сходящееся кольцо — на следующем номере
+  if (fig.dark) darkSync();                                  // «тьма»: проступает следующая отметка
   if (fig.hit.size === fig.cells.length) {
+    if (fig.gate) { gateWon(); return; }
     const done = fig, n = done.cells.length, acc = 1 / (1 + Math.max(0, done.miss - done.allow) / n), peak0 = rankPeak;
     done.clean = done.clean && acc >= 0.5;                   // «по номерам» засчитывается, только если рисунок не собран мимо всего
-    const g = C.figDone(S, n, done.name, acc, done.clean);
+    const fresh = !!done.find && !S.finds[done.find];        // находка глубины — впервые
+    const g = C.figDone(S, n, done.name, acc, done.clean, done.find);
     const d = rankSync(), up = rankIdx > peak0 && rankIdx >= 1;   // буква вылетает за новый высший ранг этого комбо, начиная с C
     rankPeak = Math.max(rankPeak, rankIdx);
-    figBoom(done, { g, acc, clean: done.clean, up, back: d > 0 && !up });
-    let dir = null;                                          // куда шла рука: следующий рисунок — по ходу
-    if (touchPrev >= 0 && hgC) { const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC)); if (dx || dy) dir = [dx, dy]; }
-    spawnFig({ spot: touchSpot, dir });
+    figBoom(done, { g, acc, clean: done.clean, up, back: d > 0 && !up, run: S.fig.run, find: done.find, fresh });
+    spawnFig({ spot: touchSpot, dir: handDir() });
     if (up) rankUp(rankIdx);                                 // после нового рисунка: надпись встаёт так, чтобы его не закрыть
     figChipKey = "?"; drawFigChip(); slowT = 0;
   }
   else drawFigChip();
+}
+function handDir() {                                         // куда шла рука: следующий рисунок — по ходу
+  if (!(touchPrev >= 0) || !hgC) return null;
+  const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC));
+  return dx || dy ? [dx, dy] : null;
+}
+// ---------- глубина комбо: разлом, провал, всплытие, искры ----------
+// Правила — js/core.js (figGate*, figSpark, figStep), вид страницы на уровне — js/deep.js и css/deep.css.
+function sparkTake() {                                       // искра поймана: комбо и души сразу
+  fig.sparkHit = true;
+  const g = C.figSpark(S), el = fig.sparkEl, t = rows[fig.spark];
+  fig.sparkEl = null;
+  if (t) t.root.classList.remove("dp-sp");
+  if (el) { el.classList.add("dp-got"); setTimeout(() => el.remove(), 400); }
+  if (!g) return;
+  sfx.spark();
+  if (el && !still()) fxAdd("hg-pop l0", parseFloat(el.style.left) || 0, parseFloat(el.style.top) || 0, 1100, '<b></b><span><i class="dp-run">искра +' + mulT(g) + "</i></span>");
+  figChipKey = "?"; drawFigChip();
+}
+function gateWon() {                                         // разлом взят: комбо проваливается на уровень глубже
+  const done = fig, list = $("mercList"), to = done.gate, first = S.fig.dmax < to;
+  if (!C.figGatePass(S)) { gateLost("time"); return; }
+  const L = DEEP[to];
+  rankIdx = -1; rankSync(); rankPeak = rankIdx;              // на новом уровне лесенка рангов своя и начинается с S
+  deepShown = S.fig.d; DP.setKnown(S.stats.figDeep || 0); DP.set(S.fig.d, "dive");
+  sfx.dive(to);
+  for (const i of done.cells) { const t = rows[i].root; t.classList.remove("hg-win"); void t.offsetWidth; t.classList.add("hg-win"); }
+  if (list.offsetParent !== null && !still() && !S.set.calm) {   // трещина раскрывается светом из последней отметки, из всех отметок летят искры
+    const lr = list.getBoundingClientRect(), W = Math.max(1, lr.width), H = Math.max(1, lr.height), last = done.dots.get(done.cells[done.cells.length - 1]);
+    const rift = fxAdd("dp-rift", 0, 0, 950);
+    rift.style.setProperty("--gt", ["", "#35e0ff", "#ff3b6b", "#b79bff"][to]);
+    rift.style.setProperty("--x", (100 * (parseFloat(last.style.left) || W / 2) / W).toFixed(1) + "%"); rift.style.setProperty("--y", (100 * (parseFloat(last.style.top) || H / 2) / H).toFixed(1) + "%");
+    for (const d of done.dots.values()) for (let j = 0; j < 4; j++) {
+      const a = Math.random() * 6.283, r = 60 + Math.random() * 170, n = fxAdd("hg-sp l4", parseFloat(d.style.left) || 0, parseFloat(d.style.top) || 0, 900);
+      n.style.setProperty("--dx", (Math.cos(a) * r).toFixed(1) + "px"); n.style.setProperty("--dy", (Math.sin(a) * r).toFixed(1) + "px");
+    }
+  }
+  spawnFig({ spot: touchSpot, dir: handDir() });
+  if (list.offsetParent !== null) {                          // баннер уровня — под слоем рисунка: следующий рисунок виден поверх него
+    const el = document.createElement("div");
+    el.className = "dp-banner" + (still() || S.set.calm ? " dp-bcalm" : "");
+    el.innerHTML = '<img class="dp-bemb" alt="" draggable="false" src="' + DP.emblem(to) + '"><span class="dp-bcap">Глубина ' + DP.roman(to) + '</span><b class="dp-bname">' + L.name + '</b><span class="dp-brule"><em>' + L.rule + ":</em> " + L.how +
+      '</span><span class="dp-bsub">души ×' + group(L.at + 1) + " и больше" + (first && L.loot ? " · подарок: " + lootT(L.loot) + " дохода" : "") + "</span>";
+    list.appendChild(el); setTimeout(() => el.remove(), 3300);
+  }
+  note("Глубина " + DP.roman(to) + " — «" + L.name + "»", "Комбо провалилось в разлом. Правило уровня — «" + L.rule + "»: " + L.how + ". Остынет ниже " + L.at + " — всплывёшь обратно", 12000);
+  meterKey = "?"; drawMeter(); if (ticksDone) drawFill(); figChipKey = "?"; drawFigChip(); roadKey = ""; slowT = 0;
+}
+function gateLost(why) {                                     // разлом закрылся: why — "order" (сбился с номеров) или "time" (не успел)
+  if (!fig || !fig.gate) return;                             // уже закрыт (событие ядра пришло вслед за нашим же закрытием)
+  if (why === "order") C.figGateFail(S, "order");            // по времени его закрывает само ядро (событие fig_gatefail)
+  sfx.gateFail();
+  const list = $("mercList");
+  rankSync();
+  spawnFig({ spot: touchSpot, dir: null });
+  if (list.offsetParent !== null && !still())
+    fxAdd("hg-pop lose dp-shut", list.clientWidth / 2, Math.max(60, list.clientHeight * 0.42), 1500, "<b>Разлом закрылся</b><span>" + (why === "order" ? "сбился с номеров" : "не успел") + " · комбо " + group(kShow()) + "</span>");
+  note("Разлом закрылся", (why === "order" ? "Его берут строго по номерам: с первой отметки по последнюю" : "На разлом даётся несколько секунд") + ". Догрей комбо до MAX — он откроется снова", 6000);
+  meterKey = "?"; drawMeter(); figChipKey = "?"; drawFigChip(); slowT = 0;
+}
+function deepRise(e) {                                       // комбо остыло ниже порога уровня: всплыли на уровень выше
+  const L = DEEP[e.from], U = DEEP[e.d], list = $("mercList");
+  rankIdx = -1; rankSync(); rankPeak = rankIdx;
+  deepShown = figWanted() ? S.fig.d : 0; DP.set(deepShown, "rise");
+  sfx.rise();
+  if (fig && (fig.gate || fig.hit.size === 0)) spawnFig();   // рисунок прежнего уровня (его искра и «тьма») уходит; начатый — остаётся
+  if (list.offsetParent !== null && !still())
+    fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight * 0.42), 1500, "<b>Всплыл</b><span>«" + L.name + "» остыла — снова «" + U.name + "» · комбо " + group(kShow()) + "</span>");
+  note("Комбо всплыло", "«" + L.name + "» → «" + U.name + "»: комбо остыло ниже " + L.at + ". Догрей до MAX — разлом откроется снова", 5000);
+  meterKey = "?"; lvShown = -1; drawMeter(); figChipKey = "?"; drawFigChip(); slowT = 0;
+}
+// Для проверок и снимков: поставить комбо на уровень глубины d (k — жар, по умолчанию 40 % уровня).
+export function deepSet(d, k) {
+  d = Math.max(0, Math.min(DEEP.length - 1, Math.floor(d) || 0));
+  const L = DEEP[d], f = S.fig;
+  f.d = d; f.gate = 0; f.run = 0; f.idle = 0; f.dmax = Math.max(f.dmax, d);
+  f.k = k !== undefined ? k : d ? L.at + (L.top - L.at) * 0.4 : 0; f.peak = Math.max(f.peak, f.k);
+  S.stats.figDeep = Math.max(S.stats.figDeep || 0, d);
+  rankIdx = -1; rankSync(); rankPeak = rankIdx; deepShown = figWanted() ? d : 0; DP.setKnown(S.stats.figDeep); DP.set(deepShown, "");
+  meterKey = "?"; lvShown = -1; spawnFig(); drawMeter(); figChipKey = "?"; drawFigChip();
 }
 // Рисунок собран: плитки вспыхивают, из них летят искры цвета ранга, сам рисунок расходится «эхом» и тает, поверх вылетает
 // надпись: название, как собрано (идеально, по номерам, точно, небрежно, мимо) и на сколько вырос жар. Чем выше ранг, тем
@@ -746,7 +946,7 @@ function figTouch(i) {                                      // по плитке
 // как собран рисунок: много лишних плиток — «мимо», как бы ни шёл; иначе по номерам лучше, чем вразнобой
 const figGrade = (q) => (q.acc < 0.5 ? ["мимо", "g0"] : q.acc < 0.9 ? (q.clean ? ["по номерам", "g2"] : ["небрежно", "g1"]) : q.clean ? ["идеально", "g3"] : ["точно", "g2"]);
 function figBoom(done, q) {
-  const list = $("mercList"), k = Math.floor(S.fig.k), lr = list.getBoundingClientRect();
+  const list = $("mercList"), k = kShow(), lr = list.getBoundingClientRect();
   const lvl = figLvl();
   sfx.boom(lvl, done.plus);
   if (q.up) setTimeout(() => rankSound(rankIdx), 240); else if (q.back) setTimeout(() => sfx.mile(), 200);
@@ -774,8 +974,9 @@ function figBoom(done, q) {
   }
   if (!q.up) {
     const W = list.clientWidth, H = Math.max(list.clientHeight, 120), gr = figGrade(q);
-    const pop = fxAdd("hg-pop l" + lvl, Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)), 1500,
-      "<b>" + done.name + "!</b><span><i class=\"hg-q " + gr[1] + "\">" + gr[0] + " +" + (Math.round(q.g * 10) / 10).toFixed(1).replace(".", ",") + "</i> · комбо " + group(k) + " · души ×" + mulT(C.figMul(S)) + "</span>");
+    const pop = fxAdd("hg-pop l" + lvl + (q.find ? " dp-findp" : ""), Math.max(110, Math.min(W - 110, cx)), Math.max(46, Math.min(H - 56, cy)), 1500,
+      "<b>" + done.name + "!</b><span><i class=\"hg-q " + gr[1] + "\">" + gr[0] + " +" + (Math.round(q.g * 10) / 10).toFixed(1).replace(".", ",") + "</i>" + (q.run > 1 ? ' <i class="dp-run">разгон ×' + mulT(1 + CFG.figRun * (q.run - 1)) + "</i>" : "") +
+      (q.find ? ' <i class="dp-run">находка' + (q.fresh ? " — новая!" : "") + "</i>" : "") + " · комбо " + group(k) + " · души ×" + mulT(C.figMul(S)) + "</span>");
     const half = Math.max(pop.firstChild.offsetWidth, pop.lastChild.offsetWidth) / 2 + 14;   // длинное название не должно уезжать за край сетки
     pop.style.left = Math.max(half, Math.min(W - half, cx)).toFixed(1) + "px";
   }
@@ -796,23 +997,34 @@ function drawFigBtn() {                                     // кнопка «К
   if (hgShow < 0) drawInfo();
 }
 function figApply() {                                       // настройку «Рисунки и комбо» переключили
-  if (S.set.fig === false) { if (fig || S.fig.k) { S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0; } if (fig || slotOf) spawnFig(); else drawFigBtn(); }
+  if (S.set.fig === false) { if (fig || S.fig.k) C.figReset(S); if (fig || slotOf) spawnFig(); else drawFigBtn(); }
   else if (!fig) spawnFig();
   else drawFigBtn();
 }
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, ранг, комбо и прибавка к душам
   drawMeter();
-  const el = $("hgFigc"), k = Math.floor(S.fig.k), hot = S.fig.k > 0;
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) : "";
+  const el = $("hgFigc"), k = kShow(), hot = S.fig.k > 0, gate = fig && fig.gate ? Math.max(0, Math.ceil(S.fig.gate)) : -1;
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run : "";
   if (key === figChipKey) return;
   figChipKey = key;
   el.hidden = !fig;
   if (!fig) { chipBar = null; return; }
+  if (fig.gate) {                                            // разлом: сколько отметок взято и сколько секунд осталось
+    const L = DEEP[fig.gate];
+    el.className = "hg-figc on dp-gatec"; el.dataset.gate = String(fig.gate);
+    el.title = "Разлом: проведи по отметкам строго по номерам, с первой по последнюю, пока идёт время. Успел — комбо провалится на глубину " + DP.roman(fig.gate) + ", «" + L.name + "»: души пойдут ×" + (L.at + 1) +
+      " и больше. Сбился или не успел — комбо отбросит от потолка, и разлом откроется снова, когда догреешь";
+    el.innerHTML = '<span class="hg-fw"><em class="hg-fn">Разлом</em> <b>' + fig.hit.size + "/" + fig.cells.length + '</b></span><span>по номерам</span><span><b>' + gate + ' с</b></span><i class="hg-figt"></i>';
+    chipBar = el.querySelector(".hg-figt"); ringShown = -1;
+    return;
+  }
   el.className = "hg-figc" + (hot ? " on" : "") + (hurryOn ? " hurry" : "");
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок греет комбо: чем он больше, чем меньше лишних плиток по пути и если брать отметки по номерам — тем сильнее. " +
-    "Комбо умножает души — до ×" + mulT(1 + CFG.figStep * CFG.figCap) + " — и всё время остывает: на высоких рангах быстрее, а без отметок дольше " + CFG.figIdleAt + " секунд — совсем быстро";
+    "Комбо умножает души — до ×" + mulT(1 + CFG.figStep * CFG.figCap) + " на улице и до ×" + (CFG.figTop + 1) + " на глубине — и всё время остывает: на высоких рангах быстрее, а без отметок дольше " + CFG.figIdleAt + " секунд — совсем быстро" +
+    (S.fig.d ? ". Сейчас — глубина " + DP.roman(S.fig.d) + ", «" + DEEP[S.fig.d].name + "»: " + DEEP[S.fig.d].how : "");
   el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b></span>" +
-    (hot ? '<span><em class="hg-frk">' + FIG_RANKS[Math.max(0, rankIdx)].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span><span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
+    (hot ? "<span>" + (S.fig.d ? '<img class="dp-cemb" alt="" draggable="false" src="' + DP.emblem(S.fig.d) + '">' : "") + '<em class="hg-frk">' + FIG_RANKS[Math.max(0, rankIdx)].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span>" +
+      (S.fig.d && S.fig.run > 0 ? '<span class="dp-crun">разгон ×' + mulT(runMul()) + "</span>" : "") + "<span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
   chipBar = el.querySelector(".hg-figt"); ringShown = -1;
 }
@@ -839,8 +1051,8 @@ export function cloudNote(was, now, first, meta) {          // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC } : null; }   // для проверки
-export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s }));
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: slotOf ? slotOf.slice() : null, spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? (slotOf ? slotOf[fig.spark] : fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
+export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s, deep: f.deep || 0, gate: f.gate || 0 }));
 export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
 function prevMs(lv) {
@@ -1038,7 +1250,7 @@ function stepAch() {                                         // зовётся �
 function drawRoad() {
   if (tab !== "road") return;
   const now = performance.now(), ak = achKey();
-  const key = Object.keys(S.un).length + ":" + Object.keys(S.feat).length + ":" + ak;
+  const key = (Object.keys(S.un).length + 100 * (S.stats.figDeep || 0) + 1000 * (S.stats.figFinds || 0)) + ":" + Object.keys(S.feat).length + ":" + ak;
   if (key === roadKey || (roadKey && now - achDrawAt < 1000 && roadKey.split(":")[2].split("|")[0] === ak.split("|")[0])) return;   // цифры прогресса — не чаще раза в секунду
   roadKey = key; achDrawAt = now;
   const ord = (u) => (u.kind === "rb" ? 1000 + u.at : u.kind === "souls" ? 0 : u.at);
@@ -1050,8 +1262,10 @@ function drawRoad() {
     h += '<div class="rd' + (done ? " done" : cur ? " cur" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + u.title + "</b><span>" + condText(u) + "</span><p>" + u.say + "</p></div></div>";
   }
   for (const x of ROAD_EXTRA) {
-    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : false;
-    h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div><b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p></div></div>";
+    const dn = x.key && x.key.indexOf("deep") === 0 ? Number(x.key.slice(4)) : 0;   // уровень глубины комбо
+    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : false;
+    const extra = x.key === "finds" ? '<div class="dp-finds">' + C.FINDS.map((f, i) => (S.finds[f] ? '<span class="dp-has">' + f + " ×" + group(S.finds[f]) : "<span>??? · " + DEEP[1 + Math.floor(i / 3)].name) + "</span>").join("") + "</div>" : "";
+    h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div>" + (dn ? '<img class="dp-remb" alt="" src="' + DP.emblem(dn) + '">' : "") + "<b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p>" + extra + "</div></div>";
   }
   $("roadList").innerHTML = h;
 }
@@ -1428,6 +1642,7 @@ export function frame(dt) {
   C.setLoud(S, inChat);                                      // и всё идёт ×2
   C.setSpoke(S, inChat && CHAT.spoke());                     // писал в чат за последние 10 минут — сундук копится вдвое быстрее
   drawBank(dt);
+  deepSync();
   stepMeter();
   stepHold(dt);
   stepDraft();
@@ -1457,8 +1672,11 @@ export function onEvent(e) {
     note("Подарок за вход через Twitch", e.fresh ? "В отряд пришли " + names + " — сразу " + e.lv + "-го уровня, уже фармят" : names + " получили по " + e.lv + " уровней", 9000);
     sfx.rank(); slowT = 0;
   }
+  else if (e.t === "fig_gatefail") { if (e.why === "time") gateLost("time"); }   // разлом закрылся по времени (сбой с номеров интерфейс закрывает сам)
+  else if (e.t === "fig_rise") deepRise(e);                  // комбо остыло ниже порога уровня глубины
   else if (e.t === "fig") {                                  // рисунок на сетке собран
     figChipKey = "?";
+    if (e.find && e.fresh) { note("Находка глубины", "«" + e.find + "» — такой рисунок выпадает только здесь, в «" + DEEP[S.fig.d].name + "». Находок: " + (S.stats.figFinds || 0) + " из " + C.FINDS.length + ", список — во вкладке «Путь»", 9000); sfx.find(); roadKey = ""; }
     if (S.stats.figs === 1) note("Рисунок «" + e.name + "» собран", "Пошло комбо: оно умножает души и всё время остывает. Собирай рисунки дальше — по номерам и без лишних плиток греет сильнее", 9000);
   }
   else if (e.t === "tired") {                               // усталость руки: объясняем один раз за 10 минут
@@ -1473,7 +1691,7 @@ export function onEvent(e) {
     if (big) sfx.drop();
     if (fig && fig.hit.size === 0) spawnFig();               // сложный рисунок уходит: новое комбо начинается с простого (начатый — остаётся)
     if (big && list.offsetParent !== null && !still())
-      fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight / 2), 1500, "<b>Комбо остыло</b><span>было " + group(Math.floor(e.k)) + " · ранг " + FIG_RANKS[Math.max(0, figRank(e.k))].mark + "</span>");
+      fxAdd("hg-pop lose", list.clientWidth / 2, Math.max(60, list.clientHeight / 2), 1500, "<b>Комбо остыло</b><span>было " + group(Math.min(CFG.figTop, Math.floor(e.k))) + (e.k >= DEEP[1].at ? " · глубина «" + deepOf(e.k).name + "»" : " · ранг " + FIG_RANKS[Math.max(0, figRank(e.k))].mark) + "</span>");
     if (e.k >= 10) note("Комбо рисунков остыло", "Было " + group(Math.floor(e.k)) + ". Жар уходит, когда рисунки не собираются. Собери рисунок — пойдёт снова", 3400);
   }
   else if (e.t === "au_on") { note("Автозапуск включён", "Час умения включаются сами. Вернётся " + group(e.pay) + " и ещё +" + group(e.gain) + " " + plural(e.gain, "осколок", "осколка", "осколков") + " сверху", 4200); auKey = ""; eclKey = ""; }

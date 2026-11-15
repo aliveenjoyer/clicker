@@ -2,7 +2,7 @@
 // Этот модель потом переедет на сервер (PLAN.md § 19): клиент шлёт намерения, сервер считает то же самое.
 // Все большие числа — lg (см. num.js). События для картинки и звука складываются в S.ev, их забирает main.js.
 import { NEG, L10, lsum, lsub, lg, txt, group } from "./num.js";
-import { CFG, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
+import { CFG, DEEP, MILESTONES, HEROES, heroCost0, heroDps0, WHIP_COST0, SKILLS, BUFFS, WISP, RELICS, bossOf, UNLOCKS, ITEMS, ITEM_MAX, BRANCH, branchTier, RARITY, STARS, LANE, ACH_LADDERS, ACH_SINGLE, PATRONS, KEEP, TSKINS, TSKIN_RAR, TASKS, RPG_SKINS } from "./data.js";
 
 const N = HEROES.length;
 // Часы правил: Затмение, задания дня, сохранение. По умолчанию — часы компьютера (так считают проверки и бот),
@@ -29,7 +29,8 @@ export function newState() {
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
     gift: 0,                                                // подарок за вход через Twitch уже получен
     gen: 0,                                                 // сколько раз прогресс стирали: по нему стирание доходит до всех устройств аккаунта
-    fig: { k: 0, idle: 0, peak: 0 },                        // рисунки на сетке отряда: жар комбо (дробный), секунд без отметки, высший жар этого комбо
+    fig: { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0 },   // рисунки на сетке отряда: жар комбо (дробный), секунд без отметки, высший жар этого комбо; d — глубина (0 — улица), gate — секунд до закрытия разлома, run — «разгон», dmax — глубже всего в этом комбо
+    finds: {},                                              // находки глубины: имя особого рисунка → сколько раз собран
     tire: { r: 0, n: 0, on: false },                        // усталость руки: средний темп попыток ударить (в секунду), попытки с прошлого шага, устала ли
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
     grd: { lv: 0, left: 1, dealt: NEG, last: 0 },           // Страж Затмения: номер в цикле (с нуля), доля здоровья, урон идущего натиска (lg), доля, снятая прошлым
@@ -119,7 +120,12 @@ export function load(text) {
     : { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: !!ou.renew };
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
-  S.fig = { k: 0, idle: 0, peak: 0 };                       // комбо рисунков перезагрузку не переживает
+  S.fig = { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0 };   // комбо рисунков и его глубина перезагрузку не переживают
+  // что запомнено о глубине: рекорд уровня, спуски, время на глубине, искры и находки — только то, что игра может дать
+  S.stats.figDeep = Math.max(0, Math.min(DEEP.length - 1, Math.floor(Number(S.stats.figDeep) || 0)));
+  for (const k of ["figDives", "figSparks", "figGates"]) S.stats[k] = Math.max(0, Math.min(1e9, Math.floor(Number(S.stats[k]) || 0)));
+  S.stats.figDeepT = Math.max(0, Math.min(1e9, Number(S.stats.figDeepT) || 0));
+  { const of = o.finds && typeof o.finds === "object" ? o.finds : {}; S.finds = {}; for (const f of FINDS) { const v = Math.max(0, Math.min(1e6, Math.floor(Number(of[f]) || 0))); if (v) S.finds[f] = v; } S.stats.figFinds = Object.keys(S.finds).length; }
   // усталость руки перезагрузку переживает (иначе её сбрасывали бы обновлением страницы), но за время между
   // сохранением и загрузкой рука отдыхает
   const otr = o.tire && typeof o.tire === "object" ? Math.max(0, Math.min(1000, Number(o.tire.r) || 0)) : 0;
@@ -311,21 +317,98 @@ const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + loud
 // Комбо рисунков — это «жар» (S.fig.k, дробное число). Собранный рисунок его подогревает, а сам он всё время остывает —
 // тем быстрее, чем он выше. Рисунок греет на figGain · плитки^figPow, умноженное на точность (лишние плитки по пути её
 // срезают, не ниже figAccMin) и на figClean, если отметки взяты строго по номерам. Нет отметок дольше figIdleAt секунд —
-// остывание разгоняется: бросил играть — жар уходит за полминуты, а не разом. Души идут ×(1 + целая часть жара), до ×100.
+// остывание разгоняется: бросил играть — жар уходит за полминуты, а не разом. Души идут ×(1 + целая часть жара).
 // Жар дошёл до нуля — комбо кончилось (событие fig_end). Числа — CFG.fig* в data.js, подбор — tools/fig_heat_sim.mjs.
-export const figMul = (S) => 1 + CFG.figStep * Math.min(Math.floor(S.fig.k), CFG.figCap);
-export const figDrain = (S) => (S.fig.k > 0 ? (CFG.figDrain0 + CFG.figDrainK * S.fig.k) * (1 + CFG.figIdleUp * Math.max(0, S.fig.idle - CFG.figIdleAt)) : 0);   // жара в секунду уходит сейчас
+//
+// Глубина (15.11). Улица — комбо до 99 (души до ×100), как и было. На потолке уровня интерфейс открывает «Разлом»
+// (figGateOpen): особый рисунок на время. Взят по номерам (figGatePass) — комбо проваливается на уровень глубже:
+// «Подземка» с 100, «Изнанка» с 250, «Пустота» с 500 и до 999 (души ×1000). Не взят (figGateFail) — жар отброшен от
+// потолка. Внутри уровня жар живёт по тем же законам, что на улице, только в масштабе уровня: «сотая» уровня — это
+// (потолок − порог) / 100 комбо, а греет рисунок слабее в DEEP[d].hard раз. Остыл ниже порога уровня — всплыл на
+// уровень выше (событие fig_rise). Уровни и их правила — DEEP в data.js.
+export const figLv = (d) => DEEP[Math.max(0, Math.min(DEEP.length - 1, d || 0))];
+export const figScale = (d) => { const L = figLv(d); return (L.top - L.at) / 100; };          // сколько комбо в одной сотой уровня
+export const figLocal = (S) => Math.max(0, (S.fig.k - figLv(S.fig.d).at) / figScale(S.fig.d));   // жар внутри уровня: 0 — порог, 99 — потолок
+export const figGateAt = (d) => (d < DEEP.length - 1 ? figLv(d).at + CFG.figCap * figScale(d) : Infinity);   // с какого комбо на уровне d открывается разлом
+export const figCeil = (d) => figLv(d).at + (CFG.figCap + CFG.figOver) * figScale(d);         // выше жар на уровне не копится
+const figMulCap = (d) => (d < DEEP.length - 1 ? figLv(d).top - 1 : CFG.figTop);               // потолок множителя на уровне: 99, 249, 499, 999
+export const figMul = (S) => 1 + CFG.figStep * Math.max(0, Math.min(Math.floor(S.fig.k), figMulCap(S.fig.d)));
+export const figDrain = (S) => (S.fig.k > 0 && !(S.fig.gate > 0)                              // жара в секунду уходит сейчас; пока открыт разлом — стоит
+  ? figScale(S.fig.d) * (CFG.figDrain0 + CFG.figDrainK * figLocal(S)) * (1 + CFG.figIdleUp * Math.max(0, S.fig.idle - CFG.figIdleAt)) : 0);
 export const figGain = (cells, acc, clean) => CFG.figGain * Math.pow(Math.max(1, cells), CFG.figPow) * Math.max(CFG.figAccMin, Math.min(1, acc === undefined ? 1 : acc)) * (clean ? CFG.figClean : 1);
+// Во сколько раз рисунок греет на этой глубине против улицы: масштаб уровня, его трудность, «разгон» (с «Подземки»:
+// рисунки по номерам подряд) и «знакомая дорога» (уровни выше своего рекорда глубины).
+export const figRunMul = (S, clean) => (S.fig.d >= 1 && clean ? 1 + CFG.figRun * Math.min(CFG.figRunMax, S.fig.run) : 1);
+export const figKnown = (S) => (S.stats.figDeep || 0) > S.fig.d;
+export const figBoost = (S, clean) => figScale(S.fig.d) * figLv(S.fig.d).hard * figRunMul(S, clean) * (figKnown(S) ? 1 + CFG.figKnown : 1);
+export function figReset(S) { const f = S.fig; f.k = 0; f.idle = 0; f.peak = 0; f.d = 0; f.gate = 0; f.run = 0; f.dmax = 0; }
 export function figMark(S) { S.fig.idle = 0; }               // взята отметка рисунка: игрок в деле
-export function figDone(S, cells, name, acc, clean) {       // рисунок собран; acc — точность 0…1, clean — отметки взяты по номерам
-  const g = figGain(cells, acc, clean);
-  S.fig.k = Math.min(CFG.figCap + CFG.figOver, S.fig.k + g); S.fig.idle = 0; S.fig.peak = Math.max(S.fig.peak, S.fig.k);
-  S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, Math.floor(S.fig.k));
+export function figDone(S, cells, name, acc, clean, find) {  // рисунок собран; acc — точность 0…1, clean — отметки взяты по номерам, find — имя «находки глубины»
+  const g = figGain(cells, acc, clean) * figBoost(S, clean);
+  if (S.fig.d >= 1) S.fig.run = clean ? Math.min(CFG.figRunMax, S.fig.run + 1) : 0;   // разгон: считает рисунки по номерам подряд
+  S.fig.k = Math.min(figCeil(S.fig.d), S.fig.k + g); S.fig.idle = 0; S.fig.peak = Math.max(S.fig.peak, S.fig.k);
+  S.stats.figs = (S.stats.figs || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, Math.min(CFG.figTop, Math.floor(S.fig.k)));
   if (clean) S.stats.figClean = (S.stats.figClean || 0) + 1;
+  let fresh = false;
+  if (find && FINDS.indexOf(find) >= 0) { fresh = !S.finds[find]; S.finds[find] = (S.finds[find] || 0) + 1; S.stats.figFinds = Object.keys(S.finds).length; }
   const r = rateLg(S), loot = r === NEG ? NEG : r + L10(CFG.figLoot * Math.max(1, cells));
   if (loot !== NEG) gain(S, loot);
-  ev(S, { t: "fig", k: S.fig.k, gain: g, loot, cells, name: name || "" });
+  ev(S, { t: "fig", k: S.fig.k, gain: g, loot, cells, name: name || "", find: find || "", fresh, run: S.fig.run });
   return g;
+}
+// Находки глубины — рисунки, которые выпадают только на своём уровне (сами рисунки — js/ui.js, FIGS с полем deep).
+export const FINDS = ["Вагон", "Рельсы", "Тоннель", "Глаз", "Перевёртыш", "Трещина", "Чёрное солнце", "Комета", "Сверхновая"];
+export const figGateReady = (S) => S.fig.d < DEEP.length - 1 && !(S.fig.gate > 0) && S.fig.k >= figGateAt(S.fig.d);
+export function figGateOpen(S, cells) {                      // разлом открыт: сколько секунд на него дано (0 — не открылся)
+  if (!figGateReady(S)) return 0;
+  S.fig.gate = CFG.figGateT + CFG.figGateTile * Math.max(1, cells || 1); S.fig.idle = 0;
+  ev(S, { t: "fig_gate", d: S.fig.d + 1, sec: S.fig.gate });
+  return S.fig.gate;
+}
+export function figGatePass(S) {                             // разлом взят: комбо проваливается на уровень глубже
+  if (!(S.fig.gate > 0) || S.fig.d >= DEEP.length - 1) return false;
+  const f = S.fig, from = f.d;
+  f.gate = 0; f.d = from + 1; f.idle = 0; f.run = 0;
+  f.k = Math.max(f.k, figLv(f.d).at + CFG.figHead * figScale(f.d)); f.peak = Math.max(f.peak, f.k);
+  const first = f.d > f.dmax; f.dmax = Math.max(f.dmax, f.d);   // подарок — за первый провал на этот уровень в этом комбо
+  const st = S.stats;
+  st.figs = (st.figs || 0) + 1; st.figGates = (st.figGates || 0) + 1; st.figDives = (st.figDives || 0) + 1;
+  const rec = f.d > (st.figDeep || 0); if (rec) st.figDeep = f.d;
+  st.figBest = Math.max(st.figBest || 0, Math.min(CFG.figTop, Math.floor(f.k)));
+  const r = rateLg(S), loot = first && r !== NEG ? r + L10(figLv(f.d).loot) : NEG;
+  if (loot !== NEG) gain(S, loot);
+  ev(S, { t: "fig_dive", d: f.d, from, k: f.k, loot, sec: first ? figLv(f.d).loot : 0, rec });
+  return true;
+}
+export function figGateFail(S, why) {                        // разлом закрылся: why — "time" (не успел) или "order" (сбился с номеров)
+  if (!(S.fig.gate > 0)) return false;
+  const f = S.fig;
+  f.gate = 0; f.k = Math.max(figLv(f.d).at, Math.min(f.k, figGateAt(f.d)) - CFG.figGateFail * figScale(f.d));
+  ev(S, { t: "fig_gatefail", d: f.d + 1, why: why || "time", k: f.k });
+  return true;
+}
+export function figSpark(S) {                                // «Изнанка» и глубже: поймана искра рядом с рисунком
+  if (S.fig.d < 2) return 0;
+  const g = CFG.figSpark * figScale(S.fig.d);
+  S.fig.k = Math.min(figCeil(S.fig.d), S.fig.k + g); S.fig.idle = 0; S.fig.peak = Math.max(S.fig.peak, S.fig.k);
+  S.stats.figSparks = (S.stats.figSparks || 0) + 1; S.stats.figBest = Math.max(S.stats.figBest || 0, Math.min(CFG.figTop, Math.floor(S.fig.k)));
+  const r = rateLg(S), loot = r === NEG ? NEG : r + L10(CFG.figSparkLoot);
+  if (loot !== NEG) gain(S, loot);
+  ev(S, { t: "fig_spark", k: S.fig.k, gain: g, loot });
+  return g;
+}
+function figStep(S, dt) {                                    // ход времени: разлом, остывание, всплытие, конец комбо
+  const f = S.fig;
+  if (f.gate > 0) { f.gate -= dt; if (f.gate <= 0) { f.gate = 1e-9; figGateFail(S, "time"); } }
+  if (!(f.k > 0)) return;
+  f.idle += dt; f.k -= figDrain(S) * dt;
+  if (f.d > 0) S.stats.figDeepT = (S.stats.figDeepT || 0) + dt;
+  while (f.d > 0 && f.k < figLv(f.d).at) {                   // остыл ниже порога уровня — всплыл; на уровне выше стоит чуть ниже его потолка
+    const from = f.d; f.d -= 1; f.gate = 0; f.run = 0;
+    f.k = Math.min(f.k, figGateAt(f.d) - CFG.figGateFail * figScale(f.d));
+    ev(S, { t: "fig_rise", from, d: f.d, k: f.k });
+  }
+  if (f.k <= 0) { ev(S, { t: "fig_end", k: f.peak }); figReset(S); }
 }
 export function setLive(S, v) { S.live = !!v; }
 export function rateLg(S) {                                 // lg душ в секунду от наёмников на этой волне
@@ -496,10 +579,7 @@ export function tick(S, dt, live) {                         // live=false — о
       if (S.act[s.id] > 0) { S.act[s.id] = Math.max(0, S.act[s.id] - dt); if (S.act[s.id] === 0) { ev(S, { t: "buff_end", id: s.id }); if (s.id === "siege") siegeEnd(S); } }
     }
     auStep(S, dt);
-    if (S.fig.k > 0) {                                        // жар комбо остывает; дошёл до нуля — комбо кончилось
-      S.fig.idle += dt; S.fig.k -= figDrain(S) * dt;
-      if (S.fig.k <= 0) { ev(S, { t: "fig_end", k: S.fig.peak }); S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0; }
-    }
+    figStep(S, dt);                                           // жар комбо остывает, разлом ждёт; дошёл до нуля — комбо кончилось
     for (const id in S.buff) if (S.buff[id] > 0) { S.buff[id] = Math.max(0, S.buff[id] - dt); if (S.buff[id] === 0) ev(S, { t: "buff_end", id }); }
     if (S.un.combo && S.combo > 0) {
       S.comboIdle += dt;
@@ -558,7 +638,7 @@ export function offline(S, seconds) {
   const before = { souls: S.souls, z: S.z, life: S.life };
   if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const id in S.act) S.act[id] = 0;                    // умения и бафы за время отсутствия истекли
-  S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0;              // и комбо рисунков
+  figReset(S);                                              // и комбо рисунков вместе с глубиной
   S.buff = {}; S.combo = 0; S.wispOn = 0; S.statueOn = 0; S.urnOn = 0; if (S.altar > 0) altarEnd(S);
   if (S.d.dps === NEG || t < 5) return null;
   const step = 2;

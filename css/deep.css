@@ -1,0 +1,251 @@
+/* ---------- глубина комбо рисунков: вид всей страницы на уровнях (15.11) ----------
+   Комбо проваливается через «Разлом» на уровни: «Подземка» (с 100), «Изнанка» (с 250), «Пустота» (с 500). Уровень —
+   атрибут data-deep="1…3" на <html> (ставит js/deep.js). Здесь всё, что от него зависит: цвета (переменные tokens.css),
+   подложка под страницей, плиты, фон поля боя, сетка героев, шкала, сам «Разлом», искры, «тьма», баннер и переход.
+   Правила: размеры блоков не меняются (страница не прыгает), над окном чата Twitch ничего не рисуется (подложка лежит
+   под страницей, вспышки — внутри поля боя и сетки), картинку стрима (#twbg в .arena) ничто не задевает — ни слой, ни
+   тень, ни сдвиг её родителей (.stage, .main, body): при показанном стриме левая колонка не двигается вовсе; анимируются
+   только сдвиг и прозрачность. Жёлтого на сетке нет; переливов через жёлтый и зелёный — тоже. Классы — с приставкой dp-. */
+
+/* --- палитры уровней: --dp — цвет места, --dp2 — светлый, --dpd — тёмный, --fg — цвет рисунка на сетке --- */
+html[data-deep] { background: var(--bg-page); }
+html[data-deep] body { background: transparent; }           /* иначе фон body закрыл бы подложку */
+html[data-deep="1"] {
+  --bg-page: #061521; --bg-sunk: #040e17; --surface-1: #0d2a40; --surface-2: #123a55; --surface-3: #1a5073; --line: #1c5576; --line-brass: #2b7fa8;
+  --brass: #5fe0ff; --brass-hi: #c8f6ff; --on-brass: #03202c; --text: #f0fbff; --text-dim: #a9cfe0; --text-mute: #6f9fb7; --outline: #041420;
+  --dp: #35e0ff; --dp2: #c8f6ff; --dpd: #0a4a66; --dp-p1: rgba(14,46,68,.88); --dp-p2: rgba(8,28,44,.92); --dp-edge: rgba(95,224,255,.3); --dp-tile: #0f3550;
+  --fg: #ff3fd0; --fg2: #ff7ae2; --fgd: #e01ab6; --fga: rgba(255,63,208,.9);
+}
+html[data-deep="2"] {
+  --bg-page: #1a0510; --bg-sunk: #11030a; --surface-1: #33091c; --surface-2: #4a0e28; --surface-3: #6a1639; --line: #6b1a3c; --line-brass: #a12a58;
+  --brass: #ff7aa8; --brass-hi: #ffd3e2; --on-brass: #3a0418; --text: #fff3f7; --text-dim: #e6adc2; --text-mute: #b56d88; --outline: #24040f;
+  --dp: #ff3b6b; --dp2: #ffd0dc; --dpd: #6b0a28; --dp-p1: rgba(58,11,32,.88); --dp-p2: rgba(34,6,18,.92); --dp-edge: rgba(255,90,140,.32); --dp-tile: #4a0f2a;
+  --fg: #2fd9ff; --fg2: #9defff; --fgd: #0b9fd0; --fga: rgba(47,217,255,.9);
+}
+html[data-deep="3"] {
+  --bg-page: #05040d; --bg-sunk: #020207; --surface-1: #100c24; --surface-2: #181238; --surface-3: #261c58; --line: #2c2260; --line-brass: #5a48b8;
+  --brass: #cdbfff; --brass-hi: #ffffff; --on-brass: #0d0826; --text: #ffffff; --text-dim: #bbb2e8; --text-mute: #8177b8; --outline: #07051a;
+  --dp: #a58bff; --dp2: #f1ecff; --dpd: #2a1a78; --dp-p1: rgba(18,14,42,.86); --dp-p2: rgba(6,5,16,.93); --dp-edge: rgba(205,191,255,.3); --dp-tile: #17123a;
+  --fg: #ff5ad2; --fg2: #ffffff; --fgd: #c41ea0; --fga: rgba(255,120,225,.95);
+}
+
+/* --- подложка под всей страницей --- */
+#dpBack { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 700ms ease; contain: strict; }
+#dpBack.dp-on { opacity: 1; }
+#dpBack > i, #dpBack > div { position: absolute; display: block; }
+#dpBack .dp-img { inset: -7%; background: center / cover no-repeat; opacity: 0; will-change: transform, opacity; }
+#dpBack .dp-img.dp-in.dp-go { opacity: 1; transition: opacity 800ms ease; }
+#dpBack .dp-img.dp-out { opacity: 1; }
+#dpBack .dp-img.dp-out.dp-go { opacity: 0; transition: opacity 800ms ease; }
+#dpBack .dp-shade { inset: 0; background: radial-gradient(ellipse 95% 80% at 50% 36%, rgba(0,0,0,.08), rgba(0,0,0,.5)); }
+#dpBack .dp-amb { inset: 0; }
+#dpBack .dp-amb i { position: absolute; display: block; pointer-events: none; will-change: transform, opacity; }
+/* «Подземка»: мимо проходят огни поезда, мерцают лампы */
+.dp-train { left: 0; top: var(--y, 30%); width: 46vw; height: 9vh; border-radius: 50%; opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(95,224,255,.0) 8%, rgba(120,235,255,.34) 50%, rgba(255,214,150,.26) 62%, transparent); animation: dp-train 13s linear infinite; animation-delay: var(--dl, 0s); }
+@keyframes dp-train { 0% { transform: translateX(-60vw); opacity: 0; } 4% { opacity: 1; } 22% { transform: translateX(120vw); opacity: 1; } 23%, 100% { transform: translateX(120vw); opacity: 0; } }
+.dp-lamp { left: var(--x); top: var(--y); width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%; background: radial-gradient(circle, rgba(95,224,255,.32), transparent 68%);
+  animation: dp-lamp var(--du, 5s) ease-in-out infinite; animation-delay: var(--dl, 0s); }
+@keyframes dp-lamp { 0%, 100% { opacity: .25; } 45% { opacity: 1; } 50% { opacity: .5; } 55% { opacity: 1; } }
+/* «Изнанка»: искры летят вверх */
+.dp-ember { left: var(--x); bottom: -3vh; width: var(--s, 5px); height: var(--s, 5px); border-radius: 50%; background: #ffb3c8; box-shadow: 0 0 10px 3px rgba(255,59,107,.9);
+  animation: dp-ember var(--du, 12s) linear infinite; animation-delay: var(--dl, 0s); }
+@keyframes dp-ember { 0% { transform: translate(0, 0); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .9; } 100% { transform: translate(var(--sw, 20px), -112vh); opacity: 0; } }
+/* «Пустота»: корона затмения дышит, звёзды мерцают */
+.dp-corona { right: 6vw; top: -18vh; width: 70vh; height: 70vh; border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 27%, rgba(255,255,255,.5) 29%, rgba(165,139,255,.32) 36%, rgba(165,139,255,.1) 52%, transparent 68%); animation: dp-corona 7s ease-in-out infinite alternate; }
+@keyframes dp-corona { from { transform: scale(.94); opacity: .65; } to { transform: scale(1.06); opacity: 1; } }
+.dp-star { left: var(--x); top: var(--y); width: var(--s, 2px); height: var(--s, 2px); border-radius: 50%; background: #fff; box-shadow: 0 0 6px 1px rgba(205,191,255,.9);
+  animation: dp-star var(--du, 4s) ease-in-out infinite alternate; animation-delay: var(--dl, 0s); }
+@keyframes dp-star { from { opacity: .15; } to { opacity: 1; } }
+/* полосы скорости: при провале летят вверх (мы падаем), при всплытии — вниз */
+#dpBack .dp-lines { inset: -60% 0; opacity: 0; will-change: transform, opacity;
+  background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,.16) 38px 40px, transparent 40px 131px), repeating-linear-gradient(90deg, transparent 0 83px, rgba(255,255,255,.09) 83px 87px, transparent 87px 217px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 20%, #000 40% 60%, transparent 80%); mask-image: linear-gradient(180deg, transparent 20%, #000 40% 60%, transparent 80%); }
+.dp-dive #dpBack .dp-lines { animation: dp-lines-up 1000ms ease-out; }
+.dp-rise #dpBack .dp-lines { animation: dp-lines-dn 800ms ease-out; }
+@keyframes dp-lines-up { 0% { opacity: 0; transform: translateY(28%); } 18% { opacity: 1; } 100% { opacity: 0; transform: translateY(-28%); } }
+@keyframes dp-lines-dn { 0% { opacity: 0; transform: translateY(-20%); } 18% { opacity: .7; } 100% { opacity: 0; transform: translateY(20%); } }
+.dp-dive #dpBack .dp-img.dp-in { animation: dp-fall 1150ms cubic-bezier(.16,1,.3,1); }
+.dp-rise #dpBack .dp-img.dp-in { animation: dp-lift 900ms cubic-bezier(.16,1,.3,1); }
+@keyframes dp-fall { from { transform: scale(1.55) translateY(16%); } to { transform: none; } }
+@keyframes dp-lift { from { transform: scale(.92) translateY(-9%); } to { transform: none; } }
+/* левая колонка и шапка вздрагивают, будто пол ушёл из-под ног. Правую панель не трогаем: в ней чат Twitch, а на сетке
+   в этот миг уже рисуют следующий рисунок. При стриме фоном не трогаем и левую — картинку стрима не трясём. */
+.dp-dive .wavebar, .dp-dive .field, .dp-dive .lower, .dp-dive .top { animation: dp-drop 640ms cubic-bezier(.2,.9,.3,1.15); }
+.dp-rise .wavebar, .dp-rise .field, .dp-rise .lower, .dp-rise .top { animation: dp-bob 520ms ease-out; }
+@keyframes dp-drop { 0% { transform: translateY(-26px); } 42% { transform: translateY(10px); } 70% { transform: translateY(-3px); } 100% { transform: none; } }
+@keyframes dp-bob { 0% { transform: translateY(12px); } 60% { transform: translateY(-4px); } 100% { transform: none; } }
+/* Сама .stage не двигается никогда: она — родитель картинки стрима, а сдвиг родителя браузер считает «плеер накрыт».
+   Когда картинка показана (.dp-tw ставит js/deep.js по .arena.tw), не двигаются и соседи: полоса волны и умения при
+   вздрагивании зашли бы на её край. */
+.dp-tw .wavebar, .dp-tw .field, .dp-tw .lower, .dp-tw .top { animation: none !important; }
+
+/* --- плиты, вкладки, шапка --- */
+html[data-deep] .plate { background: linear-gradient(180deg, var(--dp-p1), var(--dp-p2)); border-color: var(--dp-edge); box-shadow: 0 12px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08); }
+/* «Подземка» — кафель станции; «Изнанка» — багровый жар по краям; «Пустота» — чёрное стекло с тонкой светлой кромкой */
+html[data-deep="1"] .plate { background: repeating-linear-gradient(0deg, rgba(95,224,255,.05) 0 1px, transparent 1px 26px), repeating-linear-gradient(90deg, rgba(95,224,255,.04) 0 1px, transparent 1px 52px), linear-gradient(180deg, var(--dp-p1), var(--dp-p2)); }
+html[data-deep="2"] .plate { box-shadow: 0 12px 30px rgba(0,0,0,.55), inset 0 0 44px rgba(255,40,90,.13), inset 0 1px 0 rgba(255,200,215,.1); }
+html[data-deep="3"] .plate { box-shadow: 0 12px 34px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.05), inset 0 1px 0 rgba(255,255,255,.14), 0 0 26px -8px rgba(165,139,255,.55); }
+/* полоса под картинкой стрима (и под полем на телефоне) — те же цвета, что у плит; размеры и тень не трогаем */
+html[data-deep] .dock { background: linear-gradient(180deg, var(--dp-p1), var(--dp-p2)); border-color: var(--dp-edge); }
+html[data-deep] .tabs { background: rgba(0,0,0,.34); }
+html[data-deep] .tab.on { background: linear-gradient(180deg, var(--dp2), var(--dp)); box-shadow: 0 3px 0 var(--dpd); }
+html[data-deep] .seg span.on { box-shadow: 0 2px 0 rgba(0,0,0,.5); }
+html[data-deep] .logo small { color: var(--dp2); text-shadow: 0 0 10px var(--dp); }
+.dp-tag { display: flex; align-items: center; gap: 9px; height: 42px; margin-right: 10px; padding: 0 16px 0 5px; border-radius: 999px; white-space: nowrap; cursor: default;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dp, #a99bff) 26%, transparent), rgba(0,0,0,.35)); box-shadow: inset 0 0 0 2px var(--dp-edge, rgba(169,155,255,.4)), 0 0 18px -4px var(--dp, #a99bff); }
+.dp-tag[hidden] { display: none; }
+.dp-tag img { width: 36px; height: 36px; flex: none; filter: drop-shadow(0 0 6px var(--dp, #a99bff)); }
+.dp-tt { display: flex; flex-direction: column; gap: 4px; }
+.dp-tt b { font: 800 13px/1 var(--display); color: #fff; letter-spacing: .01em; }
+.dp-tt span { font: 800 10px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--dp2, #d6cfff); }
+@media (max-width: 1320px) { .dp-tt span { display: none; } }
+@media (max-width: 1240px) { .dp-tag { display: none; } }   /* узкая шапка: уровень назван под названием игры */
+/* в шапке уже стоят плашки эфира («Стрим идёт…», сундук): плашка уровня сжимается до одной строки, а на окне уже 1700 уходит */
+.top .mid:has(.live:not([hidden])) .dp-tt span { display: none; }
+@media (max-width: 1700px) { .top .mid:has(.live:not([hidden])) .dp-tag { display: none; } }
+
+/* --- поле боя: фон места и рамка в его цвете. Картинка стрима стоит отдельным блоком рядом (#twbg), на неё ничего не
+   ложится; у поля рядом с ней (.field.tw — узкий столбец боя) внешней тени и свечения нет, только рамка внутри --- */
+html[data-deep] .field { background-position: center 64% !important; }
+html[data-deep] .field:not(.tw) { box-shadow: 0 14px 34px rgba(0,0,0,.55), inset 0 0 0 2px var(--dp-edge), 0 0 44px -10px var(--dp); }
+html[data-deep] .arena.tw .field { box-shadow: inset 0 0 0 2px var(--dp-edge); background-position: 62% 64% !important; }
+html[data-deep="1"] .field { background-image: url("../art/deep/bg-sub.webp") !important; }
+html[data-deep="2"] .field { background-image: url("../art/deep/bg-inv.webp") !important; }
+html[data-deep="3"] .field { background-image: url("../art/deep/bg-void.webp") !important; }
+.dp-flash { position: absolute; inset: 0; z-index: 8; display: block; pointer-events: none; opacity: 0; border-radius: inherit; --fc: #a99bff; }
+.dp-flash[data-lv="1"] { --fc: #35e0ff; } .dp-flash[data-lv="2"] { --fc: #ff3b6b; } .dp-flash[data-lv="3"] { --fc: #b79bff; }
+.dp-flash.dp-fd { background: radial-gradient(circle at 55% 58%, #fff 0, var(--fc) 34%, rgba(0,0,0,.0) 82%); animation: dp-flash 950ms ease-out; }
+.dp-flash.dp-fr { background: linear-gradient(180deg, rgba(210,220,255,.55), rgba(20,22,50,.0) 70%); animation: dp-flash 600ms ease-out; }
+@keyframes dp-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+/* вспышка живёт внутри поля и обрезана его краем (overflow: hidden) — на картинку стрима рядом она не выступает */
+
+/* --- сетка героев: плитки в цвет места, рисунок — контрастный к нему --- */
+html[data-deep] .hg { background: var(--dp-tile); --rc: var(--dp-edge); box-shadow: inset 0 0 0 2px var(--dp-edge); }
+html[data-deep] .hg.whip { background: radial-gradient(circle at 50% 40%, var(--surface-3), var(--dp-tile)); }
+html[data-deep] .hg-ms u { background: linear-gradient(90deg, var(--dp), var(--dp2)); }
+html[data-deep] .hg.hg-no .hg-price { background: color-mix(in srgb, var(--bg-sunk) 92%, transparent); box-shadow: inset 0 1px 0 var(--dp-edge); }
+html[data-deep] .hg.hg-lock .hg-price { background: color-mix(in srgb, var(--bg-sunk) 90%, transparent); }
+html[data-deep] .hg-lv, html[data-deep] .hg-q { background: rgba(0,0,0,.74); }
+html[data-deep="3"] .hgrid.hg-has .hg:not(.hg-m) { filter: brightness(.5) saturate(.6); }
+/* рисунок: на «Изнанке» (всё багровое) — ледяной, в «Пустоте» — раскалённо-белый с розовым ореолом; собранная отметка — зелёная везде */
+html[data-deep] .hg-dot:not(.hit) { background: radial-gradient(circle at 50% 38%, var(--fg2), var(--fgd) 72%); box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(0,0,0,.85), 0 0 22px 6px var(--fga); }
+html[data-deep] .hg-fig .hg-lg { stroke: var(--fga); }
+html[data-deep] .hg-dot.hg-go::after { box-shadow: 0 0 10px var(--fga); }
+html[data-deep] .hg.hg-m:not(.hg-hit) { --rc: var(--fg2); box-shadow: 0 0 0 2px var(--fg), 0 0 18px 3px var(--fga); }
+html[data-deep="2"] .hg-num { color: #04222c; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+html[data-deep="3"] .hg-dot:not(.hit) { background: radial-gradient(circle at 50% 38%, #fff, #ff9be6 60%, var(--fgd) 100%); }
+html[data-deep="3"] .hg-dot:not(.hit) .hg-num { color: #3a0630; text-shadow: none; }
+html[data-deep] .side .head .hg-figbtn.on:not(.hg-freebtn) { background: color-mix(in srgb, var(--fg) 24%, transparent); box-shadow: inset 0 0 0 1px var(--fg); }
+html[data-deep] .side .head .hg-figbtn.on:not(.hg-freebtn)::before { background: var(--fg); box-shadow: 0 0 6px var(--fg); }
+
+/* --- ранги на глубине: S → SS → SSS → MAX в красках места --- */
+html[data-deep="1"] .hg-wrap[data-rank="s"] { --rk: #35e0ff; --rk2: #d2f9ff; --rkd: #06485c; }
+html[data-deep="1"] .hg-wrap[data-rank="ss"] { --rk: #4d9dff; --rk2: #d6e8ff; --rkd: #0b3072; }
+html[data-deep="1"] .hg-wrap[data-rank="sss"], html[data-deep="1"] .hg-wrap[data-rank="max"] { --rk: #8fd0ff; --rk2: #ffffff; --rkd: #0a3a6a; }
+html[data-deep="2"] .hg-wrap[data-rank="s"] { --rk: #ff4d8d; --rk2: #ffd6e4; --rkd: #6e0a30; }
+html[data-deep="2"] .hg-wrap[data-rank="ss"] { --rk: #ff2e4d; --rk2: #ffd3da; --rkd: #70061a; }
+html[data-deep="2"] .hg-wrap[data-rank="sss"], html[data-deep="2"] .hg-wrap[data-rank="max"] { --rk: #ff7ad9; --rk2: #fff0fa; --rkd: #6a0a52; }
+html[data-deep="3"] .hg-wrap[data-rank="s"] { --rk: #8f78ff; --rk2: #e6e0ff; --rkd: #22127a; }
+html[data-deep="3"] .hg-wrap[data-rank="ss"] { --rk: #b79bff; --rk2: #f1ecff; --rkd: #30197e; }
+html[data-deep="3"] .hg-wrap[data-rank="sss"], html[data-deep="3"] .hg-wrap[data-rank="max"] { --rk: #e3d9ff; --rk2: #ffffff; --rkd: #3a2690; }
+/* переливы двух верхних рангов на глубине — яркостью, а не сменой оттенка: с ледяным рисунком «Изнанки» оттенок ушёл бы в зелёный */
+html[data-deep] .hg-wrap[data-rank="sss"] .hg-fig, html[data-deep] .hg-wrap[data-rank="sss"] .hg-mrank,
+html[data-deep] .hg-wrap[data-rank="max"] .hg-fig, html[data-deep] .hg-wrap[data-rank="max"] .hg-mrank { animation: dp-shimmer 1100ms ease-in-out infinite alternate; }
+@keyframes dp-shimmer { from { filter: brightness(1); } to { filter: brightness(1.4) saturate(1.15); } }
+html[data-deep] .swdot[class*="rk-"] { --c1: var(--dp); --c2: var(--dp2); filter: none; }
+/* шкала: четыре секции уровня */
+html[data-deep] .sg-s { --c: color-mix(in srgb, var(--dp) 70%, #000); --c2: var(--dp); }
+html[data-deep] .sg-ss { --c: var(--dp); --c2: var(--dp2); }
+html[data-deep] .sg-sss i { background: linear-gradient(0deg, var(--dp), var(--dp2) 60%, #fff); box-shadow: 0 0 10px var(--dp); }
+html[data-deep] .sg-max i { background: linear-gradient(0deg, var(--dp2), #fff); box-shadow: 0 0 12px #fff; }
+html[data-deep] .hg-mticks .tc-s, html[data-deep] .hg-mticks .tc-ss { --tc: var(--dp2); }
+html[data-deep] .hg-mtube { background: rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px var(--dp-edge), inset 0 3px 8px rgba(0,0,0,.6); }
+/* следующий уровень — над трубкой шкалы: эмблема и комбо, с которого он открывается */
+.dp-next { flex: none; position: relative; width: 44px; display: flex; flex-direction: column; align-items: center; gap: 1px; --nc: #a99bff; }
+.dp-next[data-lv="1"] { --nc: #35e0ff; } .dp-next[data-lv="2"] { --nc: #ff3b6b; } .dp-next[data-lv="3"] { --nc: #b79bff; } .dp-next[data-lv="4"] { --nc: #ffffff; }
+.dp-next img { width: 30px; height: 30px; filter: drop-shadow(0 0 5px var(--nc)); }
+.dp-next b { font: 900 10px/1 var(--display); color: #fff; text-shadow: 0 0 8px var(--nc); letter-spacing: -.02em; }
+.dp-next.dp-locked img { filter: grayscale(.85) brightness(.62); }
+.dp-next.dp-locked b { color: var(--text-mute); text-shadow: none; }
+.dp-next.dp-ready img { animation: dp-ready 420ms ease-in-out infinite alternate; filter: drop-shadow(0 0 10px var(--nc)) brightness(1.25); }
+@keyframes dp-ready { to { transform: scale(1.18); } }
+.dp-next[hidden] { display: none; }
+@media (max-width: 1500px) { .dp-next { width: 34px; } .dp-next img { width: 24px; height: 24px; } .dp-next b { font-size: 9px; } }
+@media (max-width: 720px) { .dp-next { display: none; } html[data-deep] .logo small { display: block; } }
+
+/* --- «Разлом»: особый рисунок на потолке уровня. --gt — цвет уровня, куда он ведёт --- */
+.hg-wrap[data-gate="1"], .hg-figc[data-gate="1"] { --gt: #35e0ff; } .hg-wrap[data-gate="2"], .hg-figc[data-gate="2"] { --gt: #ff3b6b; } .hg-wrap[data-gate="3"], .hg-figc[data-gate="3"] { --gt: #b79bff; }
+/* на MAX слой рисунка переливается сменой оттенка — у разлома свой цвет, и уводить его в зелёный нельзя: только яркость */
+.hg-wrap[data-gate] .hg-fig { animation: dp-shimmer 520ms ease-in-out infinite alternate !important; }
+.hg-wrap[data-gate] .hgrid.hg-has .hg:not(.hg-m) { filter: brightness(.36) saturate(.5); }
+.hg-wrap[data-gate] .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 3px var(--gt), inset 0 0 80px color-mix(in srgb, var(--gt) 62%, transparent); animation: hg-frame 360ms ease-in-out infinite alternate; }
+.hg-fig.dp-gate .hg-dot:not(.hit) { background: radial-gradient(circle at 50% 42%, #05020e 0 34%, var(--gt) 62%, #fff 100%); box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(0,0,0,.9), 0 0 28px 9px var(--gt); }
+.hg-fig.dp-gate .hg-dot:not(.hit) .hg-num { color: #fff; text-shadow: 0 0 6px var(--gt), 0 1px 0 #000; }
+.hg-fig.dp-gate .hg-lo { stroke-width: 20; }
+.hg-fig.dp-gate .hg-lg { stroke: var(--gt); stroke-width: 18; }
+.hg-fig.dp-gate .hg-ll { stroke: #fff; stroke-width: 9; }
+.hg-fig.dp-gate .dp-lc { stroke: #05020e; stroke-width: 3; }  /* тёмная сердцевина: линия читается как трещина */
+.hg-wrap[data-gate] .hg.hg-m:not(.hg-hit) { --rc: #fff; box-shadow: 0 0 0 2px var(--gt), 0 0 22px 4px var(--gt); }
+.hg-figc.dp-gatec { color: #fff; background: linear-gradient(180deg, color-mix(in srgb, var(--gt, #b79bff) 62%, #05020e), #0b0418); box-shadow: 0 0 16px var(--gt, #b79bff), inset 0 0 0 2px #fff; animation: none; }
+.hg-figc.dp-gatec .hg-fn { font: italic 900 12px/1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.hg-figc.dp-gatec b, .hg-figc.dp-gatec i { color: #fff; }
+.hg-figc.dp-gatec .hg-figt { background: #fff; height: 5px; }
+.hg-figc .dp-cemb { display: inline-block; width: 18px; height: 18px; margin: -4px 3px -4px -2px; vertical-align: middle; }
+.hg-figc .dp-crun { padding: 2px 5px; border-radius: 5px; font: 900 11px/1 var(--ui); color: #fff; background: color-mix(in srgb, var(--dp, #a99bff) 70%, #000); }
+@media (max-width: 1500px) { .hg-figc .dp-crun { display: none; } }
+/* разлом взят: трещина раскрывается светом из того места, где рука закончила */
+.dp-rift { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), #fff 0, var(--gt, #fff) 16%, transparent 58%); animation: dp-rift 900ms ease-out forwards; }
+@keyframes dp-rift { 0% { opacity: 1; transform: scale(.25); } 28% { opacity: 1; } 100% { opacity: 0; transform: scale(3); } }
+.hg-pop.dp-shut b { font-size: 30px; color: #ffd0d0; -webkit-text-stroke: 2px #2e0614; text-shadow: 0 3px 0 #2e0614, 0 0 18px rgba(255,80,80,.7); }
+.hg-pop.dp-shut span { color: #ffc4c4; }
+.hg-pop.dp-findp b { color: #fff; text-shadow: 0 5px 0 var(--dpd, #38127a), 0 0 26px var(--dp, #a970ff), 0 0 60px var(--dp, #a970ff); }
+.hg-pop span .dp-run { font-style: normal; color: var(--dp2, #d6cfff); }
+
+/* --- баннер провала: эмблема, имя уровня и его правило. Лежит под слоем рисунка — следующий рисунок виден поверх --- */
+.dp-banner { position: absolute; left: 50%; top: 46%; z-index: 15; width: min(92%, 430px); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 18px 15px; pointer-events: none; text-align: center;
+  border-radius: 22px; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--dp) 42%, transparent), rgba(4,3,12,.86) 68%); box-shadow: 0 0 0 2px var(--dp-edge), 0 0 60px -6px var(--dp), 0 18px 40px rgba(0,0,0,.6);
+  transform: translate(-50%, -50%); animation: dp-ban 3200ms cubic-bezier(.2,.9,.3,1) forwards; will-change: transform, opacity; }
+@keyframes dp-ban { 0% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; } 9% { transform: translate(-50%, -50%) scale(.95); opacity: 1; } 14% { transform: translate(-50%, -50%) scale(1); } 82% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -64%) scale(.96); opacity: 0; } }
+.dp-banner.dp-bcalm { animation: dp-bancalm 3200ms linear forwards; }
+@keyframes dp-bancalm { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+.dp-bemb { width: clamp(64px, 30%, 112px); aspect-ratio: 1; margin-top: -4px; filter: drop-shadow(0 0 16px var(--dp)); animation: dp-bemb 700ms cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes dp-bemb { 0% { transform: scale(.2) rotate(-40deg); } 100% { transform: none; } }
+.dp-bcap { font: 800 12px/1 var(--ui); letter-spacing: .22em; text-transform: uppercase; color: var(--dp2); }
+.dp-bname { font: italic 900 clamp(26px, 9cqw, 44px)/1 var(--display); letter-spacing: .01em; text-transform: uppercase; color: #fff; -webkit-text-stroke: 2px #05020e; paint-order: stroke fill; text-shadow: 0 4px 0 var(--dpd), 0 0 26px var(--dp); }
+.dp-brule { margin-top: 4px; font: 700 13px/1.3 var(--ui); color: var(--text); text-wrap: balance; }
+.dp-brule em { font-style: normal; font-weight: 900; color: var(--dp2); }
+.dp-bsub { margin-top: 2px; font: 800 12px/1.25 var(--ui); color: var(--dp2); }
+@media (max-width: 720px) { .dp-banner { padding: 12px 12px 11px; } .dp-bname { font-size: 28px; } .dp-brule { font-size: 12px; } }
+
+/* --- искры «Изнанки» и глубже: висит рядом с рисунком, задень по пути --- */
+.dp-spark { position: absolute; left: 0; top: 0; width: calc(var(--hg-s, 80px) * .34); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.17) 0 0 calc(var(--hg-s, 80px) * -.17); pointer-events: none;
+  background: linear-gradient(135deg, #fff, var(--dp2, #ffd0dc) 45%, var(--dp, #ff3b6b)); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: dp-spark 900ms ease-in-out infinite alternate; }
+@keyframes dp-spark { from { transform: scale(.78) rotate(-10deg); } to { transform: scale(1.18) rotate(12deg); } }
+.dp-spark.dp-got { animation: dp-sparkgot 380ms ease-out forwards; }
+@keyframes dp-sparkgot { to { transform: scale(3.2) rotate(60deg); opacity: 0; } }
+.hgrid.hg-has .hg.dp-sp { filter: none; box-shadow: 0 0 0 2px #fff, 0 0 18px 3px var(--dp, #ff3b6b); z-index: 2; }
+.hgrid.hg-has .hg.dp-sp .hg-por { filter: brightness(.6); }
+
+/* --- «тьма» «Пустоты»: рисунок проступает по три отметки --- */
+.hg-dot.dp-far, .hg-fig line.dp-far { opacity: 0; }
+.hg-dot { transition: opacity 180ms ease-out; }
+.hg-fig line { transition: opacity 180ms ease-out; }
+
+/* --- спокойный режим и «меньше движения»: без живого на подложке, без вздрагиваний и пульса --- */
+.calm #dpBack .dp-amb, .calm #dpBack .dp-lines { display: none; }
+.calm .dp-next.dp-ready img, .calm .dp-spark, .calm .hg-wrap[data-gate] .list.hgrid::after, .calm .hg-wrap[data-gate] .hg-fig { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  #dpBack .dp-amb, #dpBack .dp-lines { display: none; }
+  .dp-next.dp-ready img, .dp-spark, .dp-bemb, .hg-wrap[data-gate] .list.hgrid::after, .hg-wrap[data-gate] .hg-fig { animation: none !important; }
+  html[data-deep] .hg-wrap[data-rank] .hg-fig, html[data-deep] .hg-wrap[data-rank] .hg-mrank { animation: none !important; }
+}
+body.calm .hg-wrap[data-rank] .hg-fig, body.calm .hg-wrap[data-rank] .hg-mrank { animation: none !important; }
+
+/* --- вкладка «Путь»: уровни глубины и находки --- */
+.rd .dp-finds { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.rd .dp-finds span { padding: 3px 8px; border-radius: 999px; font: 800 11px/1.2 var(--ui); color: var(--text-mute); background: rgba(0,0,0,.28); box-shadow: inset 0 0 0 1px var(--line); }
+.rd .dp-finds span.dp-has { color: #fff; background: color-mix(in srgb, var(--brass) 26%, transparent); box-shadow: inset 0 0 0 1px var(--brass); }
+.rd .dp-remb { float: right; width: 44px; height: 44px; margin: -2px 0 2px 8px; }
+.rd:not(.done) .dp-remb { filter: grayscale(.9) brightness(.6); }
