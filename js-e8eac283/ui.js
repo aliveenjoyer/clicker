@@ -12,6 +12,7 @@ import * as SWAP from "./swap.js";
 import * as ACCT from "./acct.js";
 import * as CLOCK from "./clock.js";
 import * as DP from "./deep.js";
+import * as RT from "./rite.js";
 import * as CHAT from "./chat.js";
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // проверки на своём компьютере шлют события из кода
 
@@ -67,7 +68,8 @@ export function mount(state, hooks) {
     // вкладкам), но промахом считаются так же, как при свайпе, — точность та же. Нажатие и свайп работают как раньше.
     const freeTile = (b) => {
       const i = Number(b.dataset.i);
-      if (fig && fig.cells.indexOf(i) >= 0 && !fig.hit.has(i)) buyTile(b, false, true);
+      const at = fig && !fig.veil ? fig.cells.indexOf(i) : -1;   // отметок разлома, который ещё раскрывается, на сетке нет
+      if (at >= 0 && !fig.hit.has(i) && !(fig.gate && S.fig.hold > 0 && at !== fig.hit.size)) buyTile(b, false, true);
       else figTouch(i);
     };
     let sw = null, dotAt = null, swipeT = 0, trailN = 0;   // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
@@ -397,11 +399,14 @@ const FIGS = [
   { name: "Чёрное солнце", deep: 3, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1]], [[1, 1], [2, 2]]] },
   { name: "Комета", deep: 3, s: [[[0, 4], [1, 3], [2, 2], [3, 1], [4, 0], [3, 0], [4, 1]]] },
   { name: "Сверхновая", deep: 3, s: [[[2, 0], [2, 1], [2, 2], [2, 3], [2, 4]], [[0, 2], [1, 2], [3, 2], [4, 2]]] },
-  // «Разлом» — ворота на уровень глубже (gate — куда ведёт). Берётся строго по номерам, поэтому рядом с диагональными
-  // переходами нет более поздних отметок: задеть «чужой» номер углом курсора нельзя.
-  { name: "Разлом", gate: 1, s: [[[1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 3], [1, 4], [2, 4]]] },
-  { name: "Разлом", gate: 2, s: [[[3, 0], [2, 0], [1, 0], [0, 1], [1, 2], [2, 2], [3, 3], [2, 4], [1, 4], [0, 4]]] },
-  { name: "Разлом", gate: 3, s: [[[0, 0], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 2], [0, 3], [1, 4], [2, 4], [3, 4], [3, 3]]] },
+  // «Разлом» — ворота на уровень глубже (gate — куда ведёт). Берётся строго по номерам, поэтому рядом с дорогой между
+  // соседними отметками нет более поздних: задеть «чужой» номер по пути нельзя. У каждого разлома свой рисунок (15.11, его
+  // слова: «комбо однообразные… типа большие Z, большие N»): в «Подземку» — лестница вниз, в «Изнанку» — кольцо, в
+  // «Пустоту» — звезда в пять прыжков. alt — запасной рисунок для сетки, на которую основной не ложится (узкий телефон).
+  { name: "Разлом", gate: 1, s: [[[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3]]] },
+  { name: "Разлом", gate: 2, s: [[[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 2], [0, 1]]] },
+  { name: "Разлом", gate: 3, s: [[[2, 0], [3, 4], [0, 1], [4, 1], [1, 4]]] },
+  { name: "Разлом", gate: 3, alt: 1, s: [[[0, 0], [1, 0], [2, 0], [3, 1], [2, 2], [1, 2], [0, 2], [0, 3], [1, 4], [2, 4], [3, 4], [3, 3]]] },
 ];
 // Сложность рисунка — по числу плиток: простой (до 5) прибавляет к комбо 1, дальше 2, 3 и 4. Сложные выходят не сразу:
 // пока комбо меньше 3 — только простые, с 3 — до второй ступени, с 10 — до третьей, с 25 — любые; чем сложнее из
@@ -426,7 +431,7 @@ for (const f of FIGS) {
     if (seen.has(key)) continue;
     seen.add(key);
     const Q = s.flat();
-    VARS.push({ name: f.name, t: f.t, n: f.n, deep: f.deep || 0, gate: f.gate || 0, s, w: Math.max(...Q.map((p) => p[0])) + 1, h: Math.max(...Q.map((p) => p[1])) + 1 });
+    VARS.push({ name: f.name, t: f.t, n: f.n, deep: f.deep || 0, gate: f.gate || 0, alt: f.alt || 0, s, w: Math.max(...Q.map((p) => p[0])) + 1, h: Math.max(...Q.map((p) => p[1])) + 1 });
   }
 }
 const figTier = (k) => (k < 3 ? 1 : k < 10 ? 2 : k < 25 ? 3 : 4);
@@ -547,6 +552,7 @@ function figAllow(at) {
 // (запуск, смена размера сетки, обрыв комбо) рисунок ставится в случайное место, где целиком ложится на плитки.
 function spawnFig(from) {
   const was = fig ? fig.name : "";
+  let opened = false;                                        // этот рисунок — разлом, и он открылся только что
   clearFig();
   hovLast = null;                                            // «без зажатия»: новый рисунок может лечь прямо под стоящую мышь — первое же движение его заметит
   if (figWanted() && rows.length === TILES && hgC) {
@@ -556,6 +562,7 @@ function spawnFig(from) {
     let gate = S.fig.gate > 0 || C.figGateReady(S) ? deep + 1 : 0;
     const room = VARS.filter((v) => v.w <= hgC && v.h <= R);
     let fits = gate ? room.filter((v) => v.gate === gate) : [];
+    if (fits.some((v) => !v.alt)) fits = fits.filter((v) => !v.alt);   // запасной рисунок разлома — только если основной не ложится на сетку
     if (!fits.length) { gate = 0; fits = room.filter((v) => !v.gate && v.t <= top && v.name !== was && (!v.deep || v.deep === deep)); }
     // сложные из разрешённых — чаще; «находки» своего уровня глубины — примерно каждый седьмой рисунок
     const plainW = (v) => (v.t === top ? 4 : v.t === top - 1 ? 2 : 1);
@@ -598,17 +605,15 @@ function spawnFig(from) {
         find: v.deep ? v.name : "", gate: 0, spark: -1, sparkEl: null, sparkHit: false, dark: deep >= 3 && !gate ? CFG.figDark : 0, born: performance.now() };
       const lay = figLayer();
       lay.classList.remove("hg-messy");
-      if (gate) {                                            // разлом: время пошло (или идёт дальше, если он уже был открыт)
-        if (!(S.fig.gate > 0)) {
-          gateTotal = C.figGateOpen(S, fig.cells.length);
-          if (gateTotal > 0) { sfx.gate(); note("Разлом открыт", "Веди по номерам, пока идёт время. Дальше — «" + DEEP[gate].name + "»", 9000); }
-        }
-        if (S.fig.gate > 0) { fig.gate = gate; $("hgWrap").dataset.gate = String(gate); gateSecShown = -1; }
+      if (gate) {                                            // разлом: открывается с передышкой (или идёт дальше, если он уже был открыт)
+        if (!(S.fig.gate > 0)) { gateTotal = C.figGateOpen(S, fig.cells.length); opened = gateTotal > 0; if (opened) fig.veil = true; }   // отметок пока нет: они выйдут на трещину к концу передышки
+        if (S.fig.gate > 0) { fig.gate = gate; $("hgWrap").dataset.gate = String(gate); gateSecShown = -1; if (rite && rite.kind === "rest" && !rite.shown) fig.veil = true; }
       }
       // кружки с номерами по ходу рисунка, как в osu; у первого — сходящееся кольцо: начинать отсюда
       fig.dots = new Map();
       fig.cells.forEach((i, n) => {
-        const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : ""); d.dataset.i = i; d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
+        // dp-far — с рождения кружка: отметки разлома, который ещё раскрывается, не должны мелькнуть
+        const d = document.createElement("i"); d.className = "hg-dot" + (n === 0 ? " hg-go" : "") + (fig.veil ? " dp-far" : ""); d.dataset.i = i; d.innerHTML = '<b class="hg-num">' + (n + 1) + "</b>";
         lay.appendChild(d); fig.dots.set(i, d);
       });
       // искра («Изнанка» и глубже): висит на соседней с рисунком плитке — задень по пути, это не промах
@@ -630,7 +635,10 @@ function spawnFig(from) {
       }
     }
   } else if (!figWanted() && slotOf) { slotOf = null; for (const r of rows) r.root.style.order = ""; }   // рисунки выключены — сетка в обычном порядке
-  drawFigLines(); drawFigChip(); drawFigBtn();
+  drawFigLines();
+  if (opened) riteOpen(fig.gate);                            // постановка: передышка, трещина по сетке, надпись
+  else if (fig && fig.gate && !rite) riteResume();           // разлом уже шёл, а сетку собрали заново
+  drawFigChip(); drawFigBtn();
 }
 function drawFigLines() {                                   // слой рисунка поверх сетки: кружки на центрах плиток и линия между ними
   const list = $("mercList");
@@ -640,6 +648,7 @@ function drawFigLines() {                                   // слой рису
   const lr = list.getBoundingClientRect(), W = Math.round(lr.width), H = Math.round(list.classList.contains("hg-flow") ? Math.max(lr.height, list.scrollHeight) : lr.height);
   lay.style.width = W + "px"; lay.style.height = H + "px";
   lay.classList.toggle("dp-gate", !!fig.gate);
+  lay.classList.toggle("rt-live", !!fig.gate && riteLive());   // трещину рисует холст постановки: линия между кружками не нужна
   const pt = (i) => { const r = rows[i].root.getBoundingClientRect(); return [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]; };
   svg.setAttribute("width", W); svg.setAttribute("height", H);
   for (const [i, d] of fig.dots) { const p = pt(i); d.style.left = p[0].toFixed(1) + "px"; d.style.top = p[1].toFixed(1) + "px"; }
@@ -657,14 +666,15 @@ function drawFigLines() {                                   // слой рису
   }
   svg.innerHTML = (fig.gate ? ["hg-lo", "hg-lg", "hg-ll", "dp-lc"] : ["hg-lo", "hg-lg", "hg-ll"]).map((c) => segs.map((q) => '<line class="' + c + '" data-n="' + q[4] + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
   darkSync();
+  if (fig.gate && rite) RT.shape(figPts(fig), tileSize());   // сетка сменила размер — трещина идёт за отметками
 }
 // Какие отметки видны. Обычно — все. В «Пустоте» («тьма») — только ближайшие CFG.figDark: остальные проступают по мере
 // сбора. Отметка на месте и засчитывается, даже если её ещё не видно.
 function darkSync() {
   if (!fig) return;
-  const lim = fig.dark ? fig.hit.size + fig.dark : 1e9;
+  const lim = fig.veil ? 0 : fig.dark ? fig.hit.size + fig.dark : 1e9;   // veil — разлом ещё раскрывается: его отметок на сетке пока нет
   fig.cells.forEach((i, n) => { const far = n >= lim, d = fig.dots.get(i); if (d) d.classList.toggle("dp-far", far); rows[i].root.classList.toggle("hg-m", !far); });
-  if (fig.dark) { const lay = $("mercList").querySelector(".hg-fig"); if (lay) lay.querySelectorAll("line").forEach((l) => l.classList.toggle("dp-far", Number(l.dataset.n) >= lim)); }
+  if (fig.dark || fig.gate) { const lay = $("mercList").querySelector(".hg-fig"); if (lay) lay.querySelectorAll("line").forEach((l) => l.classList.toggle("dp-far", Number(l.dataset.n) >= lim)); }
 }
 // Все «вылеты» (искры, кольца, надписи) живут в своём слое поверх сетки — как кружки и линия рисунка: плитки их не
 // перекрывают и не обрезают (на iPhone иначе они уходили под плитки). Слой не ловит касания.
@@ -700,7 +710,7 @@ function drawMeter() {                                      // то, что ме
   if (!m) return;
   const on = figWanted();
   if (!on) { rankIdx = -1; rankPeak = -1; }
-  const k = on ? kShow() : 0, key = (on ? 1 : 0) + "|" + k + "|" + rankIdx + "|" + S.fig.d + "|" + (S.fig.gate > 0 ? 1 : 0) + "|" + (S.stats.figDeep || 0) + "|" + S.fig.run;
+  const k = on ? kShow() : 0, key = (on ? 1 : 0) + "|" + k + "|" + rankIdx + "|" + S.fig.d + "|" + (S.fig.gate > 0 ? 1 : 0) + "|" + (S.stats.figDeep || 0) + "|" + S.fig.run + "|" + (S.fig.hold > 0 ? 1 : 0);
   if (key === meterKey) return;
   meterKey = key;
   m.hidden = !on;
@@ -717,7 +727,7 @@ function drawMeter() {                                      // то, что ме
   [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i + lo <= rankIdx));
   const mk = $("hgMMark");
   mk.textContent = Rk ? Rk.mark : ""; mk.dataset.n = Rk ? Rk.mark.length : 0;
-  $("hgMWord").textContent = Rk ? Rk.word + (S.fig.d >= 1 && S.fig.run > 0 ? " · разгон ×" + mulT(runMul()) : "") : "";
+  $("hgMWord").textContent = S.fig.hold > 0 ? "комбо стоит" : Rk ? Rk.word + (S.fig.d >= 1 && S.fig.run > 0 ? " · разгон ×" + mulT(runMul()) : "") : "";
   $("hgMNum").textContent = group(k);
   $("hgMMul").textContent = k ? "×" + mulT(C.figMul(S)) : "";
   const L = DEEP[S.fig.d];
@@ -775,27 +785,25 @@ function stepMeter() {                                      // каждый ка
   if (d > 0) rankPeak = Math.max(rankPeak, rankIdx);
   if (d) { drawMeter(); figChipKey = "?"; }
   if (ticksDone) drawFill();
-  // кольцо: сколько осталось до быстрого остывания, если не брать отметки; пока открыт разлом — сколько осталось ему
-  const k = S.fig.k, gate = S.fig.gate > 0 && fig && fig.gate;
-  const f = gate ? Math.max(0, Math.min(1, S.fig.gate / gateTotal)) : k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240) + (gate ? 1000 : 0);
+  // кольцо: сколько осталось до быстрого остывания, если не брать отметки; пока открыт разлом — сколько осталось ему;
+  // пока идёт передышка (разлом раскрывается, титул уровня) — сколько осталось её
+  const k = S.fig.k, gate = S.fig.gate > 0 && fig && fig.gate, hold = S.fig.hold > 0 && rite ? Math.max(0, Math.min(1, S.fig.hold / (rite.total || 1))) : -1;
+  const f = hold >= 0 ? hold : gate ? Math.max(0, Math.min(1, S.fig.gate / gateTotal)) : k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240) + (hold >= 0 ? 2000 : gate ? 1000 : 0);
   if (v !== ringShown) {
     ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1);
     if (chipBar && chipBar.isConnected) chipBar.style.transform = "scaleX(" + f.toFixed(3) + ")";
   }
-  if (gate) {                                                // секунды разлома — в плашке над сеткой; последние три тикают
+  if (gate && hold < 0) {                                    // секунды разлома — в плашке над сеткой; последние три тикают
     const sec = Math.ceil(S.fig.gate);
     if (sec !== gateSecShown) { if (gateSecShown >= 0 && sec <= 3) sfx.hurry(sec <= 1); gateSecShown = sec; figChipKey = "?"; drawFigChip(); }
   }
-  const h = gate ? S.fig.gate < 3 : k > 0 && S.fig.idle >= CFG.figIdleAt;
-  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); if (h && !gate) sfx.hurry(false); figChipKey = "?"; }
+  const h = hold >= 0 ? false : gate ? S.fig.gate < 3 : k > 0 && S.fig.idle >= CFG.figIdleAt;
+  if (h !== hurryOn) { hurryOn = h; $("hgWrap").classList.toggle("hg-hurry", h); if (h && !gate) sfx.hurry(false); RT.hurry(h && !!gate); figChipKey = "?"; }
 }
 // Новый ранг: буква врезается в сетку (в ту её половину, где нет следующего рисунка), под ней слово; потом буква улетает
 // в шкалу и встаёт там в кольцо. На потолке по сетке ещё и хлещет хлыст.
-function rankUp(r) {
-  const wrap = $("hgWrap"), list = $("mercList"), Rk = FIG_RANKS[r], max = r === FIG_RANKS.length - 1;
-  if (still()) return;                                       // «меньше движения»: ранг просто меняется в шкале
-  const W = list.clientWidth, H = Math.max(120, list.clientHeight);
-  // место — то из девяти (углы, стороны, середина), что дальше всего от кружков нового рисунка: надпись не должна его закрывать
+function farSpot() {                                         // то из девяти мест сетки (углы, стороны, середина), что дальше всего от кружков рисунка
+  const list = $("mercList"), W = list.clientWidth, H = Math.max(120, list.clientHeight);
   const dots = fig ? [...fig.dots.values()].map((d) => [parseFloat(d.style.left) || 0, parseFloat(d.style.top) || 0]) : [];
   let bx = W / 2, by = H / 2, far = -1;
   for (const fx of [0.5, 0.27, 0.73]) for (const fy of [0.5, 0.28, 0.72]) {
@@ -803,6 +811,12 @@ function rankUp(r) {
     for (const p of dots) near = Math.min(near, Math.hypot(p[0] - x, (p[1] - y) * 1.25));
     if (near > far + 1) { far = near; bx = x; by = y; }
   }
+  return [bx, by, W, H];
+}
+function rankUp(r) {
+  const wrap = $("hgWrap"), list = $("mercList"), Rk = FIG_RANKS[r], max = r === FIG_RANKS.length - 1;
+  if (still()) return;                                       // «меньше движения»: ранг просто меняется в шкале
+  const [bx, by, W] = farSpot();                             // надпись не должна закрыть новый рисунок
   const size = Math.round(Math.max(50, Math.min(170, W * 0.26)) * [1, 1, 0.8, 0.6][Math.min(3, Rk.mark.length)]);
   const el = document.createElement("div");
   el.className = "hg-rankup"; el.style.setProperty("--rs", size + "px");
@@ -829,7 +843,7 @@ function rankUp(r) {
 function figTouch(i) {                                      // по плитке провели или нажали: отметка рисунка, лишняя плитка или ничего
   const spot = spotOf(i);                                    // где на сетке эта плитка (герои могут быть пересажены)
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
-  if (!fig) return;
+  if (!fig || fig.veil) return;                              // veil — разлом ещё раскрывается: его отметок на сетке пока нет
   const at = fig.cells.indexOf(i);
   if (at < 0) {
     if (i === fig.spark && !fig.sparkHit) { sparkTake(); return; }   // искра рядом с рисунком — не промах, а подарок
@@ -838,7 +852,7 @@ function figTouch(i) {                                      // по плитке
   }
   if (fig.hit.has(i)) return;                                // по уже взятой отметке ходить можно
   if (fig.gate && at !== fig.hit.size) {                     // разлом берут строго по номерам: сбился — закрылся
-    if (performance.now() - fig.born < GATE_GRACE) return;   // …но не в первый миг: рука ещё летит по прошлому рисунку и разлома не видела
+    if (S.fig.hold > 0 || performance.now() - fig.born < GATE_GRACE) return;   // …но не пока идёт передышка и не в первый миг: рука ещё летит по прошлому рисунку
     gateLost("order"); return;
   }
   if (at !== fig.hit.size && fig.clean) {                    // взята не по номерам: прибавки «по номерам» за этот рисунок не будет
@@ -847,6 +861,7 @@ function figTouch(i) {                                      // по плитке
   }
   fig.hit.add(i);
   C.figMark(S);
+  if (fig.gate) { if (S.fig.hold > 0 && C.figGo(S)) riteGo(true); RT.mark(fig.hit.size); }   // первая отметка взята до конца передышки — часы разлома пошли сразу
   rows[i].root.classList.add("hg-hit");
   sfx.mark(fig.hit.size - 1, fig.cells.length, figLvl());
   const dot = fig.dots.get(i);
@@ -866,7 +881,7 @@ function figTouch(i) {                                      // по плитке
     rankPeak = Math.max(rankPeak, rankIdx);
     figBoom(done, { g, acc, clean: done.clean, up, back: d > 0 && !up, run: S.fig.run, find: done.find, fresh });
     spawnFig({ spot: touchSpot, dir: handDir() });
-    if (up) rankUp(rankIdx);                                 // после нового рисунка: надпись встаёт так, чтобы его не закрыть
+    if (up && !rite) rankUp(rankIdx);                        // после нового рисунка: надпись встаёт так, чтобы его не закрыть; открылся разлом — говорит он
     figChipKey = "?"; drawFigChip(); slowT = 0;
   }
   else drawFigChip();
@@ -892,36 +907,27 @@ function sparkTake() {                                       // искра по�
 function gateWon() {                                         // разлом взят: комбо проваливается на уровень глубже
   const done = fig, list = $("mercList"), to = done.gate, first = S.fig.dmax < to;
   if (!C.figGatePass(S)) { gateLost("time"); return; }
-  const L = DEEP[to];
+  const L = DEEP[to], shown = list.offsetParent !== null, quiet = riteQuiet(), pts = figPts(done);
   rankIdx = -1; rankSync(); rankPeak = rankIdx;              // на новом уровне лесенка рангов своя и начинается с S
-  deepShown = S.fig.d; DP.setKnown(S.stats.figDeep || 0); DP.set(S.fig.d, "dive");
+  deepShown = S.fig.d; DP.setKnown(S.stats.figDeep || 0);
   sfx.dive(to);
   for (const i of done.cells) { const t = rows[i].root; t.classList.remove("hg-win"); void t.offsetWidth; t.classList.add("hg-win"); }
-  if (list.offsetParent !== null && !still() && !S.set.calm) {   // трещина раскрывается светом из последней отметки, из всех отметок летят искры
-    const lr = list.getBoundingClientRect(), W = Math.max(1, lr.width), H = Math.max(1, lr.height), last = done.dots.get(done.cells[done.cells.length - 1]);
-    const rift = fxAdd("dp-rift", 0, 0, 950);
-    rift.style.setProperty("--gt", ["", "#35e0ff", "#ff3b6b", "#b79bff"][to]);
-    rift.style.setProperty("--x", (100 * (parseFloat(last.style.left) || W / 2) / W).toFixed(1) + "%"); rift.style.setProperty("--y", (100 * (parseFloat(last.style.top) || H / 2) / H).toFixed(1) + "%");
-    for (const d of done.dots.values()) for (let j = 0; j < 4; j++) {
-      const a = Math.random() * 6.283, r = 60 + Math.random() * 170, n = fxAdd("hg-sp l4", parseFloat(d.style.left) || 0, parseFloat(d.style.top) || 0, 900);
-      n.style.setProperty("--dx", (Math.cos(a) * r).toFixed(1) + "px"); n.style.setProperty("--dy", (Math.sin(a) * r).toFixed(1) + "px");
-    }
-  }
-  spawnFig({ spot: touchSpot, dir: handDir() });
-  if (list.offsetParent !== null) {                          // баннер уровня — под слоем рисунка: следующий рисунок виден поверх него
-    const el = document.createElement("div");
-    el.className = "dp-banner" + (still() || S.set.calm ? " dp-bcalm" : "");
-    el.innerHTML = '<img class="dp-bemb" alt="" draggable="false" src="' + DP.emblem(to) + '"><span class="dp-bcap">Глубина ' + DP.roman(to) + '</span><b class="dp-bname">' + L.name + '</b><span class="dp-brule"><em>' + L.rule + ":</em> " + L.how +
-      '</span><span class="dp-bsub">души ×' + group(L.at + 1) + " и больше" + (first && L.loot ? " · подарок: " + lootT(L.loot) + " дохода" : "") + "</span>";
-    list.appendChild(el); setTimeout(() => el.remove(), 3300);
-  }
+  clearFig(); drawFigLines();                                // пока идёт титул уровня, рисунка на сетке нет: передышка (CFG.figLand)
+  $("hgWrap").classList.remove("rt-wait");
+  rite = { kind: "land", to, total: S.fig.hold, sec: -1, out: false, fig: false };
+  if (shown) RT.dive({ list, pts, size: tileSize(), to, calm: quiet, html: riteLandHtml(to, first) });   // трещина раскрывается на всю сетку, поверх — титул уровня
+  // Вид страницы меняется на пике вспышки: сначала раскрывается трещина, за ней — всё остальное. Без постановки — сразу.
+  if (shown && !quiet && S.fig.hold > 0) setTimeout(() => { if (deepShown === to && figWanted()) DP.set(to, "dive"); }, 220);
+  else DP.set(S.fig.d, "dive");
   note("Глубина " + DP.roman(to) + " — «" + L.name + "»", "Комбо провалилось в разлом. Правило уровня — «" + L.rule + "»: " + L.how + ". Остынет ниже " + L.at + " — всплывёшь обратно", 12000);
   meterKey = "?"; drawMeter(); if (ticksDone) drawFill(); figChipKey = "?"; drawFigChip(); roadKey = ""; slowT = 0;
+  if (!(S.fig.hold > 0)) riteStep(0);                        // передышки нет (CFG.figLand = 0) — рисунок сразу
 }
 function gateLost(why) {                                     // разлом закрылся: why — "order" (сбился с номеров) или "time" (не успел)
   if (!fig || !fig.gate) return;                             // уже закрыт (событие ядра пришло вслед за нашим же закрытием)
   if (why === "order") C.figGateFail(S, "order");            // по времени его закрывает само ядро (событие fig_gatefail)
   sfx.gateFail();
+  RT.seal(); riteEnd(true);                                  // трещина затягивается сама
   const list = $("mercList");
   rankSync();
   spawnFig({ spot: touchSpot, dir: null });
@@ -941,16 +947,142 @@ function deepRise(e) {                                       // комбо ос�
   note("Комбо всплыло", "«" + L.name + "» → «" + U.name + "»: комбо остыло ниже " + L.at + ". Догрей до MAX — разлом откроется снова", 5000);
   meterKey = "?"; lvShown = -1; drawMeter(); figChipKey = "?"; drawFigChip(); slowT = 0;
 }
-// Для проверок и снимков: поставить комбо на уровень глубины d (k — жар, по умолчанию 40 % уровня).
-export function deepSet(d, k) {
+// Для проверок и снимков: поставить комбо на уровень глубины d (k — жар, по умолчанию 40 % уровня). Если жар у потолка,
+// разлом открывается как в игре — с передышкой; quick — без неё: разлом сразу открыт, часы идут.
+export function deepSet(d, k, quick) {
   d = Math.max(0, Math.min(DEEP.length - 1, Math.floor(d) || 0));
   const L = DEEP[d], f = S.fig;
-  f.d = d; f.gate = 0; f.run = 0; f.idle = 0; f.dmax = Math.max(f.dmax, d);
+  if (rite) { rite = null; RT.stop(); $("hgWrap").classList.remove("rt-wait"); }
+  f.d = d; f.gate = 0; f.hold = 0; f.run = 0; f.idle = 0; f.dmax = Math.max(f.dmax, d);
   f.k = k !== undefined ? k : d ? L.at + (L.top - L.at) * 0.4 : 0; f.peak = Math.max(f.peak, f.k);
   S.stats.figDeep = Math.max(S.stats.figDeep || 0, d);
   rankIdx = -1; rankSync(); rankPeak = rankIdx; deepShown = figWanted() ? d : 0; DP.setKnown(S.stats.figDeep); DP.set(deepShown, "");
   meterKey = "?"; lvShown = -1; spawnFig(); drawMeter(); figChipKey = "?"; drawFigChip();
+  if (quick && rite && rite.kind === "rest") { C.figGo(S); riteStep(0); }
 }
+// ---------- постановка разлома: передышка, отметки, провал ----------
+// Вид — js/rite.js (холст и надписи на сетке), здесь — что и когда. Часы — S.fig.hold (js/core.js): пока идёт передышка,
+// жар и часы разлома стоят. rite.kind: "rest" — разлом раскрывается (сначала без отметок, потом с ними, но часы ещё
+// стоят), "run" — разлом открыт, часы идут, "land" — титул уровня после провала. Каждый кадр — riteStep: постановка идёт
+// по часам игры, а не по своим, поэтому свёрнутая вкладка её не ломает.
+let rite = null;
+const riteSeen = {};                                         // какие разломы в этот заход уже открывались: во второй раз надпись короче
+const CARD_AT = 0.95, REVEAL = 3.6, REVEAL_QUICK = 2.2;      // на какой секунде передышки выходит надпись (до неё по сетке бежит трещина) и на какой — отметки
+const LAND_OUT = 0.6, LAND_FIG = 0.25;                       // за сколько секунд до конца титул уровня уходит и за сколько выходит первый рисунок уровня
+const figPts = (f) => f.cells.map((i) => { const d = f.dots.get(i); return [parseFloat(d.style.left) || 0, parseFloat(d.style.top) || 0]; });   // середины отметок по порядку
+const tileSize = () => parseFloat(getComputedStyle($("mercList")).getPropertyValue("--hg-s")) || 80;
+const riteQuiet = () => still() || !!S.set.calm;             // спокойный режим и «меньше движения»: без холста, одни надписи
+const riteLive = () => { const q = rite ? RT.info() : null; return !!q && !q.calm; };   // трещину сейчас рисует холст
+function tileWave(cls, spot, step) {                         // волна по плиткам от места spot (−1 — от середины): у каждой плитки своя задержка
+  const list = $("mercList"); if (!hgC || !rows.length) return;
+  const R = Math.ceil(TILES / hgC), ox = spot >= 0 ? spot % hgC : (hgC - 1) / 2, oy = spot >= 0 ? Math.floor(spot / hgC) : (R - 1) / 2;
+  rows.forEach((r, h) => { const q = spotOf(h); r.root.style.setProperty("--rt-d", Math.round(Math.hypot(q % hgC - ox, Math.floor(q / hgC) - oy) * step)); });
+  list.classList.remove("rt-quake", "rt-rise"); void list.offsetWidth; list.classList.add(cls);
+  setTimeout(() => list.classList.remove(cls), 1200);
+}
+function riteOpenHtml(to) {                                  // надпись, пока разлом раскрывается: что это, куда ведёт и что делать
+  const L = DEEP[to];
+  return '<div class="rt-kick"><i></i><span>комбо <b>' + group(kShow()) + "</b> · MAX</span><i></i></div>" +
+    '<div class="rt-title"><span class="rt-ta">Разлом</span><span class="rt-tb">Разлом</span><svg class="rt-cut" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="-3" y1="63" x2="103" y2="37" pathLength="100"/></svg></div>' +
+    '<div class="rt-dest"><img class="rt-emb" alt="" draggable="false" src="' + DP.emblem(to) + '"><span class="rt-dt"><em>путь на глубину ' + DP.roman(to) + "</em><b>" + L.name + "</b></span></div>" +
+    '<div class="rt-do">Проведи по трещине <b>по номерам</b> — души пойдут <b>×' + group(L.at + 1) + " и больше</b></div>" +
+    '<div class="rt-rest"><i class="rt-pz"></i><span>комбо стоит · передохни</span><u><s></s></u></div>';
+}
+function riteLandHtml(to, first) {                           // титул уровня после провала
+  const L = DEEP[to];
+  return '<div class="rt-lembw"><img class="rt-lemb" alt="" draggable="false" src="' + DP.emblem(to) + '"></div>' +
+    '<div class="rt-kick"><i></i><span>глубина ' + DP.roman(to) + "</span><i></i></div>" +
+    '<div class="rt-name" data-t="' + L.name + '" style="--rt-n:' + L.name.length + '">' + [...L.name].map((ch, i) => '<span style="--i:' + i + '">' + ch + "</span>").join("") + "</div>" +
+    '<div class="rt-steps">' + DEEP.map((x, i) => '<span class="' + (i <= to ? "on" : "") + (i === to ? " cur" : "") + '">' + (i ? DP.roman(i) : "") + "</span>").join("<i></i>") + "</div>" +
+    '<div class="rt-rule"><em>новое правило</em><b>' + L.rule + "</b><span>" + L.how.charAt(0).toUpperCase() + L.how.slice(1) + "</span></div>" +
+    '<div class="rt-gain"><span>души ×' + group(L.at + 1) + " и больше</span>" + (first && L.loot ? "<span>подарок: " + lootT(L.loot) + " дохода</span>" : "") + "</div>";
+}
+function riteOpen(to) {                                      // разлом открылся: передышка, трещина бежит по сетке, надпись
+  const list = $("mercList"), L = DEEP[to], quick = !!riteSeen[to];
+  riteSeen[to] = true;
+  rite = { kind: "rest", to, total: S.fig.hold || CFG.figRest, revealAt: quick ? REVEAL_QUICK : REVEAL, sec: -1, shown: false };
+  $("hgWrap").classList.add("rt-wait");
+  sfx.riftOpen(to);
+  if (list.offsetParent !== null) {
+    fxLayer().querySelectorAll(".hg-pop").forEach((n) => n.remove());   // надпись прошлого рисунка с разломом не спорит
+    RT.open({ list, pts: figPts(fig), size: tileSize(), to, calm: riteQuiet(), quick, html: riteOpenHtml(to), cardAt: CARD_AT, vars: { "--rt-rest": rite.total + "s", "--rt-ago": -CARD_AT + "s" } });
+    if (!riteQuiet()) { DP.pulse(to); tileWave("rt-quake", fig.spots[0], 15); }
+    figLayer().classList.toggle("rt-live", riteLive());
+  }
+  note("Разлом открыт", "Комбо стоит, пока он раскрывается, — передохни. Потом проведи по нему строго по номерам: дальше — глубина " + DP.roman(to) + ", «" + L.name + "»", 9000);
+  meterKey = "?"; figChipKey = "?";
+}
+function riteResume() {                                      // разлом уже шёл, а сетку собрали заново (возрождение): трещина встаёт без удара
+  const list = $("mercList");
+  rite = { kind: S.fig.hold > 0 ? "rest" : "run", to: fig.gate, total: CFG.figRest, revealAt: 0, sec: -1, shown: true };
+  if (list.offsetParent !== null) { RT.open({ list, pts: figPts(fig), size: tileSize(), to: fig.gate, calm: riteQuiet(), resume: true, run: rite.kind === "run" }); figLayer().classList.toggle("rt-live", riteLive()); }
+  $("hgWrap").classList.toggle("rt-wait", rite.kind === "rest");
+}
+function riteReveal() {                                      // отметки разлома выходят на трещину — по одной, от первой к последней
+  if (!fig || !fig.veil) return;
+  fig.veil = false; fig.born = performance.now(); rite.shown = true;
+  darkSync();
+  if (!riteQuiet()) fig.cells.forEach((i, n) => {
+    const d = fig.dots.get(i); d.style.animationDelay = (n * 60) + "ms"; d.classList.add("rt-pop");
+    d.addEventListener("animationend", (e) => { if (e.animationName === "rt-pop") { d.classList.remove("rt-pop"); d.style.animationDelay = ""; } });
+  });
+  sfx.riftDots(fig.cells.length, rite.to);
+  RT.reveal();
+  figChipKey = "?"; drawFigChip();
+}
+function riteGo(byHand) {                                    // передышка кончилась — сама или игрок взял первую отметку: часы разлома пошли
+  if (!rite || rite.kind !== "rest") return;
+  if (fig && fig.veil) riteReveal();
+  rite.kind = "run";
+  $("hgWrap").classList.remove("rt-wait");
+  RT.go();
+  if (!byHand) {
+    sfx.riftGo(rite.to);
+    const list = $("mercList");
+    if (list.offsetParent !== null && !still()) { const [x, y] = farSpot(); fxAdd("rt-goword", x, y, 900, "<b>Веди!</b><span>по номерам</span>").dataset.lv = String(rite.to); }
+  }
+  gateSecShown = -1; ringShown = -1; meterKey = "?"; figChipKey = "?"; drawFigChip();
+}
+function riteLandOut() {                                     // титул уровня уходит: картинка места расходится, сетка возвращается волной
+  RT.land();
+  if (!riteQuiet() && $("mercList").offsetParent !== null) tileWave("rt-rise", -1, 24);
+}
+function riteLandFig() {                                     // …и выходит первый рисунок уровня: к концу передышки он уже на сетке
+  spawnFig({ spot: touchSpot, dir: null });
+  meterKey = "?"; drawMeter(); figChipKey = "?"; drawFigChip();
+}
+function riteEnd(keep) {                                     // постановка кончилась или сорвана; keep — холст доигрывает сам (затягивается или расходится)
+  if (!rite) return;
+  const was = rite.kind; rite = null;
+  if (!keep) RT.stop();
+  $("hgWrap").classList.remove("rt-wait");
+  if (fig && fig.veil) { fig.veil = false; darkSync(); }
+  if (was === "land" && !fig && figWanted() && rows.length === TILES) spawnFig();   // титул сорван — рисунок на место
+  gateSecShown = -1; ringShown = -1; meterKey = "?"; figChipKey = "?"; drawFigChip();
+}
+function riteStep(dt) {
+  if (rite) {
+    const f = S.fig;
+    if (rite.kind === "land") {
+      if (f.d !== rite.to || !figWanted() || !(f.k > 0)) riteEnd();   // комбо сброшено, рисунки выключены, прогресс подхвачен с другого устройства
+      else {
+        const sec = Math.ceil(f.hold);
+        if (sec !== rite.sec) { rite.sec = sec; figChipKey = "?"; drawFigChip(); }
+        if (f.hold <= LAND_OUT && !rite.out) { rite.out = true; riteLandOut(); }
+        if (f.hold <= LAND_FIG && !rite.fig) { rite.fig = true; riteLandFig(); }
+        if (!(f.hold > 0)) riteEnd(true);
+      }
+    } else if (!fig || !fig.gate || !(f.gate > 0) || !figWanted()) riteEnd();   // разлома больше нет
+    else if (rite.kind === "rest") {
+      if (fig.veil && (rite.total - f.hold >= rite.revealAt || !(f.hold > 0))) riteReveal();
+      const sec = Math.ceil(f.hold);
+      if (sec !== rite.sec) { if (rite.sec > 0 && sec >= 1 && sec <= 3) sfx.riftTick(sec); rite.sec = sec; figChipKey = "?"; drawFigChip(); }
+      if (!(f.hold > 0)) riteGo(false);
+    }
+  }
+  RT.frame(dt);
+}
+export const riteInfo = () => ({ kind: rite ? rite.kind : "", hold: S.fig.hold, gate: S.fig.gate, shown: !!(rite && rite.shown), rt: RT.info() });   // для проверки
 // Рисунок собран: плитки вспыхивают, из них летят искры цвета ранга, сам рисунок расходится «эхом» и тает, поверх вылетает
 // надпись: название, как собрано (идеально, по номерам, точно, небрежно, мимо) и на сколько вырос жар. Чем выше ранг, тем
 // крупнее. Если комбо взяло новый высший ранг (q.up), вместо надписи рисунка вылетает буква ранга (rankUp).
@@ -960,7 +1092,7 @@ function figBoom(done, q) {
   const list = $("mercList"), k = kShow(), lr = list.getBoundingClientRect();
   const lvl = figLvl();
   sfx.boom(lvl, done.plus);
-  if (q.up) setTimeout(() => rankSound(rankIdx), 240); else if (q.back) setTimeout(() => sfx.mile(), 200);
+  if (q.up) setTimeout(() => { if (!rite) rankSound(rankIdx); }, 240); else if (q.back) setTimeout(() => sfx.mile(), 200);   // открылся разлом — звучит он
   let cx = 0, cy = 0;
   const pts = done.cells.map((i) => { const r = rows[i].root.getBoundingClientRect(), p = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height / 2 - lr.top + list.scrollTop]; cx += p[0]; cy += p[1]; return p; });
   cx /= pts.length; cy /= pts.length;
@@ -1015,20 +1147,31 @@ function figApply() {                                       // настройк�
 function drawFigChip() {                                    // справа в строке над сеткой: какой рисунок, сколько отмечено, ранг, комбо и прибавка к душам
   drawMeter();
   const el = $("hgFigc"), k = kShow(), hot = S.fig.k > 0, gate = fig && fig.gate ? Math.max(0, Math.ceil(S.fig.gate)) : -1;
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run : "";
+  const rest = S.fig.hold > 0 ? Math.ceil(S.fig.hold) : 0, land = !fig && !!rite && rite.kind === "land";   // передышка: разлом раскрывается или идёт титул уровня
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run + "|" + rest + "|" + (fig.veil ? 1 : 0) : land ? "land|" + rest : "";
   if (key === figChipKey) return;
   figChipKey = key;
-  el.hidden = !fig;
-  if (!fig) { chipBar = null; return; }
-  if (fig.gate) {                                            // разлом: сколько отметок взято и сколько секунд осталось
-    const L = DEEP[fig.gate];
-    el.className = "hg-figc on dp-gatec"; el.dataset.gate = String(fig.gate);
-    el.title = "Разлом: проведи по отметкам строго по номерам, с первой по последнюю, пока идёт время. Успел — комбо провалится на глубину " + DP.roman(fig.gate) + ", «" + L.name + "»: души пойдут ×" + (L.at + 1) +
-      " и больше. Сбился или не успел — комбо отбросит от потолка, и разлом откроется снова, когда догреешь";
-    el.innerHTML = '<span class="hg-fw"><em class="hg-fn">Разлом</em> <b>' + fig.hit.size + "/" + fig.cells.length + '</b></span><span>по номерам</span><span><b>' + gate + ' с</b></span><i class="hg-figt"></i>';
+  el.hidden = !fig && !land;
+  if (!fig && !land) { chipBar = null; return; }
+  if (land) {                                                // титул уровня: комбо стоит
+    const L = DEEP[rite.to];
+    el.className = "hg-figc on dp-gatec rt-held"; el.dataset.gate = String(rite.to);
+    el.title = "Комбо провалилось на глубину " + DP.roman(rite.to) + ", «" + L.name + "». Пока идёт заставка уровня, комбо стоит";
+    el.innerHTML = '<span class="hg-fw"><em class="hg-fn">Глубина ' + DP.roman(rite.to) + '</em></span><span class="rt-hw">«' + L.name + "» · комбо стоит</span><span><b>" + rest + ' с</b></span><i class="hg-figt"></i>';
     chipBar = el.querySelector(".hg-figt"); ringShown = -1;
     return;
   }
+  if (fig.gate) {                                            // разлом: сколько отметок взято и сколько секунд осталось; пока идёт передышка — сколько осталось её
+    const L = DEEP[fig.gate];
+    el.className = "hg-figc on dp-gatec" + (rest ? " rt-held" : ""); el.dataset.gate = String(fig.gate);
+    el.title = "Разлом: пока он раскрывается, комбо стоит — можно передохнуть. Потом проведи по отметкам строго по номерам, с первой по последнюю, пока идёт время. Успел — комбо провалится на глубину " + DP.roman(fig.gate) + ", «" + L.name + "»: души пойдут ×" + (L.at + 1) +
+      " и больше. Сбился или не успел — комбо отбросит от потолка, и разлом откроется снова, когда догреешь";
+    el.innerHTML = '<span class="hg-fw"><em class="hg-fn">Разлом</em>' + (fig.veil ? "" : " <b>" + fig.hit.size + "/" + fig.cells.length + "</b>") + "</span>" +
+      (rest ? '<span class="rt-hw">' + (fig.veil ? "комбо стоит — передохни" : "по номерам · комбо стоит") + "</span><span><b>" + rest + " с</b></span>" : "<span>по номерам</span><span><b>" + gate + " с</b></span>") + '<i class="hg-figt"></i>';
+    chipBar = el.querySelector(".hg-figt"); ringShown = -1;
+    return;
+  }
+  if (el.dataset.gate) delete el.dataset.gate;
   el.className = "hg-figc" + (hot ? " on" : "") + (hurryOn ? " hurry" : "");
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок греет комбо: чем он больше, чем меньше лишних плиток по пути и если брать отметки по номерам — тем сильнее. " +
     "Комбо умножает души — до ×" + mulT(1 + CFG.figStep * CFG.figCap) + " на улице и до ×" + (CFG.figTop + 1) + " на глубине — и всё время остывает: на высоких рангах быстрее, а без отметок дольше " + CFG.figIdleAt + " секунд — совсем быстро" +
@@ -1062,7 +1205,7 @@ export function cloudNote(was, now, first, meta) {          // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: (slotOf || HOME).slice(), spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? spotOf(fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: (slotOf || HOME).slice(), spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, veil: !!fig.veil, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? spotOf(fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s, deep: f.deep || 0, gate: f.gate || 0 }));
 export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
@@ -1654,6 +1797,7 @@ export function frame(dt) {
   C.setSpoke(S, inChat && CHAT.spoke());                     // писал в чат за последние 10 минут — сундук копится вдвое быстрее
   drawBank(dt);
   deepSync();
+  riteStep(dt);
   stepMeter();
   stepHold(dt);
   stepDraft();
@@ -1672,7 +1816,7 @@ export function onEvent(e) {
     else if (e.ms) sfx.ms(); else sfx.buy();
     slowT = 0;
   } else if (e.t === "unlock") { if (e.key === "bulk") drawBuySeg(); slowT = 0; }
-  else if (e.t === "rebirth" || e.t === "eclipse") { rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
+  else if (e.t === "rebirth" || e.t === "eclipse") { if (rite) { rite = null; RT.stop(); $("hgWrap").classList.remove("rt-wait"); } rows = []; $("mercList").textContent = ""; fig = null; slotOf = null; hgFit = ""; shownLg = NEG; lastSfx = null; lastK = -1; slowT = 0; itemsKey = rosterKey = ""; draftKey = "?"; eclKey = ""; grdKey = ""; }
   else if (e.t === "draft" || e.t === "item" || e.t === "feat" || e.t === "star") {
     slowT = 0; itemsKey = "";
     if (e.t === "item" && e.auto) { const x = ITEMS.find((q) => q.id === e.id); note("Автовыбор", "Взят предмет «" + x.name + "», ранг " + RANK[e.rank], 2600); }   // вместо карточек — строка в плашке «Дальше»

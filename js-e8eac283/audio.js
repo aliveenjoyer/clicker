@@ -49,6 +49,19 @@ const semi = (base, n) => base * Math.pow(2, n / 12);
 // и аккорд сбора складываются в мелодию, а не в шум. Слои сбора рисунка идут разом, поэтому им разрешено больше голосов.
 const GRID = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const loud = (fn) => { const was = cap; cap = 16; try { fn(); } finally { cap = was; } };
+const big = (fn) => { const was = cap; cap = 30; try { fn(); } finally { cap = was; } };   // разлом и провал звучат поверх аккорда последнего рисунка
+function swell(freq, dur, type, vol, slide, delay) {         // звук, который нарастает и обрывается: подъём перед ударом
+  if (!on || voices >= cap) return;
+  const c = ac(); if (!c) return;
+  const t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
+  o.type = type || "sawtooth"; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || 0.05, t + dur * 0.92); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master);
+  voices++; o.onended = () => { voices--; };
+  o.start(t); o.stop(t + dur + 0.02);
+}
+const ROOTS = [0, 146.83, 130.81, 110];                      // основной тон уровня глубины
 // Глубина комбо (js/deep.js): у каждого уровня свой строй сетки и свой тихий гул под ним. Улица — мажорная пентатоника,
 // «Подземка» — минорная и на тон ниже, «Изнанка» — тревожный лад с малой секундой, «Пустота» — пустые квинты и кварты.
 const SCALES = [GRID, [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24], [0, 1, 5, 7, 8, 12, 13, 17, 19, 20, 24], [0, 2, 7, 9, 12, 14, 19, 21, 24, 26, 31]];
@@ -145,20 +158,38 @@ export const sfx = {
   down() { tone(520, 0.2, "triangle", 0.09, 0.55); },        // ранг комбо упал на ступень
   drop() { tone(330, 0.5, "sawtooth", 0.09, 0.22); tone(165, 0.6, "sine", 0.13, 0.3); noise(0.3, 0.1, 320, 0.5); },   // комбо оборвалось
   // ---- глубина комбо ----
-  gate() {                                                   // разлом открылся: тревожный подъём и три стука
-    loud(() => {
-      tone(98, 0.8, "sawtooth", 0.11, 3.4); tone(196, 0.8, "sine", 0.09, 2.5, 0.04); noise(0.7, 0.13, 800, 0.5);
-      [0, 6, 12].forEach((x, i) => tone(semi(587.3, x), 0.11, "square", 0.05, 1, 0.12 + i * 0.1));
+  // Постановка разлома (js/rite.js). lv — уровень, куда он ведёт: аккорды — в его строе.
+  riftOpen(lv) {                                             // разлом открылся: удар, треск плит, стеклянный аккорд места и тихий подъём к выходу отметок
+    const G = SCALES[lv] || GRID, root = ROOTS[lv] || ROOTS[1];
+    big(() => {
+      tone(64, 1.6, "sine", 0.5, 0.4); tone(128, 0.5, "triangle", 0.2, 0.45);
+      noise(0.55, 0.36, 420, 0.5); noise(0.3, 0.2, 1400, 0.7, 0.03);
+      [[0.09, 3800, 0], [0.07, 5200, 0.12], [0.06, 2900, 0.25], [0.08, 4400, 0.44], [0.05, 6100, 0.62], [0.05, 3300, 0.8]].forEach((x) => noise(x[0], 0.22, x[1], 1.5, x[2]));
+      [0, 4, 6].forEach((i, n) => tone(semi(root * 2, G[i]), 1.3, n ? "sine" : "triangle", 0.075, 1, 0.5 + n * 0.17));
+      swell(root / 2, 2.6, "sawtooth", 0.04, 1.5, 0.8); swell(root, 2.6, "sine", 0.05, 1.5, 0.8);
     });
   },
+  riftTick(n) {                                              // последние секунды передышки: стук сердца, всё выше
+    tone(78, 0.2, "sine", 0.3, 0.55); tone(semi(880, 3 - n), 0.05, "square", 0.035, 1, 0.01);
+  },
+  riftDots(n, lv) {                                          // отметки выходят на трещину: пробежка вверх по строю уровня
+    const G = SCALES[lv] || GRID, root = ROOTS[lv] || ROOTS[1];
+    big(() => { for (let i = 0; i < n; i++) tone(semi(root * 4, G[Math.min(G.length - 1, i)]), 0.16, i % 2 ? "sine" : "triangle", 0.085, 1, i * 0.06); noise(0.3, 0.07, 6200, 1.6, 0.02); });
+  },
+  riftGo(lv) {                                               // часы разлома пошли
+    const root = ROOTS[lv] || ROOTS[1];
+    big(() => { tone(root * 4, 0.5, "triangle", 0.13); tone(root * 6, 0.5, "sine", 0.08, 1, 0.02); tone(root * 2, 0.3, "sawtooth", 0.05, 1); noise(0.22, 0.14, 5200, 1.3); });
+  },
   gateFail() { tone(233, 0.5, "sawtooth", 0.1, 0.3); tone(98, 0.6, "sine", 0.15, 0.5); noise(0.3, 0.13, 420, 0.5); },   // разлом закрылся
-  dive(lv) {                                                 // провал на уровень глубже: удар, гул вниз и аккорд нового места
-    const G = SCALES[lv] || GRID, root = [0, 146.83, 130.81, 110][lv] || 146.83;
-    loud(() => {
-      tone(150, 1.2, "sine", 0.42, 0.16); tone(75, 1.4, "sawtooth", 0.12, 0.3);
-      noise(1.0, 0.3, 1300, 0.4); noise(0.5, 0.15, 5200, 1.2, 0.04);
-      [0, 2, 4, 6].forEach((i, n) => tone(semi(root * 2, G[i]), 1.2, n % 2 ? "triangle" : "sine", 0.1, 1, 0.45 + n * 0.12));
-      [7, 9].forEach((i, n) => tone(semi(root * 2, G[i]), 0.8, "sine", 0.07, 1, 1.0 + n * 0.14));
+  dive(lv) {                                                 // провал на уровень глубже: удар, свист падения, гул вниз и аккорд нового места — под титул уровня
+    const G = SCALES[lv] || GRID, root = ROOTS[lv] || ROOTS[1];
+    big(() => {
+      tone(150, 1.3, "sine", 0.44, 0.16); tone(75, 1.5, "sawtooth", 0.12, 0.3);
+      noise(1.0, 0.3, 1300, 0.4); noise(0.5, 0.16, 5200, 1.2, 0.04);
+      tone(1400, 0.6, "sine", 0.05, 0.12, 0.02);             // свист: падаем
+      [0, 2, 4, 6].forEach((i, n) => tone(semi(root * 2, G[i]), 1.5, n % 2 ? "triangle" : "sine", 0.1, 1, 0.5 + n * 0.11));
+      [7, 9, 10].forEach((i, n) => tone(semi(root * 2, G[i]), 0.9, "sine", 0.07, 1, 1.05 + n * 0.13));
+      tone(root / 2, 1.8, "sine", 0.2, 1, 0.5);              // низ под названием уровня
     });
   },
   rise() { tone(170, 0.7, "sine", 0.13, 2.8); noise(0.55, 0.11, 2400, 0.6); tone(415, 0.3, "triangle", 0.06, 0.7, 0.34); },   // всплыл на уровень выше

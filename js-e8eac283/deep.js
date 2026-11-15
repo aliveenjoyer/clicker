@@ -99,19 +99,22 @@ export function set(d, how) {
   build();
   void root.offsetWidth;
   root.classList.add(how === "dive" ? "dp-dive" : "dp-rise");
-  flash(how, how === "dive" ? d : was);
+  flash(how === "dive" ? "dp-fd" : "dp-fr", how === "dive" ? d : was, 1200);
   paint(d);
+  if (tag && d && how === "dive") { tag.classList.remove("dp-tagin"); void tag.offsetWidth; tag.classList.add("dp-tagin"); }   // плашка уровня в шапке въезжает
   moveT = setTimeout(() => root.classList.remove("dp-dive", "dp-rise"), 1300);
 }
 
 // Вспышка перехода внутри поля боя: обрезана его краем, на картинку стрима рядом не выступает.
-function flash(how, d) {
+function flash(cls, d, ms) {
   const f = $("field"); if (!f) return;
   let el = f.querySelector(".dp-flash");
   if (!el) { el = document.createElement("i"); el.className = "dp-flash"; el.setAttribute("aria-hidden", "true"); f.appendChild(el); }
-  el.className = "dp-flash"; el.dataset.lv = String(d); void el.offsetWidth; el.classList.add(how === "dive" ? "dp-fd" : "dp-fr");
-  clearTimeout(flashT); flashT = setTimeout(() => { el.className = "dp-flash"; }, 1200);
+  el.className = "dp-flash"; el.dataset.lv = String(d); void el.offsetWidth; el.classList.add(cls);
+  clearTimeout(flashT); flashT = setTimeout(() => { el.className = "dp-flash"; }, ms);
 }
+// Разлом открылся (js/rite.js): поле боя на миг вспыхивает цветом уровня, куда он ведёт.
+export function pulse(to) { if (!quiet() && to >= 1 && to < DEEP.length) flash("dp-fo", to, 900); }
 
 // Что игрок уже открыл (рекорд глубины): по нему в шкале и во вкладке «Путь» уровни показаны открытыми или под замком.
 export function setKnown(n) { known = Math.max(0, Math.min(DEEP.length - 1, n || 0)); root.dataset.deepKnown = String(known); }
