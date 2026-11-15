@@ -45,9 +45,11 @@
   --shard: #b07cff;
   --seal: #ff5a6e;
 
-  /* --- шрифты: круглые и жирные --- */
-  --display: "Unbounded", "Segoe UI", sans-serif;   /* числа и заголовки */
-  --ui: "Nunito", "Segoe UI", Roboto, sans-serif;     /* интерфейс */
+  /* --- шрифты. До 15.11 были Unbounded и Nunito — пользователь назвал их «колхозными» и из четырёх вариантов на снимках
+     игры выбрал Montserrat (числа и заголовки) + Inter (интерфейс); оба есть и в кириллице, и в латинице. Начертания,
+     которые грузит index.html: Montserrat 700–900 и курсив 800–900 (буквы рангов), Inter 500–900 --- */
+  --display: "Montserrat", "Segoe UI", sans-serif;   /* числа и заголовки */
+  --ui: "Inter", "Segoe UI", Roboto, sans-serif;       /* интерфейс */
 
   /* --- шкала чисел --- */
   --num-hero: clamp(40px, 4.4vw, 64px);

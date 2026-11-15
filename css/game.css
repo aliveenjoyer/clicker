@@ -21,7 +21,12 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .wavebar .sub { font-size: 12px; color: var(--text-dim); margin-top: 7px; white-space: nowrap; }
 .wavebar .sub b { color: var(--danger-soft); font-weight: 800; }
 .wavebar .sp { flex: 1; }
-.wavebar .rec { text-align: right; font-size: 12px; color: var(--text-dim); }
+/* Рекорд не сжимается и не переносится, а «трупер N / 10» держит одну ширину (цифры одной ширины, перед однозначным
+   числом — пробел шириной в цифру, js/ui.js drawWave). Иначе в тесной полосе (стрим рядом с боем, датчик с местом по росту)
+   «трупер 10 / 10» был шире «трупер 2 / 10», полосе не хватало пары пикселей, число рекорда «7 543» переносилось на две
+   строки, полоса вырастала на 12 пикселей — и раз в волну дёргался весь экран (15.11, его снимки). */
+.wavebar .rec { flex: none; text-align: right; font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.wavebar #waveSub { font-variant-numeric: tabular-nums; }
 .wavebar .rec b { display: block; font: 800 20px/1 var(--display); color: var(--brass-hi); }
 .seg span { cursor: pointer; }
 .wavebar.boss .w b { color: var(--danger-soft); }
@@ -1027,7 +1032,7 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 .side .list.hgrid.hg-flow { flex: none; overflow: visible; grid-template-rows: none; grid-auto-rows: auto; }
 .hgrid.hg-flow .hg { aspect-ratio: 1 / 1.08; }
 .hg-info { flex: none; display: flex; align-items: center; gap: 10px; height: 34px; margin: 0 10px 6px; padding: 0 5px 0 12px; border-radius: 10px; background: rgba(10,10,30,.35);
-  box-shadow: inset 0 0 0 1px var(--line); font: 700 12.5px/1 var(--ui); color: var(--text-dim); white-space: nowrap; overflow: hidden; }
+  box-shadow: inset 0 0 0 1px var(--line); font: 700 12px/1 var(--ui); color: var(--text-dim); white-space: nowrap; overflow: hidden; }   /* 12, а не 12,5: Inter шире прежнего Nunito, подсказка про свайп обрезалась */
 .hg-it { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 14px; overflow: hidden; }
 .hg-it > b { font: 800 14px/1 var(--ui); color: var(--text); }
 .hg-info span b { color: var(--text); font-weight: 800; }

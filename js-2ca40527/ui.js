@@ -590,7 +590,7 @@ function spawnFig(from) {
       if (gate) {                                            // разлом: время пошло (или идёт дальше, если он уже был открыт)
         if (!(S.fig.gate > 0)) {
           gateTotal = C.figGateOpen(S, fig.cells.length);
-          if (gateTotal > 0) { sfx.gate(); note("Разлом открыт", "Проведи по отметкам строго по номерам, пока идёт время, — и комбо провалится на глубину " + DP.roman(gate) + ", «" + DEEP[gate].name + "»: души пойдут ×" + (DEEP[gate].at + 1) + " и больше", 9000); }
+          if (gateTotal > 0) { sfx.gate(); note("Разлом открыт", "Веди по номерам, пока идёт время. Дальше — «" + DEEP[gate].name + "»", 9000); }
         }
         if (S.fig.gate > 0) { fig.gate = gate; $("hgWrap").dataset.gate = String(gate); gateSecShown = -1; }
       }
@@ -1467,7 +1467,7 @@ const plural = (n, a, b, c) => (n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2
 function drawWave() {
   const boss = C.isBoss(S.z);
   $("waveNum").textContent = group(S.z);
-  $("waveSub").textContent = boss ? "босс" : "трупер " + (S.kills + 1) + " / " + CFG.mobs;
+  $("waveSub").textContent = boss ? "босс" : "трупер " + (S.kills + 1 < 10 ? "\u2007" : "") + (S.kills + 1) + " / " + CFG.mobs;   // перед однозначным числом — пробел шириной в цифру: подпись не меняет ширину и не толкает соседей
   $("waveRec").textContent = group(S.best);
   document.querySelector(".wavebar").classList.toggle("boss", boss);
   const key = S.z + ":" + S.kills + ":" + S.mode;
