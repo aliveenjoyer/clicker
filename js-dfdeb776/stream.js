@@ -44,7 +44,11 @@ let playing = false;                                        // идёт ли п�
 // держит просмотр: такие просмотры идут в онлайн канала, а за накрутку онлайна Twitch с мая 2026 ограничивает его каналу.
 // Теперь плеер создаётся без автозапуска и сам ничего не возобновляет: встал (реклама кончилась, пауза, обрыв) — зритель
 // сам нажимает ▶ на картинке (она ничем не накрыта, кнопка — самого Twitch). Игра к play() не обращается вообще.
-//   — браузер остановил показ, потому что звук сняли без нажатия, — дальше без звука (hush), пока игрок не нажмёт сам.
+// Игра не трогает и звук с качеством (15.11, вечером того же дня): показ начинается с рекламы, и когда игра в этот момент
+// сама снимала «без звука», браузер рекламу останавливал — счётчик вставал на 0:15, а продолжить было нечем. Теперь у
+// плеера родные кнопки Twitch (controls: true): пауза, звук, качество, во весь экран — всем управляет зритель на самой
+// картинке. Свои значок звука, ползунок и кнопка качества в полосе спрятаны; код под ними (applySound, applyQ, меню)
+// оставлен, но не вызывается.
 let hush = false, unmutedAt = 0;
 // Качество стрима: S.set.twQ — что выбрал игрок: "auto" или группа Twitch ("chunked" — исходное, "720p60", "480p30"…),
 // S.set.twQh — высота этого качества: у другого канала ступени могут называться иначе, тогда берём ближайшую не выше.
@@ -190,17 +194,12 @@ async function start() {
   try { await loadScript(); } catch (e) { player = null; return; }
   if (player !== "loading" || ch !== cur || !cur || !S.set.stream) { if (player === "loading") player = null; return; }
   const T = window.Twitch.Player;
-  player = new T("twplayer", { channel: ch, width: "100%", height: "100%", parent: [location.hostname], muted: true, autoplay: false, controls: false });
+  player = new T("twplayer", { channel: ch, width: "100%", height: "100%", parent: [location.hostname], muted: false, autoplay: false, controls: true });
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
-  player.addEventListener(T.PAUSE, () => {
-    playing = false;
-    if (performance.now() - unmutedAt < 3000) hush = true;   // включили звук — и браузер тут же остановил показ: дальше без звука до нажатия
-    draw();
-  });
-  if (T.PLAYBACK_BLOCKED) player.addEventListener(T.PLAYBACK_BLOCKED, () => { hush = true; draw(); });
+  player.addEventListener(T.PLAYING, () => { playing = true; draw(); });   // к плееру не обращаемся: ни звук, ни качество, ни play()
+  player.addEventListener(T.PAUSE, () => { playing = false; draw(); });
   playing = false;
 }
 function stop() {
@@ -231,8 +230,9 @@ export function draw() {
   b.classList.toggle("off", !S.set.stream);
   b.title = !S.set.stream ? "Стрим фоном выключен" : cur === LOFI && !live ? "Фоном линии идёт LoFi-музыка. Нажми, чтобы убрать" : cur ? "Фоном линии идёт стрим " + nice(cur) + ". Нажми, чтобы убрать"
     : "Сейчас никто не в эфире. Нажми — фоном пойдёт LoFi-музыка";
-  // звук стрима: значок и ползунок в полосе под картинкой, пока стрим на фоне
+  // в полосе под картинкой — только выбор, чей стрим показывать; звуком и качеством управляют кнопки самого плеера
   $("twctl").hidden = !shown;
+  for (const id of ["btnStreamSound", "twVol", "btnStreamQ"]) if (!$(id).hidden) $(id).hidden = true;
   if (shown) {
     const on = sound(), sb = $("btnStreamSound"), sl = $("twVol");
     sb.innerHTML = on ? ICON_ON : ICON_OFF;
@@ -254,7 +254,6 @@ export function draw() {
     rb.title = (rec ? "Рекомендуемый канал: сейчас в эфире " + nice(rec) + (rec === LIST[0] ? " — свой стрим: души ×2, а в его чате — всё ×2 и сундуки эфира" : "") : "Из рекомендуемых каналов сейчас никто не в эфире") +
       (one && !isLofi ? ". Нажми — фоном пойдёт LoFi-музыка" : "");
     lb.title = "LoFi-музыка: канал lofigirl, играет круглые сутки" + (one && isLofi ? (rec ? ". Нажми — вернётся " + nice(rec) : ". Из рекомендуемых каналов сейчас никто не в эфире") : "");
-    if (playing) applyQ();                                   // список качеств приходит не сразу: ставим выбранное, как только оно появилось
     const qb = $("btnStreamQ"), ql = qLabel();
     if (qb.textContent !== ql) qb.textContent = ql;
   }
@@ -327,10 +326,6 @@ export function info() {                                     // для пров�
   if (on) { try { q = player.getQuality(); list = player.getQualities() || []; } catch (e) { /* плеер не готов */ } }
   return { channel: cur, shown, playing, want: S.set.twQ || "", sent: setQ, quality: q, qualities: list.map((x) => (typeof x === "string" ? x : x.group + "=" + x.name)) };
 }
-// Удар по линии показ не запускает (его включает только нажатие по самому плееру). Но удар — это
-// нажатие: если показ уже идёт без звука из-за запрета браузера, звук можно вернуть.
-export function nudge() {
-  if (!shown || !player || player === "loading" || !playing) return;
-  if (hush) { hush = false; applySound(); }
-}
+// Удар по линии плеер не трогает: показ, звук и качество — только кнопками самого плеера.
+export function nudge() {}
 export const guardInfo = () => ({ hush });                   // для проверки
