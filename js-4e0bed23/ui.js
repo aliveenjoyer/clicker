@@ -39,6 +39,7 @@ export function mount(state, hooks) {
   $("modeSeg").addEventListener("click", (e) => { const m = e.target.dataset.mode; if (m) { C.setMode(S, m); slowT = 0; } });
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
   $("btnFig").addEventListener("click", () => { S.set.fig = S.set.fig === false; api.settings(); slowT = 0; });   // кнопка «Комбо»: рисунки на сетке вкл/выкл
+  $("btnFigFree").addEventListener("click", () => { S.set.figFree = !S.set.figFree; api.settings(); slowT = 0; });   // «Без зажатия»: отметки рисунка берутся наведением
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
   // Покупка героев. Отряд стоит сеткой плиток, плитка и есть кнопка. Мышью — сразу по нажатию и свайпом: зажал левую
   // кнопку в сетке и ведёшь в любую сторону — покупается каждая плитка, на которую зашёл курсор (вернулся на ту же — ещё
@@ -47,7 +48,7 @@ export function mount(state, hooks) {
   {
     const list = $("mercList");
     const tap = (b) => { b.classList.remove("tapfx"); void b.offsetWidth; b.classList.add("tapfx"); };   // короткий щелчок плитки
-    const buyTile = (b, loud) => {
+    const buyTile = (b, loud, free) => {
       if (!b) return false;
       figTouch(Number(b.dataset.i));                         // плитка из рисунка засчитывается, даже если купить её нельзя
       if (b.classList.contains("hg-lock")) return false;
@@ -55,8 +56,17 @@ export function mount(state, hooks) {
       if (b.classList.contains("hg-no") || !C.buy(S, Number(b.dataset.i), buyMode)) { if (loud) sfx.deny(); return false; }
       slowT = 0; tap(b);
       sfx.tap(tapN++); gridBuys += 1;                        // звук покупки — сразу и свой: каждая следующая плитка свайпа выше
-      const how = loud ? "gridTap" : "gridSw"; S.stats[how] = (S.stats[how] || 0) + 1;   // сколько куплено нажатием и сколько свайпом (для наблюдения)
+      const how = loud ? "gridTap" : free ? "gridFree" : "gridSw"; S.stats[how] = (S.stats[how] || 0) + 1;   // сколько куплено нажатием, свайпом и наведением (для наблюдения)
       return true;
+    };
+    // «Без зажатия» (S.set.figFree, 15.11; его слова: «чтобы во время рисования комбо можно было не зажимать лкм… а то рука
+    // устала»). Мышь ведут над сеткой, не держа кнопку: зашла на отметку рисунка — отметка взята и герой куплен, как при
+    // свайпе. Плитки мимо рисунка наведением НЕ покупаются (иначе души уходили бы, стоит провести мышью через сетку к
+    // вкладкам), но промахом считаются так же, как при свайпе, — точность та же. Нажатие и свайп работают как раньше.
+    const freeTile = (b) => {
+      const i = Number(b.dataset.i);
+      if (fig && fig.cells.indexOf(i) >= 0 && !fig.hit.has(i)) buyTile(b, false, true);
+      else figTouch(i);
     };
     let sw = null, dotAt = null, swipeT = 0, trailN = 0;   // sw: { last: плитка под курсором, used: мышь уже нажала плитку }
     const trail = (x, y) => {                                // след свайпа: искры тают за курсором; только над сеткой героев
@@ -73,6 +83,7 @@ export function mount(state, hooks) {
     };
     const end = (e) => {                                     // щелчок после пальца приходит не сразу — ждём его дольше
       if (sw && sw.used) { swipeDone = true; clearTimeout(swipeT); swipeT = setTimeout(() => { swipeDone = false; }, e && e.pointerType && e.pointerType !== "mouse" ? 450 : 0); }
+      if (sw) hovLast = sw.last;                             // плитка под курсором уже отработана свайпом
       sw = null; dotAt = null; tapN = 0;
     };
     list.addEventListener("click", (e) => {
@@ -88,7 +99,16 @@ export function mount(state, hooks) {
       if (b) buyTile(b, true);                               // покупка сразу, по нажатию
     });
     window.addEventListener("pointermove", (e) => {
-      if (!sw || (!e.isTrusted && !LOCAL)) return;
+      if (!e.isTrusted && !LOCAL) return;
+      if (!sw) {                                             // кнопка не зажата: с настройкой «Без зажатия» рисунок собирается и так
+        if (!figFree() || e.pointerType === "touch" || (e.buttons & 1)) return;
+        const hb = e.target && e.target.closest ? e.target.closest("#mercList .hg") : null;
+        if (hb) trail(e.clientX, e.clientY);
+        if (hb === hovLast) return;
+        hovLast = hb;
+        if (hb) freeTile(hb);
+        return;
+      }
       if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
       trail(e.clientX, e.clientY);
       const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .hg") : null;
@@ -104,7 +124,7 @@ export function mount(state, hooks) {
     for (const t of ["touchstart", "touchmove"]) list.addEventListener(t, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
     // строка над сеткой рассказывает про героя под курсором (или про того, кого только что купили)
     list.addEventListener("pointerover", (e) => { const b = e.target.closest(".hg"); if (b) { hgShow = Number(b.dataset.i); drawInfo(); } });
-    list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); } });
+    list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); hovLast = null; tapN = 0; dotAt = null; } });
     if (window.ResizeObserver) new ResizeObserver(() => fitGrid()).observe(list);
     window.addEventListener("resize", fitGrid);
   }
@@ -425,6 +445,9 @@ function rankSound(r) {                                     // новый ран
 }
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";
 let touchSpot = -1, touchPrev = -1;                         // место плитки, на которой сейчас мышь (палец), и прошлое — куда она движется
+let hovLast = null;                                          // «без зажатия»: плитка, над которой мышь уже отработала
+const FINE = window.matchMedia ? matchMedia("(hover: hover) and (pointer: fine)") : { matches: true };   // есть мышь: наведение бывает только с ней
+const figFree = () => figOn && S.set.fig !== false && !!S.set.figFree && FINE.matches;   // рисунки собираются наведением, кнопку держать не надо
 const figWanted = () => figOn && S.set.fig !== false;       // рисунки можно выключить: кнопка «Комбо» над сеткой и настройки   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
 // Под рисунок подставляются лучшие герои. Сам рисунок и его место от героев не зависят: когда все герои уже открыты,
 // на отмеченные места встают те, чья покупка сейчас прибавит больше всего урона (в выбранном режиме покупки; веха —
@@ -482,6 +505,7 @@ function figAllow(at) {
 function spawnFig(from) {
   const was = fig ? fig.name : "";
   clearFig();
+  hovLast = null;                                            // «без зажатия»: новый рисунок может лечь прямо под стоящую мышь — первое же движение его заметит
   if (figWanted() && rows.length === TILES && hgC) {
     const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k);
     const fits = VARS.filter((v) => v.w <= hgC && v.h <= R && v.t <= top && v.name !== was);
@@ -756,6 +780,13 @@ function drawFigBtn() {                                     // кнопка «К
   const on = S.set.fig !== false;
   b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
   b.title = on ? "Рисунки на сетке включены: собирай их — растёт комбо и души. Нажми, чтобы просто покупать героев" : "Рисунки выключены: сетка — просто покупка героев. Нажми, чтобы снова собирать рисунки и комбо";
+  const f = $("btnFigFree"), free = !!S.set.figFree;         // «Без зажатия» — только при включённых рисунках и только с мышью
+  f.hidden = !on || !FINE.matches;
+  b.classList.toggle("hg-pair", !f.hidden);
+  f.classList.toggle("on", free); f.setAttribute("aria-pressed", free ? "true" : "false");
+  f.title = free ? "Рисунки собираются без зажатой кнопки: веди мышью по отметкам — они берутся сами, герой под отметкой покупается. Нажми, чтобы снова рисовать с зажатой кнопкой"
+    : "Рука устала держать кнопку? Нажми — и отметки рисунка будут браться, когда наводишь на них мышь";
+  if (hgShow < 0) drawInfo();
 }
 function figApply() {                                       // настройку «Рисунки и комбо» переключили
   if (S.set.fig === false) { if (fig || S.fig.k) { S.fig.k = 0; S.fig.idle = 0; S.fig.peak = 0; } if (fig || slotOf) spawnFig(); else drawFigBtn(); }
@@ -836,7 +867,7 @@ function drawRows() {
 function drawInfo() {
   const i = hgShow, shown = C.heroesShown(S);
   let h;
-  if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(pointer: coarse)").matches ? "Веди пальцем по героям — купится каждый по пути" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
+  if (i < 0 || i >= TILES) h = '<span class="tip">' + (matchMedia("(pointer: coarse)").matches ? "Веди пальцем по героям — купится каждый по пути" : figFree() ? "Веди мышью по отметкам рисунка — кнопку держать не надо" : "Зажми мышь и веди по героям — купится каждый по пути") + "</span>";
   else {
     const whip = i === 0, name = whip ? "Хлыст Лэша" : HEROES[i - 1].name, lv = S.lv[i], nm = C.nextMs(lv);
     const skin = C.hasRpgSkin(S, whip ? "lesh" : HEROES[i - 1].id) ? '<span>скин из RPG: урон <b>×' + String(C.rpgSkinMul(whip ? "lesh" : HEROES[i - 1].id)).replace(".", ",") + "</b></span>" : "";
@@ -1487,7 +1518,7 @@ let wipeT = 0;
 
 function openSettings() {
   const sw = (k, label) => '<div class="row"><span>' + label + '</span><button class="sw' + (S.set[k] ? " on" : "") + '" data-k="' + k + '" aria-label="' + label + '"></button></div>';
-  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("hit", "Звук ударов по труперу") + sw("fig", "Рисунки и комбо на сетке героев") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
+  openModal("<h2>Настройки</h2>" + sw("sound", "Звук игры") + sw("hit", "Звук ударов по труперу") + sw("fig", "Рисунки и комбо на сетке героев") + sw("figFree", "Рисунки без зажатой кнопки: навёл мышь на отметку — взята") + sw("stream", "Стрим Twitch фоном линии, когда он идёт") + sw("calm", "Спокойный режим: без тряски и вспышек") +
     sw("sci", "Научная запись чисел") + sw("autoBoss", "Сам идти на босса, когда наёмники справятся") +
     '<div class="row"><span>Как играть: три шага</span><button class="btn ghost sm" data-intro>Показать</button></div>' +
     '<div class="row"><span>Настройки как в начале. Прогресс не трогает</span><button class="btn ghost sm" data-defaults>Сбросить настройки</button></div>' +
@@ -1522,7 +1553,7 @@ function openWipe() {                                       // стирание 
   for (const n of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(n, stop);
   b.addEventListener("contextmenu", (e) => e.preventDefault());
 }
-export function applySettings() { if (S.set.hit === undefined) S.set.hit = true; if (S.set.fig === undefined) S.set.fig = true; if (rows.length) figApply(); setSound(S.set.sound); setHitSound(S.set.hit); setSci(S.set.sci); FX.setCalm(S.set.calm); }
+export function applySettings() { if (S.set.hit === undefined) S.set.hit = true; if (S.set.fig === undefined) S.set.fig = true; if (S.set.figFree === undefined) S.set.figFree = false; if (rows.length) figApply(); setSound(S.set.sound); setHitSound(S.set.hit); setSci(S.set.sci); FX.setCalm(S.set.calm); }
 
 // ---------- вкладка «Скины»: сундуки, задания дня, скины труперов, скины героев из RPG ----------
 // Правила — core.js, раздел «удержание». Вкладка строится заново, только когда поменялось что-то по существу

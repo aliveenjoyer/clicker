@@ -1066,6 +1066,11 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 .side .head .hg-figbtn.on { color: #fff; background: rgba(255,63,208,.22); box-shadow: inset 0 0 0 1px rgba(255,63,208,.7); }
 .side .head .hg-figbtn.on::before { background: #ff3fd0; box-shadow: 0 0 6px #ff3fd0; }
 .side .head .hg-figbtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.side .head .hg-figbtn.hg-pair { margin-right: 0; }          /* рядом стоит «Без зажатия»: пустое место — после неё */
+.side .head .hg-figbtn.hg-freebtn { margin-left: 6px; }
+.side .head .hg-figbtn.hg-freebtn.on { background: rgba(120,214,255,.2); box-shadow: inset 0 0 0 1px rgba(120,214,255,.75); }
+.side .head .hg-figbtn.hg-freebtn.on::before { background: #78d6ff; box-shadow: 0 0 6px #78d6ff; }
+.side .head .hg-figbtn[hidden] { display: none; }
 @keyframes hg-dot { from { transform: translate(-50%, -50%) scale(.86); } to { transform: translate(-50%, -50%) scale(1.12); } }
 /* Жёлтого на сетке много (цены, подсветка вех), поэтому рисунок — розовый, а плитки под ним темнее: кружки и линия
    читаются сразу. Плитки рисунка затемнены сильнее остальных — на них горит только рамка и кружок; собранная — зелёная. */

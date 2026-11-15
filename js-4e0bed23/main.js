@@ -73,7 +73,7 @@ const hooks = {
     store();
     UI.cloudNote(was, S, first, meta);
   },
-  defaults() { Object.assign(S.set, { sound: true, hit: true, fig: true, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
+  defaults() { Object.assign(S.set, { sound: true, hit: true, fig: true, figFree: false, calm: false, sci: false, autoBoss: true, stream: true, twQ: "auto", twQh: 0 }); UI.applySettings(); TW.sync(); store(); },
 };
 
 function drain() {

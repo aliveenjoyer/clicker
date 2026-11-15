@@ -36,14 +36,13 @@ function applySound() {                                      // передать
   try { player.setVolume(vol() / 100); if (on && player.getMuted()) unmutedAt = performance.now(); player.setMuted(!on); } catch (e) { /* плеер ещё не готов */ }
 }
 let playing = false, askT = 0;                              // идёт ли показ; когда предложить кнопку «Включить стрим»
-// Сторож плеера. Twitch перед показом крутит рекламу, и после неё плеер часто встаёт на паузу или так и не стартует, а своих
-// кнопок у него нет (controls: false) — раньше спасала только кнопка «Включить стрим». Теперь сам плеер подталкивается:
-//   — встал на паузу, а игрок его не останавливал (плеер не выведен вперёд) — через 0,6 с и дальше раз в 2 с play();
-//   — браузер не пускает показ со звуком без нажатия — показ идёт без звука (hush), звук вернётся с первым ударом по линии;
-//   — картинка не пошла за 90 секунд (ни показа, ни движения времени; реклама столько обычно не длится) — плеер создаётся
-//     заново, не чаще двух раз за 15 минут.
-const STUCK_MS = Number(Q.get("stuckms")) || 90000, REBORN_MAX = 2, REBORN_WIN = 15 * 60000;   // ?stuckms= — только на своём компьютере, для проверки
-let hush = false, unmutedAt = 0, watchT = 0, movedAt = 0, lastPos = -1, reborn = [];
+// Показ запускает только сам зритель (15.11). До этого здесь стоял «сторож»: он каждые 2 секунды звал play(), включал
+// показ без звука и пересоздавал плеер, если картинка не шла. Для игрока удобно, а для Twitch это вкладка, которая сама
+// держит просмотр: такие просмотры идут в онлайн канала, а за накрутку онлайна Twitch с мая 2026 ограничивает его каналу.
+// Теперь плеер создаётся без автозапуска и сам ничего не возобновляет: встал (реклама кончилась, пауза, обрыв) — на
+// картинке появляется кнопка «Включить стрим», её жмёт человек. Игра к play() не обращается вообще.
+//   — браузер остановил показ, потому что звук сняли без нажатия, — дальше без звука (hush), пока игрок не нажмёт сам.
+let hush = false, unmutedAt = 0;
 // Качество стрима: S.set.twQ — что выбрал игрок: "auto" или группа Twitch ("chunked" — исходное, "720p60", "480p30"…),
 // S.set.twQh — высота этого качества: у другого канала ступени могут называться иначе, тогда берём ближайшую не выше.
 let quals = [], setQ = "", menuOpen = false;                // что предлагает плеер; что ему уже поставлено
@@ -189,38 +188,18 @@ async function start() {
   if (player !== "loading" || ch !== cur || !cur || !S.set.stream) { if (player === "loading") player = null; return; }
   fit();
   const T = window.Twitch.Player;
-  player = new T("twplayer", { channel: ch, width: "100%", height: "100%", parent: [location.hostname], muted: true, autoplay: true, controls: false });
+  player = new T("twplayer", { channel: ch, width: "100%", height: "100%", parent: [location.hostname], muted: true, autoplay: false, controls: false });
   const gone = () => { if (ch !== cur) return; dead[ch] = Date.now() + DEAD_MS; check(); };   // эфир кончился — ищем следующего
   player.addEventListener(T.OFFLINE, gone);
   player.addEventListener(T.ENDED, gone);
-  player.addEventListener(T.PLAYING, () => { playing = true; movedAt = performance.now(); front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
+  player.addEventListener(T.PLAYING, () => { playing = true; front(false); applySound(); applyQ(); if (menuOpen) drawMenu(); draw(); });
   player.addEventListener(T.PAUSE, () => {
-    playing = false; askT = performance.now() + 4000;
+    playing = false; askT = performance.now() + 1500;        // кнопка «Включить стрим» — чуть погодя, чтобы не мигала на смене качества
     if (performance.now() - unmutedAt < 3000) hush = true;   // включили звук — и браузер тут же остановил показ: дальше без звука до нажатия
-    setTimeout(resume, 600); draw();
+    setTimeout(draw, 1600); draw();
   });
-  if (T.PLAYBACK_BLOCKED) player.addEventListener(T.PLAYBACK_BLOCKED, () => { hush = true; setTimeout(resume, 300); });
-  playing = false; askT = performance.now() + 5000; movedAt = performance.now(); lastPos = -1;
-  if (!watchT) watchT = setInterval(guard, 2000);
-}
-function resume() {                                          // плеер на паузе, а игрок его не ставил — запустить
-  if (!shown || !player || player === "loading" || isFront()) return;
-  try { if (player.isPaused()) { if (hush) player.setMuted(true); player.play(); } } catch (e) { /* плеер ещё грузится */ }
-}
-function guard() {
-  if (!shown || !player || player === "loading" || isFront()) return;
-  const now = performance.now();
-  if (document.hidden) { movedAt = now; return; }            // вкладка свёрнута: ничего не трогаем и не копим «застой»
-  let paused = true, pos = -1;
-  try { paused = player.isPaused(); pos = player.getCurrentTime(); } catch (e) { return; }
-  if ((playing && !paused) || pos !== lastPos) movedAt = now;
-  lastPos = pos;
-  if (paused) resume();
-  if (now - movedAt > STUCK_MS) {                            // так и не пошёл: создать плеер заново
-    movedAt = now;
-    reborn = reborn.filter((t) => now - t < REBORN_WIN);
-    if (reborn.length < REBORN_MAX) { reborn.push(now); stop(); start(); }
-  }
+  if (T.PLAYBACK_BLOCKED) player.addEventListener(T.PLAYBACK_BLOCKED, () => { hush = true; draw(); });
+  playing = false; askT = performance.now() + 800; setTimeout(draw, 900);   // плеер без автозапуска: кнопка — почти сразу
 }
 function stop() {
   if (player && player !== "loading") { try { player.pause(); } catch (e) { /* плеер уже снят */ } }
@@ -249,7 +228,7 @@ export function draw() {
   b.classList.toggle("off", !S.set.stream);
   b.title = !S.set.stream ? "Стрим фоном выключен" : cur === LOFI && !live ? "Фоном линии идёт LoFi-музыка. Нажми, чтобы убрать" : cur ? "Фоном линии идёт стрим " + nice(cur) + ". Нажми, чтобы убрать"
     : "Сейчас никто не в эфире. Нажми — фоном пойдёт LoFi-музыка";
-  // Twitch не запускает показ сам, пока плеер чем-то закрыт: тогда нужен один клик по его кнопке ▶
+  // показ не идёт — кнопка «Включить стрим»: она выводит плеер вперёд, и зритель сам жмёт его ▶
   $("twplay").hidden = !(shown && !playing && player && player !== "loading" && performance.now() > askT) || $("field").classList.contains("twfront");
   // звук стрима: значок и ползунок в полосе под картинкой, пока стрим на фоне
   $("twctl").hidden = !shown;
@@ -360,10 +339,10 @@ export function info() {                                     // для пров�
   if (on) { try { q = player.getQuality(); list = player.getQualities() || []; } catch (e) { /* плеер не готов */ } }
   return { channel: cur, shown, playing, want: S.set.twQ || "", sent: setQ, quality: q, qualities: list.map((x) => (typeof x === "string" ? x : x.group + "=" + x.name)) };
 }
-// Браузер не даёт плееру стартовать без действия человека: первый же удар по линии запускает показ.
+// Удар по линии показ не запускает (его включает только кнопка «Включить стрим» и нажатие по самому плееру). Но удар — это
+// нажатие: если показ уже идёт без звука из-за запрета браузера, звук можно вернуть.
 export function nudge() {
-  if (!shown || !player || player === "loading") return;
-  if (hush) { hush = false; applySound(); }                  // удар — это нажатие: теперь браузер пустит и звук
-  try { if (player.isPaused()) player.play(); } catch (e) { /* плеер ещё грузится */ }
+  if (!shown || !player || player === "loading" || !playing) return;
+  if (hush) { hush = false; applySound(); }
 }
-export const guardInfo = () => ({ hush, reborn: reborn.length, stuck: Math.round(performance.now() - movedAt) });   // для проверки
+export const guardInfo = () => ({ hush });                   // для проверки
