@@ -196,4 +196,19 @@ export const sfx = {
   spark() { [0, 7, 12].forEach((x, i) => tone(semi(1568, x), 0.15, "sine", 0.09, 1, i * 0.035)); noise(0.05, 0.08, 7200, 2); },   // поймана искра
   find() { const G = grid(); [0, 2, 4, 6, 8, 10].forEach((i, n) => tone(deepF(semi(659.3, G[i])), 0.28, n % 2 ? "sine" : "triangle", 0.11, 1, n * 0.07)); noise(0.3, 0.07, 6000, 1.6, 0.3); },   // находка глубины
   hurry(last) { tone(last ? 1568 : 1175, 0.045, "square", 0.045); if (last) tone(1568, 0.045, "square", 0.045, 1, 0.09); },   // время на рисунок кончается
+  // ---- особые рисунки глубины (js/ui.js): поезд, фонари, орбита — в строе уровня ----
+  trainGo() { tone(deepF(587.3), 0.2, "square", 0.05); tone(deepF(784), 0.3, "square", 0.05, 1, 0.15); noise(0.25, 0.08, 900, 0.6); },   // поезд тронулся: гудок в два тона
+  clack(i) {                                                 // отметка поезда: стук колёс, тон по ходу вверх
+    const G = grid(), f = deepF(semi(392, G[Math.min(G.length - 1, i)]));
+    tone(f, 0.12, "triangle", 0.11); noise(0.03, 0.12, 2200, 1.4); noise(0.03, 0.09, 1500, 1.2, 0.07);
+  },
+  lamp(i) {                                                  // фонарь взят: звон, каждый следующий выше
+    const G = grid(), f = deepF(semi(659.3, G[Math.min(G.length - 1, i)]));
+    tone(f, 0.3, "sine", 0.13); tone(f * 2, 0.22, "sine", 0.06, 1, 0.01); tone(f * 3, 0.1, "sine", 0.03);
+  },
+  lampOut() { tone(196, 0.18, "sine", 0.08, 0.6); },          // фонарь погас
+  orbit(p, need) {                                           // шаг по орбите: тон растёт с кругами
+    const f = deepF(330 * Math.pow(2, Math.min(1, p / Math.max(1, need)) * 1.5));
+    tone(f, 0.1, "sine", 0.1, 1.06); tone(f * 1.5, 0.07, "sine", 0.04);
+  },
 };

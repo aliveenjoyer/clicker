@@ -68,7 +68,7 @@ export function mount(state, hooks) {
     // вкладкам), но промахом считаются так же, как при свайпе, — точность та же. Нажатие и свайп работают как раньше.
     const freeTile = (b) => {
       const i = Number(b.dataset.i);
-      const at = fig && !fig.veil ? fig.cells.indexOf(i) : -1;   // отметок разлома, который ещё раскрывается, на сетке нет
+      const at = fig && !fig.veil && !(fig.kind === "train" && !fig.sp.go && i !== fig.cells[0]) ? fig.cells.indexOf(i) : -1;   // отметок разлома, который ещё раскрывается, на сетке нет; поезд, пока стоит, — только первая
       if (at >= 0 && !fig.hit.has(i) && !(fig.gate && S.fig.hold > 0 && at !== fig.hit.size)) buyTile(b, false, true);
       else figTouch(i);
     };
@@ -88,7 +88,7 @@ export function mount(state, hooks) {
     const end = (e) => {                                     // щелчок после пальца приходит не сразу — ждём его дольше
       if (sw && sw.used) { swipeDone = true; clearTimeout(swipeT); swipeT = setTimeout(() => { swipeDone = false; }, e && e.pointerType && e.pointerType !== "mouse" ? 450 : 0); }
       if (sw) hovLast = sw.last;                             // плитка под курсором уже отработана свайпом
-      sw = null; dotAt = null; tapN = 0;
+      sw = null; dotAt = null; tapN = 0; drawing = false;
     };
     list.addEventListener("click", (e) => {
       if (!e.isTrusted && !LOCAL) return;                    // нажатия из консоли героев не покупают
@@ -100,6 +100,7 @@ export function mount(state, hooks) {
       const b = e.target.closest(".hg");
       tapN = 0;
       sw = { last: b, used: !!b };
+      drawing = true; overHero = b ? Number(b.dataset.i) : -1;
       if (b) buyTile(b, true);                               // покупка сразу, по нажатию
     });
     window.addEventListener("pointermove", (e) => {
@@ -107,6 +108,7 @@ export function mount(state, hooks) {
       if (!sw) {                                             // кнопка не зажата: с настройкой «Без зажатия» рисунок собирается и так
         if (!figFree() || e.pointerType === "touch" || (e.buttons & 1)) return;
         const hb = e.target && e.target.closest ? e.target.closest("#mercList .hg") : null;
+        overHero = hb ? Number(hb.dataset.i) : -1;
         if (hb) trail(e.clientX, e.clientY);
         if (hb === hovLast) return;
         hovLast = hb;
@@ -116,6 +118,7 @@ export function mount(state, hooks) {
       if (!(e.buttons & 1)) { end(); return; }              // кнопку мыши отпустили за окном
       trail(e.clientX, e.clientY);
       const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest ? el.closest("#mercList .hg") : null;
+      overHero = b ? Number(b.dataset.i) : -1;
       if (b === sw.last) return;
       sw.used = true; sw.last = b;
       buyTile(b, false);
@@ -128,7 +131,7 @@ export function mount(state, hooks) {
     for (const t of ["touchstart", "touchmove"]) list.addEventListener(t, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
     // строка над сеткой рассказывает про героя под курсором (или про того, кого только что купили)
     list.addEventListener("pointerover", (e) => { const b = e.target.closest(".hg"); if (b) { hgShow = Number(b.dataset.i); drawInfo(); } });
-    list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); hovLast = null; tapN = 0; dotAt = null; } });
+    list.addEventListener("pointerleave", () => { if (!sw) { hgShow = -1; drawInfo(); hovLast = null; tapN = 0; dotAt = null; overHero = -1; } });
     if (window.ResizeObserver) new ResizeObserver(() => fitGrid()).observe(list);
     window.addEventListener("resize", fitGrid);
   }
@@ -489,6 +492,7 @@ function rankSound(r) {                                     // новый ран
 let fig = null, hgC = 0, hgR = 0, figOn = true, figChipKey = "?";
 let touchSpot = -1, touchPrev = -1;                         // место плитки, на которой сейчас мышь (палец), и прошлое — куда она движется
 let hovLast = null;                                          // «без зажатия»: плитка, над которой мышь уже отработала
+let overHero = -1, drawing = false;                          // герой под мышью (пальцем) на сетке, −1 — мимо сетки; кнопка (палец) сейчас зажата на сетке
 const FINE = window.matchMedia ? matchMedia("(hover: hover) and (pointer: fine)") : { matches: true };   // есть мышь: наведение бывает только с ней
 const figFree = () => figOn && S.set.fig !== false && !!S.set.figFree && FINE.matches;   // рисунки собираются наведением, кнопку держать не надо
 const figWanted = () => figOn && S.set.fig !== false;       // рисунки можно выключить: кнопка «Комбо» над сеткой и настройки   // рисунок сейчас: { name, cells — номера плиток, segs — штрихи линии, hit — уже отмеченные }
@@ -527,6 +531,7 @@ function clearFig() {
   if (fig) for (const i of fig.cells) { const r = rows[i]; if (r) r.root.classList.remove("hg-m", "hg-hit"); }
   if (fig && fig.dots) for (const d of fig.dots.values()) d.remove();
   if (fig && fig.sparkEl) fig.sparkEl.remove();              // искра и разлом уходят вместе с рисунком
+  if (fig && fig.extra) for (const e of fig.extra) e.remove();   // огни, фонарь, солнце особого рисунка
   if (fig && fig.spark >= 0 && rows[fig.spark]) rows[fig.spark].root.classList.remove("dp-sp");
   const gw = $("hgWrap"); if (gw && gw.dataset.gate) delete gw.dataset.gate;
   fig = null;
@@ -555,6 +560,7 @@ function spawnFig(from) {
   let opened = false;                                        // этот рисунок — разлом, и он открылся только что
   clearFig();
   hovLast = null;                                            // «без зажатия»: новый рисунок может лечь прямо под стоящую мышь — первое же движение его заметит
+  if (rite && rite.kind === "land" && !rite.fig) { drawFigLines(); drawFigChip(); drawFigBtn(); return; }   // идёт титул уровня (сетку могли растянуть): рисунок выйдет в свой черёд
   if (figWanted() && rows.length === TILES && hgC) {
     const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k), deep = S.fig.d;
     // Жар у потолка уровня — вместо рисунка выходит «Разлом» на уровень глубже (если разлом уже открыт, а рисунок пришлось
@@ -564,6 +570,9 @@ function spawnFig(from) {
     let fits = gate ? room.filter((v) => v.gate === gate) : [];
     if (fits.some((v) => !v.alt)) fits = fits.filter((v) => !v.alt);   // запасной рисунок разлома — только если основной не ложится на сетку
     if (!fits.length) { gate = 0; fits = room.filter((v) => !v.gate && v.t <= top && v.name !== was && (!v.deep || v.deep === deep)); }
+    const kind = gate ? "" : specPick(deep);                 // особый рисунок уровня глубины: поезд, фонари, орбита
+    if (kind) { specMake(kind, from, R); if (fig) specTell(); }   // не лёг на сетку — выйдет обычный
+    if (!gate) specCool = fig ? 0 : specCool + 1;
     // сложные из разрешённых — чаще; «находки» своего уровня глубины — примерно каждый седьмой рисунок
     const plainW = (v) => (v.t === top ? 4 : v.t === top - 1 ? 2 : 1);
     let findW = 0;
@@ -576,7 +585,7 @@ function spawnFig(from) {
     };
     const pickW = (list) => { let sum = 0; for (const c of list) sum += c.w; let r = Math.random() * sum; for (const c of list) { r -= c.w; if (r <= 0) return c; } return list[list.length - 1]; };
     let pick = null;
-    if (from && from.spot >= 0 && fits.length) {
+    if (!fig && from && from.spot >= 0 && fits.length) {
       const fx = from.spot % hgC, fy = Math.floor(from.spot / hgC), cands = [];
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
@@ -590,7 +599,7 @@ function spawnFig(from) {
       }
       if (cands.length) pick = pickW(cands);
     }
-    if (!pick) {
+    if (!fig && !pick) {
       const bag = fits.map((v) => ({ v, w: weight(v) }));
       for (let t = 0; t < 160 && bag.length; t++) {
         const v = pickW(bag).v, at = place(v, Math.floor(Math.random() * (hgC - v.w + 1)), Math.floor(Math.random() * (R - v.h + 1)));
@@ -664,6 +673,7 @@ function drawFigLines() {                                   // слой рису
     const ux = (b[0] - a[0]) / d, uy = (b[1] - a[1]) / d;
     segs.push([a[0] + ux * rad, a[1] + uy * rad, b[0] - ux * rad, b[1] - uy * rad].map((v) => v.toFixed(1)).concat(Math.max(fig.cells.indexOf(st[k - 1]), fig.cells.indexOf(st[k]))));
   }
+  if (fig.kind) { svg.innerHTML = fig.kind === "train" ? ["sk-under", "sk-tie", "sk-rail", "sk-bed"].map((c) => '<polyline class="' + c + '" points="' + fig.cells.map((i) => pt(i).map((v) => v.toFixed(1)).join(",")).join(" ") + '"/>').join("") : ""; fig.sp.pts = fig.cells.map(pt); darkSync(); specDraw(); return; }
   svg.innerHTML = (fig.gate ? ["hg-lo", "hg-lg", "hg-ll", "dp-lc"] : ["hg-lo", "hg-lg", "hg-ll"]).map((c) => segs.map((q) => '<line class="' + c + '" data-n="' + q[4] + '" x1="' + q[0] + '" y1="' + q[1] + '" x2="' + q[2] + '" y2="' + q[3] + '"/>').join("")).join("");
   darkSync();
   if (fig.gate && rite) RT.shape(figPts(fig), tileSize());   // сетка сменила размер — трещина идёт за отметками
@@ -844,6 +854,7 @@ function figTouch(i) {                                      // по плитке
   const spot = spotOf(i);                                    // где на сетке эта плитка (герои могут быть пересажены)
   if (spot !== touchSpot) { touchPrev = touchSpot; touchSpot = spot; }
   if (!fig || fig.veil) return;                              // veil — разлом ещё раскрывается: его отметок на сетке пока нет
+  if (fig.kind) { specTouch(i); return; }                    // поезд, фонари, орбита берутся по-своему
   const at = fig.cells.indexOf(i);
   if (at < 0) {
     if (i === fig.spark && !fig.sparkHit) { sparkTake(); return; }   // искра рядом с рисунком — не промах, а подарок
@@ -873,23 +884,251 @@ function figTouch(i) {                                      // по плитке
   if (fig.dark) darkSync();                                  // «тьма»: проступает следующая отметка
   if (fig.hit.size === fig.cells.length) {
     if (fig.gate) { gateWon(); return; }
-    const done = fig, n = done.cells.length, acc = 1 / (1 + Math.max(0, done.miss - done.allow) / n), peak0 = rankPeak;
-    done.clean = done.clean && acc >= 0.5;                   // «по номерам» засчитывается, только если рисунок не собран мимо всего
-    const fresh = !!done.find && !S.finds[done.find];        // находка глубины — впервые
-    const g = C.figDone(S, n, done.name, acc, done.clean, done.find);
-    const d = rankSync(), up = rankIdx > peak0 && rankIdx >= 1;   // буква вылетает за новый высший ранг этого комбо, начиная с C
-    rankPeak = Math.max(rankPeak, rankIdx);
-    figBoom(done, { g, acc, clean: done.clean, up, back: d > 0 && !up, run: S.fig.run, find: done.find, fresh });
-    spawnFig({ spot: touchSpot, dir: handDir() });
-    if (up && !rite) rankUp(rankIdx);                        // после нового рисунка: надпись встаёт так, чтобы его не закрыть; открылся разлом — говорит он
-    figChipKey = "?"; drawFigChip(); slowT = 0;
+    const n = fig.cells.length, acc = 1 / (1 + Math.max(0, fig.miss - fig.allow) / n);
+    figFinish(fig, n, acc, fig.clean && acc >= 0.5, fig.find);   // «по номерам» засчитывается, только если рисунок не собран мимо всего
   }
   else drawFigChip();
+}
+function figFinish(done, n, acc, clean, find) {              // рисунок собран: жар, вылеты, следующий рисунок. n — за сколько плиток он считается
+  const peak0 = rankPeak;
+  done.clean = clean;
+  const fresh = !!find && !S.finds[find];                    // находка глубины — впервые
+  const g = C.figDone(S, n, done.name, acc, clean, find);
+  const d = rankSync(), up = rankIdx > peak0 && rankIdx >= 1;   // буква вылетает за новый высший ранг этого комбо, начиная с C
+  rankPeak = Math.max(rankPeak, rankIdx);
+  figBoom(done, { g, acc, clean, up, back: d > 0 && !up, run: S.fig.run, find, fresh });
+  spawnFig({ spot: touchSpot, dir: handDir() });
+  if (up && !rite) rankUp(rankIdx);                          // после нового рисунка: надпись встаёт так, чтобы его не закрыть; открылся разлом — говорит он
+  figChipKey = "?"; drawFigChip(); slowT = 0;
 }
 function handDir() {                                         // куда шла рука: следующий рисунок — по ходу
   if (!(touchPrev >= 0) || !hgC) return null;
   const dx = Math.sign(touchSpot % hgC - touchPrev % hgC), dy = Math.sign(Math.floor(touchSpot / hgC) - Math.floor(touchPrev / hgC));
   return dx || dy ? [dx, dy] : null;
+}
+// ---------- особые рисунки глубины (15.11) ----------
+// Его слова: «комбо однообразные все… нужно разнообразить, сделать что-то уникальное, а не то, что у нас есть сейчас,
+// типа большие Z, большие N… Я же тебя просил что-то необычное». У каждого уровня глубины — свой вид рисунка с другим
+// движением руки, чем «веди по номерам»; виды копятся с глубиной, как правила:
+//   «Подземка» — «Поезд»: по рельсам едет огонь. Дотронься до него — тронется; держись за ним до конца пути.
+//   «Изнанка» — «Фонари»: вспыхивают по одному в разных местах сетки. Бей, пока горит.
+//   «Пустота» — «Орбита»: вокруг чёрного солнца восемь отметок. Крути по ним два круга в одну сторону.
+// Особый рисунок выходит первым после провала на уровень, дальше — примерно каждым четвёртым (не чаще, чем через два
+// обычных). Открытое остаётся навсегда: рисунки уровней, где игрок уже бывал (рекорд глубины), выходят и выше, вплоть до
+// улицы, — реже и только когда комбо разогналось: иначе всё разнообразие доставалось бы только тому, кто сейчас на глубине.
+// Жар за него считает то же ядро (C.figDone): «плиток» — по труду, точность — доля взятого, «по номерам» — взято всё.
+// Вид — блок sk- в css/deep.css, звуки — js/audio.js.
+const KINDS = {
+  train: { deep: 1, name: "Поезд", how: "держись за огнём" },
+  lamp: { deep: 2, name: "Фонари", how: "бей, пока горит" },
+  orbit: { deep: 3, name: "Орбита", how: "крути вокруг солнца" },
+};
+const TRAIN_V = [0, 4.2, 4.7, 5.2], TRAIN_REACH = 0.85;      // плиток в секунду на уровнях; на сколько плиток рука может отстать от огня или обогнать его
+const LAMP_N = 6, LAMP_T = [0, 1.4, 1.3, 1.1];               // сколько фонарей и сколько секунд горит каждый
+const ORBIT_LAPS = 2, SPEC_P = 0.5, SPEC_GAP = 2;            // кругов; как часто выходит особый рисунок и сколько обычных между двумя особыми
+const SPEC_STREET = 25, SPEC_P_UP = 0.4;                     // на улице: с какого комбо выходят открытые особые рисунки и как часто (между ними — на один обычный больше)
+// Пути поезда: один штрих, соседние плитки подряд, без возвратов. Поворачиваются и отражаются, как рисунки.
+const RAILS = [
+  [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0]],
+  [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1], [4, 2], [4, 3]],
+  [[0, 2], [0, 1], [0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2]],
+  [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [3, 2], [4, 2], [5, 2]],
+  [[0, 3], [1, 2], [2, 1], [3, 0], [4, 1], [5, 2], [6, 3]],
+  [[0, 0], [1, 1], [2, 2], [3, 2], [4, 2], [5, 1], [6, 0]],
+  [[0, 0], [1, 0], [2, 0], [3, 1], [3, 2], [3, 3], [2, 4], [1, 4], [0, 4]],
+];
+const RAILV = [];
+for (const r of RAILS) {
+  const seen = new Set();
+  for (const [a, b, c, d] of SYM) for (const rev of [false, true]) {
+    let s = r.map(([x, y]) => [a * x + b * y, c * x + d * y]);
+    if (rev) s = s.slice().reverse();
+    const mx = Math.min(...s.map((p) => p[0])), my = Math.min(...s.map((p) => p[1]));
+    s = s.map(([x, y]) => [x - mx, y - my]);
+    const key = JSON.stringify(s);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    RAILV.push({ s, w: Math.max(...s.map((p) => p[0])) + 1, h: Math.max(...s.map((p) => p[1])) + 1 });
+  }
+}
+let specCool = 0, specDue = 0, specForce = "";               // сколько обычных рисунков вышло после особого; на каком уровне особый рисунок ждёт своей очереди первым; какой поставить по заказу проверки
+function specPick(deep) {                                    // какой особый рисунок выходит сейчас ("" — обычный)
+  if (specForce) return KINDS[specForce] ? specForce : "";
+  const known = Math.max(deep, S.stats.figDeep || 0);        // открыты рисунки всех уровней до рекорда глубины
+  if (known < 1) return "";
+  const open = Object.keys(KINDS).filter((k) => KINDS[k].deep <= known);
+  if (deep >= 1 && specDue === deep) { specDue = 0; return open.find((k) => KINDS[k].deep === deep); }   // первым после провала — рисунок этого уровня
+  specDue = 0;
+  if (deep < 1 && S.fig.k < SPEC_STREET) return "";          // на улице — когда комбо разогналось
+  if (specCool < SPEC_GAP + (deep < 1 ? 1 : 0) || Math.random() > (deep < 1 ? SPEC_P_UP : SPEC_P)) return "";
+  const w = open.map((k) => (KINDS[k].deep === deep ? 2 : 1));           // рисунок своего уровня — вдвое чаще прочих
+  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < open.length; i++) { r -= w[i]; if (r <= 0) return open[i]; }
+  return open[0];
+}
+// Плитка целиком на экране? На телефоне сетка выше экрана: особый рисунок должен встать там, где его видно.
+function spotSeen(q) { const h = heroOn(q), r = rows[h] && rows[h].root.getBoundingClientRect(); return !!r && r.top >= 4 && r.bottom <= window.innerHeight - 4; }
+function specMake(kind, from, R) {                           // ставит особый рисунок; если на сетку он не лёг, рисунка нет (fig остаётся пустым)
+  const K = KINDS[kind], lay = figLayer(), extra = [];
+  const add = (cls, html) => { const e = document.createElement("i"); e.className = cls; if (html) e.innerHTML = html; lay.appendChild(e); extra.push(e); return e; };
+  const base = (cells, spots, sp) => ({ name: K.name, kind, plus: 3, segs: [], cells, spots, hit: new Set(), dots: new Map(), best: 0, miss: 0, clean: true, allow: 1e9, find: "", gate: 0, spark: -1, sparkEl: null, sparkHit: false, dark: 0, born: performance.now(), extra, sp });
+  const mark = (f, cls, n) => f.cells.forEach((i, k) => { const d = document.createElement("i"); d.className = "hg-dot " + cls + (k === 0 && n ? " hg-go" : ""); d.dataset.i = i; lay.appendChild(d); f.dots.set(i, d); });
+  lay.classList.remove("hg-messy");
+  if (kind === "train") {
+    const fits = RAILV.filter((v) => v.w <= hgC && v.h <= R);
+    let at = null;
+    for (let t = 0; t < 80 && !at && fits.length; t++) {
+      const v = fits[Math.floor(Math.random() * fits.length)], ox = Math.floor(Math.random() * (hgC - v.w + 1)), oy = Math.floor(Math.random() * (R - v.h + 1));
+      const sp = v.s.map(([x, y]) => (oy + y) * hgC + ox + x);
+      if (sp.every((q) => q < TILES) && (t > 50 || sp.every(spotSeen))) at = sp;
+    }
+    if (!at) return;
+    const who = seat(at);                                    // лучшие герои — под рельсы (если все открыты)
+    fig = base(at.map((q) => who.get(q)), at, { tick: 0, pts: [], pos: 0, go: false, v: TRAIN_V[S.fig.d] || TRAIN_V[1], lost: 0, cars: [add("sk-car"), add("sk-car")], head: add("sk-train", "<u></u>") });
+    fig.best = who.best;
+    mark(fig, "sk-st", true);
+  } else if (kind === "lamp") {
+    fig = base([], [], { tick: 0, pts: [], n: LAMP_N, k: 0, hits: 0, t: 0, T: LAMP_T[S.fig.d] || LAMP_T[1], wait: true, used: [], el: add("sk-lamp sk-wait", "<b></b><u></u>") });
+    if (!lampNext(from && from.spot >= 0 ? from.spot : touchSpot)) { for (const e of extra) e.remove(); fig = null; }
+  } else {
+    const RING = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]], opts = [];   // по часовой стрелке, с верхней
+    for (let y = 1; y < R - 1; y++) for (let x = 1; x < hgC - 1; x++) {
+      const ring = RING.map(([dx, dy]) => (y + dy) * hgC + x + dx);
+      if (ring.every((q) => q < TILES)) opts.push({ c: y * hgC + x, ring, seen: ring.every(spotSeen) });
+    }
+    const pool = opts.some((o) => o.seen) ? opts.filter((o) => o.seen) : opts;
+    if (!pool.length) return;
+    const o = pool[Math.floor(Math.random() * pool.length)];
+    fig = base(o.ring.map(heroOn), o.ring, { tick: 0, pts: [], c: heroOn(o.c), last: -1, dir: 0, prog: 0, need: 8 * ORBIT_LAPS, back: false, sun: add("sk-sun"), arc: add("sk-arc sk-hint", '<svg viewBox="0 0 100 100"><circle class="sk-at" cx="50" cy="50" r="46"/><circle class="sk-av" cx="50" cy="50" r="46" pathLength="100"/></svg><u></u>'), comet: add("sk-comet") });
+    mark(fig, "sk-orb", false);
+  }
+}
+const specTold = {};                                         // про какие особые рисунки в этот заход уже сказано
+function specTell() {                                        // особый рисунок на сетке впервые: что это и как его брать
+  const k = fig.kind, key = "fig" + k.charAt(0).toUpperCase() + k.slice(1), how = DEEP[KINDS[k].deep].figHow;
+  if (S.stats[key] || specTold[k]) return;
+  specTold[k] = true;
+  note("Новый рисунок: «" + fig.name + "»", how.charAt(0).toUpperCase() + how.slice(1) + ". По номерам его не берут", 10000);
+}
+function specDraw() {                                        // огни особого рисунка — на свои места (каждый кадр у поезда; у остальных — когда что-то сменилось)
+  if (!fig || !fig.kind) return;
+  const sp = fig.sp, P = sp.pts, put = (el, p) => { el.style.transform = "translate(" + p[0].toFixed(1) + "px," + p[1].toFixed(1) + "px)"; };
+  if (!P.length) return;
+  if (fig.kind === "train") {
+    const at = (x) => { const f = Math.max(0, Math.min(P.length - 1, x)), i = Math.min(P.length - 2, Math.floor(f)), k = f - i; return [P[i][0] + (P[i + 1][0] - P[i][0]) * k, P[i][1] + (P[i + 1][1] - P[i][1]) * k]; };
+    const h = at(sp.pos), a = at(sp.pos + 0.2), b = at(sp.pos - 0.2);
+    put(sp.head, h); sp.head.style.setProperty("--a", Math.atan2(a[1] - b[1], a[0] - b[0]).toFixed(3) + "rad");
+    sp.cars.forEach((c, n) => { put(c, at(sp.pos - 0.42 * (n + 1))); c.style.opacity = sp.go && sp.pos > 0.42 * (n + 1) ? "1" : "0"; });
+  } else if (fig.kind === "lamp") put(sp.el, P[0]);
+  else {
+    const list = $("mercList"), lr = list.getBoundingClientRect(), r = rows[sp.c].root.getBoundingClientRect(), c = [r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop];
+    put(sp.sun, c); put(sp.arc, c);
+    sp.arc.querySelector(".sk-av").style.strokeDashoffset = (100 * (1 - Math.min(1, sp.prog / sp.need))).toFixed(1);
+    sp.comet.style.opacity = sp.last >= 0 ? "1" : "0";
+    if (sp.last >= 0) put(sp.comet, P[sp.last]);
+  }
+}
+const specCount = () => { const sp = fig.sp; return fig.kind === "train" ? fig.hit.size + "/" + fig.cells.length : fig.kind === "lamp" ? sp.hits + "/" + sp.n : Math.min(ORBIT_LAPS, Math.floor(sp.prog / 8)) + "/" + ORBIT_LAPS + " " + plural(ORBIT_LAPS, "круг", "круга", "кругов"); };
+const specInfo = () => { const sp = fig.sp; return fig.kind === "train" ? { go: sp.go, pos: sp.pos, v: sp.v } : fig.kind === "lamp" ? { k: sp.k, n: sp.n, hits: sp.hits, t: sp.t, T: sp.T, wait: sp.wait } : { c: sp.c, last: sp.last, dir: sp.dir, prog: sp.prog, need: sp.need }; };   // для проверки
+function specFx(cls, p, ms) { if (p && !still()) fxAdd(cls, p[0], p[1], ms); }
+// --- «Поезд» ---
+function trainCatch(j) {                                     // рука — у огня: отметка взята
+  const h = fig.cells[j], d = fig.dots.get(h);
+  fig.hit.add(h); C.figMark(S);
+  rows[h].root.classList.add("hg-hit");
+  if (d) { d.classList.remove("hg-go"); d.classList.add("hit", "hg-tick"); }
+  specFx("hg-hitr", fig.sp.pts[j], 380);
+  sfx.clack(j, fig.cells.length);
+  fig.sp.tick += 1; drawFigChip();
+}
+function trainTry(j) { const sp = fig.sp; if (j >= sp.lost && j < fig.cells.length && !fig.hit.has(fig.cells[j]) && Math.abs(j - sp.pos) <= TRAIN_REACH) trainCatch(j); }
+// --- «Фонари» ---
+function lampNext(near) {                                    // следующий фонарь: в двух-трёх плитках от прошлого, на видном месте, не там, где уже был
+  const sp = fig.sp, from = sp.used.length ? sp.used[sp.used.length - 1] : near, far = (q) => (from >= 0 ? Math.max(Math.abs(q % hgC - from % hgC), Math.abs(Math.floor(q / hgC) - Math.floor(from / hgC))) : 2);
+  const free = []; for (let q = 0; q < TILES; q++) if (sp.used.indexOf(q) < 0 && q !== from) free.push(q);
+  let opts = free.filter((q) => far(q) >= 2 && far(q) <= 3 && spotSeen(q));
+  if (!opts.length) opts = free.filter(spotSeen);
+  if (!opts.length) opts = free;
+  if (!opts.length) return false;
+  for (const h of fig.cells) rows[h].root.classList.remove("hg-m", "hg-hit");
+  const q = opts[Math.floor(Math.random() * opts.length)], h = heroOn(q);
+  sp.used.push(q); fig.spots = [q]; fig.cells = [h]; sp.t = 0;
+  rows[h].root.classList.add("hg-m");
+  const list = $("mercList"), lr = list.getBoundingClientRect(), r = rows[h].root.getBoundingClientRect();
+  sp.pts = [[r.left + r.width / 2 - lr.left + list.scrollLeft, r.top + r.height * 0.42 - lr.top + list.scrollTop]];
+  sp.el.style.setProperty("--T", sp.T + "s");
+  sp.el.classList.remove("sk-lit"); void sp.el.offsetWidth; if (!sp.wait) sp.el.classList.add("sk-lit");   // кольцо времени — заново
+  specDraw();
+  return true;
+}
+function lampStep(hit) {                                     // фонарь взят или погас: следующий — или рисунок кончился
+  const sp = fig.sp, p = sp.pts[0];
+  if (hit) { sp.hits += 1; C.figMark(S); sfx.lamp(sp.k, sp.n); specFx("hg-hitr", p, 380); specFx("hg-ring l2", p, 600); }
+  else { sfx.lampOut(); specFx("sk-out", p, 500); }
+  if (sp.wait) { sp.wait = false; sp.el.classList.remove("sk-wait"); }
+  sp.k += 1; sp.tick += 1;
+  if (sp.k >= sp.n) { specDone(); return; }
+  lampNext(-1); drawFigChip();
+}
+// --- «Орбита» ---
+function orbitTouch(i) {
+  const sp = fig.sp, r = fig.cells.indexOf(i);
+  if (r < 0) return;
+  const lit = () => { fig.dots.forEach((d, h) => d.classList.toggle("sk-on", fig.cells.indexOf(h) === r)); specDraw(); };
+  if (sp.last < 0) { sp.last = r; sp.arc.classList.remove("sk-hint"); C.figMark(S); sfx.orbit(0, sp.need); lit(); return; }   // рука на орбите — подсказка «крути» больше не нужна
+  const st = (r - sp.last + 8) % 8;
+  if (!st) return;
+  const d = st <= 2 ? 1 : st >= 6 ? -1 : 0;                  // шаг на одну-две отметки по кругу; через солнце — не шаг
+  sp.last = r;
+  if (!d) { lit(); return; }
+  if (!sp.dir) sp.dir = d;
+  if (d !== sp.dir) { sp.back = true; lit(); return; }       // пошёл обратно: круг не идёт, пока рука не вернётся
+  sp.prog += d > 0 ? st : 8 - st; sp.tick += 1; C.figMark(S);
+  sfx.orbit(sp.prog, sp.need); specFx("hg-hitr", sp.pts[r], 380); lit();
+  if (sp.prog >= sp.need) specDone(); else drawFigChip();
+}
+function specTouch(i) {                                      // по плитке провели или нажали, а на сетке — особый рисунок
+  const sp = fig.sp;
+  if (fig.kind === "train") {
+    if (!sp.go) { if (i === fig.cells[0]) { sp.go = true; sfx.trainGo(); trainCatch(0); } }
+    else trainTry(fig.cells.indexOf(i));
+  } else if (fig.kind === "lamp") { if (i === fig.cells[0]) lampStep(true); }
+  else orbitTouch(i);
+}
+function specStep(dt) {                                      // каждый кадр: поезд едет, фонарь догорает
+  if (!fig || !fig.kind) return;
+  const sp = fig.sp;
+  if (fig.kind === "train") {
+    if (!sp.go) return;
+    const n = fig.cells.length;
+    sp.pos += sp.v * dt;
+    if ((drawing || figFree()) && overHero >= 0) trainTry(fig.cells.indexOf(overHero));   // рука стоит на плитке и ждёт огня — тоже считается
+    while (sp.lost < n && sp.pos > sp.lost + TRAIN_REACH) {  // огонь ушёл, а отметку не взяли
+      const h = fig.cells[sp.lost], d = fig.dots.get(h);
+      if (!fig.hit.has(h)) { if (d) d.classList.add("sk-miss"); rows[h].root.classList.remove("hg-m"); }
+      sp.lost += 1;
+    }
+    specDraw();
+    if (sp.pos >= n - 1 + TRAIN_REACH) specDone();
+  } else if (fig.kind === "lamp" && !sp.wait) {
+    sp.t += dt;
+    if (sp.t >= sp.T) lampStep(false);
+  }
+}
+function specDone() {                                        // особый рисунок кончился: сколько взято — столько и жара
+  const done = fig, sp = done.sp, kind = done.kind, key = "fig" + kind.charAt(0).toUpperCase() + kind.slice(1);
+  const n = kind === "train" ? done.cells.length + 4 : kind === "lamp" ? 2 * sp.n + 2 : 16;   // за сколько плиток считается: особый рисунок греет заметно сильнее обычного того же размера
+  const acc = kind === "train" ? done.hit.size / done.cells.length : kind === "lamp" ? sp.hits / sp.n : 1;
+  S.stats[key] = (S.stats[key] || 0) + 1; roadKey = "";
+  if (acc < 0.34) {                                          // почти всё мимо: рисунок ушёл ни с чем
+    const list = $("mercList");
+    sfx.down();
+    if (list.offsetParent !== null && !still()) { const p = sp.pts[Math.min(sp.pts.length - 1, done.cells.length - 1)] || [list.clientWidth / 2, 80]; fxAdd("hg-pop lose", Math.max(110, Math.min(list.clientWidth - 110, p[0])), Math.max(46, p[1]), 1300, "<b>" + (kind === "train" ? "Уехал" : "Погасли") + "</b><span>«" + done.name + "» · мимо</span>"); }
+    spawnFig({ spot: touchSpot, dir: handDir() });
+    figChipKey = "?"; drawFigChip(); slowT = 0;
+    return;
+  }
+  figFinish(done, n, acc, kind === "orbit" ? !sp.back : acc === 1, "");
 }
 // ---------- глубина комбо: разлом, провал, всплытие, искры ----------
 // Правила — js/core.js (figGate*, figSpark, figStep), вид страницы на уровне — js/deep.js и css/deep.css.
@@ -915,6 +1154,7 @@ function gateWon() {                                         // разлом в�
   clearFig(); drawFigLines();                                // пока идёт титул уровня, рисунка на сетке нет: передышка (CFG.figLand)
   $("hgWrap").classList.remove("rt-wait");
   rite = { kind: "land", to, total: S.fig.hold, sec: -1, out: false, fig: false };
+  specDue = to;                                              // первым на уровне выйдет его особый рисунок
   if (shown) RT.dive({ list, pts, size: tileSize(), to, calm: quiet, html: riteLandHtml(to, first) });   // трещина раскрывается на всю сетку, поверх — титул уровня
   // Вид страницы меняется на пике вспышки: сначала раскрывается трещина, за ней — всё остальное. Без постановки — сразу.
   if (shown && !quiet && S.fig.hold > 0) setTimeout(() => { if (deepShown === to && figWanted()) DP.set(to, "dive"); }, 220);
@@ -994,7 +1234,8 @@ function riteLandHtml(to, first) {                           // титул ур�
     '<div class="rt-kick"><i></i><span>глубина ' + DP.roman(to) + "</span><i></i></div>" +
     '<div class="rt-name" data-t="' + L.name + '" style="--rt-n:' + L.name.length + '">' + [...L.name].map((ch, i) => '<span style="--i:' + i + '">' + ch + "</span>").join("") + "</div>" +
     '<div class="rt-steps">' + DEEP.map((x, i) => '<span class="' + (i <= to ? "on" : "") + (i === to ? " cur" : "") + '">' + (i ? DP.roman(i) : "") + "</span>").join("<i></i>") + "</div>" +
-    '<div class="rt-rule"><em>новое правило</em><b>' + L.rule + "</b><span>" + L.how.charAt(0).toUpperCase() + L.how.slice(1) + "</span></div>" +
+    '<div class="rt-rules"><div class="rt-rule"><em>новое правило</em><b>' + L.rule + "</b><span>" + L.how.charAt(0).toUpperCase() + L.how.slice(1) + "</span></div>" +
+    '<div class="rt-rule"><em>новый рисунок</em><b>' + L.fig + "</b><span>" + L.figHow.charAt(0).toUpperCase() + L.figHow.slice(1) + "</span></div></div>" +
     '<div class="rt-gain"><span>души ×' + group(L.at + 1) + " и больше</span>" + (first && L.loot ? "<span>подарок: " + lootT(L.loot) + " дохода</span>" : "") + "</div>";
 }
 function riteOpen(to) {                                      // разлом открылся: передышка, трещина бежит по сетке, надпись
@@ -1082,6 +1323,7 @@ function riteStep(dt) {
   }
   RT.frame(dt);
 }
+export function specSet(kind) { specForce = kind || "none"; spawnFig(); specForce = ""; }   // для проверки: поставить особый рисунок ("train", "lamp", "orbit"); без имени — обычный
 export const riteInfo = () => ({ kind: rite ? rite.kind : "", hold: S.fig.hold, gate: S.fig.gate, shown: !!(rite && rite.shown), rt: RT.info() });   // для проверки
 // Рисунок собран: плитки вспыхивают, из них летят искры цвета ранга, сам рисунок расходится «эхом» и тает, поверх вылетает
 // надпись: название, как собрано (идеально, по номерам, точно, небрежно, мимо) и на сколько вырос жар. Чем выше ранг, тем
@@ -1148,7 +1390,7 @@ function drawFigChip() {                                    // справа в �
   drawMeter();
   const el = $("hgFigc"), k = kShow(), hot = S.fig.k > 0, gate = fig && fig.gate ? Math.max(0, Math.ceil(S.fig.gate)) : -1;
   const rest = S.fig.hold > 0 ? Math.ceil(S.fig.hold) : 0, land = !fig && !!rite && rite.kind === "land";   // передышка: разлом раскрывается или идёт титул уровня
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run + "|" + rest + "|" + (fig.veil ? 1 : 0) : land ? "land|" + rest : "";
+  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run + "|" + rest + "|" + (fig.veil ? 1 : 0) + "|" + (fig.sp ? fig.sp.tick : 0) : land ? "land|" + rest : "";
   if (key === figChipKey) return;
   figChipKey = key;
   el.hidden = !fig && !land;
@@ -1176,7 +1418,7 @@ function drawFigChip() {                                    // справа в �
   el.title = "Рисунок на сетке: проведи мышью по всем отмеченным героям или нажми каждого. Собранный рисунок греет комбо: чем он больше, чем меньше лишних плиток по пути и если брать отметки по номерам — тем сильнее. " +
     "Комбо умножает души — до ×" + mulT(1 + CFG.figStep * CFG.figCap) + " на улице и до ×" + (CFG.figTop + 1) + " на глубине — и всё время остывает: на высоких рангах быстрее, а без отметок дольше " + CFG.figIdleAt + " секунд — совсем быстро" +
     (S.fig.d ? ". Сейчас — глубина " + DP.roman(S.fig.d) + ", «" + DEEP[S.fig.d].name + "»: " + DEEP[S.fig.d].how : "");
-  el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + fig.hit.size + "/" + fig.cells.length + "</b></span>" +
+  el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + (fig.kind ? specCount() : fig.hit.size + "/" + fig.cells.length) + "</b></span>" + (fig.kind ? '<span class="sk-how">' + KINDS[fig.kind].how + "</span>" : "") +
     (hot ? "<span>" + (S.fig.d ? '<img class="dp-cemb" alt="" draggable="false" src="' + DP.emblem(S.fig.d) + '">' : "") + '<em class="hg-frk">' + FIG_RANKS[Math.max(0, rankIdx)].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span>" +
       (S.fig.d && S.fig.run > 0 ? '<span class="dp-crun">разгон ×' + mulT(runMul()) + "</span>" : "") + "<span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
@@ -1205,7 +1447,7 @@ export function cloudNote(was, now, first, meta) {          // игра прод
 }
 export function updateNote() { note("Вышло обновление игры", "Обнови страницу (F5): прогресс сохранён, а правила и защита — новые", 20000); }
 export const curTab = () => tab;                            // какая вкладка открыта (для наблюдения)
-export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: (slotOf || HOME).slice(), spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, veil: !!fig.veil, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? spotOf(fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
+export function figInfo() { return fig ? { name: fig.name, plus: fig.plus, miss: fig.miss, allow: fig.allow, clean: fig.clean, rank: rankIdx, cells: fig.cells.slice(), hit: [...fig.hit], best: fig.best, order: (slotOf || HOME).slice(), spots: fig.spots.slice(), touch: touchSpot, cols: hgC, gate: fig.gate || 0, veil: !!fig.veil, kind: fig.kind || "", sp: fig.sp ? specInfo() : null, find: fig.find || "", spark: fig.spark, sparkSpot: fig.spark >= 0 ? spotOf(fig.spark) : -1, dark: fig.dark || 0, deep: S.fig.d } : null; }   // для проверки
 export const figList = () => FIGS.map((f) => ({ name: f.name, w: f.w, h: f.h, n: f.n, t: f.t, s: f.s, deep: f.deep || 0, gate: f.gate || 0 }));
 export const figVariants = () => VARS.length;
 export function figSet(on) { figOn = !!on; spawnFig(); }    // для проверки: убрать рисунки или вернуть
@@ -1404,7 +1646,7 @@ function stepAch() {                                         // зовётся �
 function drawRoad() {
   if (tab !== "road") return;
   const now = performance.now(), ak = achKey();
-  const key = (Object.keys(S.un).length + 100 * (S.stats.figDeep || 0) + 1000 * (S.stats.figFinds || 0)) + ":" + Object.keys(S.feat).length + ":" + ak;
+  const key = (Object.keys(S.un).length + 100 * (S.stats.figDeep || 0) + 1000 * (S.stats.figFinds || 0)) + ":" + Object.keys(S.feat).length + ":" + ak + ":" + (S.stats.figTrain ? 1 : 0) + (S.stats.figLamp ? 1 : 0) + (S.stats.figOrbit ? 1 : 0);
   if (key === roadKey || (roadKey && now - achDrawAt < 1000 && roadKey.split(":")[2].split("|")[0] === ak.split("|")[0])) return;   // цифры прогресса — не чаще раза в секунду
   roadKey = key; achDrawAt = now;
   const ord = (u) => (u.kind === "rb" ? 1000 + u.at : u.kind === "souls" ? 0 : u.at);
@@ -1417,7 +1659,7 @@ function drawRoad() {
   }
   for (const x of ROAD_EXTRA) {
     const dn = x.key && x.key.indexOf("deep") === 0 ? Number(x.key.slice(4)) : 0;   // уровень глубины комбо
-    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : x.key === "line" ? (S.stats.hired || 0) >= HEROES.length : false;
+    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : x.key === "line" ? (S.stats.hired || 0) >= HEROES.length : x.key === "kinds" ? !!(S.stats.figTrain && S.stats.figLamp && S.stats.figOrbit) : false;
     const extra = x.key === "finds" ? '<div class="dp-finds">' + C.FINDS.map((f, i) => (S.finds[f] ? '<span class="dp-has">' + f + " ×" + group(S.finds[f]) : "<span>??? · " + DEEP[1 + Math.floor(i / 3)].name) + "</span>").join("") + "</div>" : "";
     h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div>" + (dn ? '<img class="dp-remb" alt="" src="' + DP.emblem(dn) + '">' : "") + "<b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p>" + extra + "</div></div>";
   }
@@ -1798,6 +2040,7 @@ export function frame(dt) {
   drawBank(dt);
   deepSync();
   riteStep(dt);
+  specStep(dt);
   stepMeter();
   stepHold(dt);
   stepDraft();

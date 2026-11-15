@@ -124,7 +124,7 @@ export function load(text) {
   S.fig = { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0, hold: 0 };   // комбо рисунков и его глубина перезагрузку не переживают
   // что запомнено о глубине: рекорд уровня, спуски, время на глубине, искры и находки — только то, что игра может дать
   S.stats.figDeep = Math.max(0, Math.min(DEEP.length - 1, Math.floor(Number(S.stats.figDeep) || 0)));
-  for (const k of ["figDives", "figSparks", "figGates"]) S.stats[k] = Math.max(0, Math.min(1e9, Math.floor(Number(S.stats[k]) || 0)));
+  for (const k of ["figDives", "figSparks", "figGates", "figTrain", "figLamp", "figOrbit"]) S.stats[k] = Math.max(0, Math.min(1e9, Math.floor(Number(S.stats[k]) || 0)));   // последние три — особые рисунки глубины (js/ui.js)
   S.stats.figDeepT = Math.max(0, Math.min(1e9, Number(S.stats.figDeepT) || 0));
   { const of = o.finds && typeof o.finds === "object" ? o.finds : {}; S.finds = {}; for (const f of FINDS) { const v = Math.max(0, Math.min(1e6, Math.floor(Number(of[f]) || 0))); if (v) S.finds[f] = v; } S.stats.figFinds = Object.keys(S.finds).length; }
   // усталость руки перезагрузку переживает (иначе её сбрасывали бы обновлением страницы), но за время между

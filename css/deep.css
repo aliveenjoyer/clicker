@@ -280,6 +280,10 @@ html[data-deep] .hg-mtube { background: rgba(0,0,0,.6); box-shadow: inset 0 0 0 
 .rt-steps span.cur { transform: scale(1.4); background: #fff; box-shadow: 0 0 0 max(2px, calc(var(--u) * .45)) color-mix(in srgb, var(--gt) 65%, transparent), 0 0 calc(var(--u) * 3) var(--gt); }
 .rt-rule { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .9); box-sizing: border-box; max-width: 86%; margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 1.9) calc(var(--u) * 3.2) calc(var(--u) * 2.1); border-radius: calc(var(--u) * 2.4); white-space: normal;
   background: rgba(5,3,14,.74); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gt) 55%, transparent), 0 calc(var(--u) * 1.6) calc(var(--u) * 4) rgba(0,0,0,.45); animation: rt-up 480ms 1280ms cubic-bezier(.2,.9,.2,1) both; }
+.rt-rules { display: flex; align-items: stretch; justify-content: center; gap: calc(var(--u) * 1.6); width: 94%; margin-top: calc(var(--u) * 3); animation: rt-up 480ms 1280ms cubic-bezier(.2,.9,.2,1) both; }
+.rt-rules .rt-rule { flex: 1 1 0; max-width: none; margin-top: 0; padding: calc(var(--u) * 1.7) calc(var(--u) * 2) calc(var(--u) * 1.9); animation: none; }
+.rt-rules .rt-rule span { font-size: max(11px, calc(var(--u) * 1.9)); }
+@media (max-width: 720px) { .rt-rules { flex-direction: column; gap: calc(var(--u) * 1.4); width: 90%; } .rt-rules .rt-rule { flex: none; padding: calc(var(--u) * 1.4) calc(var(--u) * 2.4); } .rt-rules .rt-rule b { font-size: 15px; } }
 .rt-rule em { font: 800 max(9px, calc(var(--u) * 1.6))/1 var(--ui); font-style: normal; letter-spacing: .26em; text-transform: uppercase; color: var(--gt2); }
 .rt-rule b { font: italic 900 max(16px, calc(var(--u) * 4.4))/1 var(--display); text-transform: uppercase; color: #fff; text-shadow: 0 0 calc(var(--u) * 2) var(--gt); }
 .rt-rule span { font: 600 max(11px, calc(var(--u) * 2.1))/1.32 var(--ui); color: #ece9ff; text-wrap: balance; }
@@ -315,6 +319,59 @@ html[data-deep] .hg-mtube { background: rgba(0,0,0,.6); box-shadow: inset 0 0 0 
 .hg-figc.dp-gatec > .hg-fw { flex: none; }
 .hg-figc.dp-gatec .hg-fn { font-size: 14px; }
 @media (max-width: 720px) { .hg-figc.dp-gatec { align-self: stretch; max-width: none; gap: 10px; font-size: 12px; } }
+
+/* --- особые рисунки глубины (js/ui.js, «особые рисунки», 15.11): «Поезд», «Фонари», «Орбита». Берутся не по номерам.
+   Цвет — цвет рисунка уровня (--fg, --fg2, --fga из палитр наверху). Всё лежит в слое рисунка (.hg-fig): касаний не ловит,
+   за сетку не выходит. Места огней ставит js сдвигом (transform). Классы — с приставкой sk-. */
+.sk-train, .sk-car, .sk-lamp, .sk-sun, .sk-arc, .sk-comet { position: absolute; left: 0; top: 0; display: block; pointer-events: none; will-change: transform; }
+/* «Поезд»: шпалы, два рельса (широкая светлая линия и тёмная поуже поверх неё), станции-отметки, огонь и два вагона за ним */
+.hg-fig .sk-under { stroke: rgba(8,6,24,.82); stroke-width: calc(var(--hg-s, 80px) * .46); }                      /* тёмная подложка: путь виден на любом портрете */
+.hg-fig .sk-tie { stroke: rgba(255,255,255,.62); stroke-width: calc(var(--hg-s, 80px) * .36); stroke-dasharray: 3 10; stroke-linecap: butt; }   /* шпалы */
+.hg-fig .sk-rail { stroke: var(--fg2, #ff7ae2); stroke-width: calc(var(--hg-s, 80px) * .22); filter: drop-shadow(0 0 5px var(--fga, rgba(255,63,208,.9))); }
+.hg-fig .sk-bed { stroke: #0b0920; stroke-width: calc(var(--hg-s, 80px) * .14); stroke-dasharray: none; }
+html .hg-dot.sk-st { width: calc(var(--hg-s, 80px) * .2); animation: none; }
+html[data-deep] .hg-dot.sk-st:not(.hit), .hg-dot.sk-st:not(.hit) { background: #fff; box-shadow: 0 0 0 3px rgba(8,6,24,.9), 0 0 10px 2px var(--fga, rgba(255,63,208,.9)); }
+html[data-deep] .hg-dot.sk-st.sk-miss:not(.hit), .hg-dot.sk-st.sk-miss:not(.hit) { opacity: .35; background: #8d8fb5; box-shadow: 0 0 0 3px rgba(8,6,24,.9); }
+.hg-dot.sk-st.hg-go::after { inset: -190%; }                 /* сходящееся кольцо у первой станции: поезд ждёт здесь */
+.sk-train { width: calc(var(--hg-s, 80px) * .58); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.29) 0 0 calc(var(--hg-s, 80px) * -.29); border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 26%, var(--fg2, #ff7ae2) 44%, var(--fg, #ff3fd0) 60%, transparent 72%); filter: drop-shadow(0 0 10px var(--fga, #ff3fd0)); }
+.sk-train u { position: absolute; left: 50%; top: 50%; width: 210%; height: 120%; transform-origin: 0 50%; transform: translateY(-50%) rotate(var(--a, 0rad)); background: linear-gradient(90deg, rgba(255,255,255,.6), rgba(255,255,255,0) 86%); clip-path: polygon(0 43%, 100% 0, 100% 100%, 0 57%); }
+.sk-car { width: calc(var(--hg-s, 80px) * .3); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.15) 0 0 calc(var(--hg-s, 80px) * -.15); border-radius: 30%; background: var(--fg2, #ff7ae2); box-shadow: 0 0 0 2px rgba(8,6,24,.9), 0 0 10px var(--fga, #ff3fd0); opacity: 0; transition: opacity 120ms; }
+/* «Фонари»: фонарь горит, кольцо сходится — столько осталось времени; первый ждёт, сколько надо */
+.sk-lamp { width: calc(var(--hg-s, 80px) * .74); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.37) 0 0 calc(var(--hg-s, 80px) * -.37); }
+.sk-lamp b { position: absolute; left: 25%; right: 25%; top: 12%; bottom: 12%; border-radius: 46% / 34%; background: radial-gradient(circle at 50% 46%, #fff 0 16%, var(--fg2, #ff7ae2) 46%, var(--fg, #ff3fd0) 88%); box-shadow: 0 0 0 3px rgba(8,6,24,.9), 0 0 26px 8px var(--fga, #ff3fd0); animation: sk-glow 520ms ease-in-out infinite alternate; }
+.sk-lamp b::before, .sk-lamp b::after { content: ""; position: absolute; left: 20%; right: 20%; height: 13%; border-radius: 3px; background: #0b0920; }
+.sk-lamp b::before { top: -10%; } .sk-lamp b::after { bottom: -10%; }
+.sk-lamp u { position: absolute; inset: 0; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 10px var(--fga, #ff3fd0); opacity: 0; }
+.sk-lamp.sk-lit u { animation: sk-ring var(--T, 1.3s) linear forwards; }
+.sk-lamp.sk-wait u { opacity: 1; animation: hg-appr 900ms ease-in infinite; }
+@keyframes sk-ring { from { transform: scale(1.6); opacity: .95; } to { transform: scale(.5); opacity: 1; } }
+@keyframes sk-glow { from { filter: brightness(1); } to { filter: brightness(1.3); } }
+.sk-out { position: absolute; width: calc(var(--hg-s, 80px) * .5); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(150,150,180,.75), transparent 70%); animation: sk-out 480ms ease-out forwards; }
+@keyframes sk-out { to { transform: translate(-50%, -20%) scale(1.6); opacity: 0; } }
+/* «Орбита»: чёрное солнце, восемь отметок вокруг, дуга — сколько кругов пройдено, огонёк — где сейчас рука */
+.sk-sun { width: calc(var(--hg-s, 80px) * .9); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.45) 0 0 calc(var(--hg-s, 80px) * -.45); border-radius: 50%;
+  background: radial-gradient(circle, #04020c 0 50%, #fff 54%, var(--fg2, #ff7ae2) 62%, color-mix(in srgb, var(--fg, #ff3fd0) 60%, transparent) 76%, transparent 84%); animation: sk-glow 1.5s ease-in-out infinite alternate; }
+.sk-arc { width: calc(var(--hg-s, 80px) * 2.5 + 12px); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -1.25 - 6px) 0 0 calc(var(--hg-s, 80px) * -1.25 - 6px); }
+.sk-arc svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.sk-arc circle { fill: none; }
+.sk-at { stroke: rgba(255,255,255,.3); stroke-width: 1.5; stroke-dasharray: 1.2 2.4; }
+.sk-arc u { position: absolute; inset: 0; display: none; }
+.sk-arc.sk-hint u { display: block; animation: sk-spin 1.9s linear infinite; }   /* пока руки на орбите нет, по ней бежит огонёк: вот так и крути */
+.sk-arc.sk-hint u::before { content: ""; position: absolute; left: 50%; top: 4%; width: 14%; aspect-ratio: 1; margin-left: -7%; margin-top: -7%; border-radius: 50%; background: radial-gradient(circle, #fff 0 30%, var(--fg2, #ff7ae2) 55%, transparent 74%); filter: drop-shadow(0 0 6px var(--fga, #ff3fd0)); }
+@keyframes sk-spin { to { transform: rotate(360deg); } }
+.sk-av { stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; filter: drop-shadow(0 0 5px var(--fga, #ff3fd0)); transition: stroke-dashoffset 120ms linear; }
+html .hg-dot.sk-orb { width: calc(var(--hg-s, 80px) * .26); animation: none; transition: transform 100ms ease-out, opacity 100ms; }
+html[data-deep] .hg-dot.sk-orb:not(.hit), .hg-dot.sk-orb:not(.hit) { background: radial-gradient(circle, #fff, var(--fg2, #ff7ae2) 60%, var(--fg, #ff3fd0)); box-shadow: 0 0 0 3px rgba(8,6,24,.9), 0 0 12px 2px var(--fga, #ff3fd0); opacity: .7; }
+html .hg-dot.sk-orb.sk-on { opacity: 1; transform: translate(-50%, -50%) scale(1.55); }
+.sk-comet { width: calc(var(--hg-s, 80px) * .56); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.28) 0 0 calc(var(--hg-s, 80px) * -.28); border-radius: 50%; background: radial-gradient(circle, #fff 0 24%, var(--fg2, #ff7ae2) 46%, transparent 72%); filter: drop-shadow(0 0 8px var(--fga, #ff3fd0)); opacity: 0; transition: transform 90ms linear, opacity 120ms; }
+/* строка над сеткой: что делать с особым рисунком — она занимает строку целиком */
+.hg-info:has(.sk-how) .hg-it { display: none; }
+.hg-info:has(.sk-how) .hg-figc { flex: 1 1 auto; justify-content: center; gap: 14px; }
+.hg-figc .sk-how { font-weight: 900; letter-spacing: .02em; }
+@media (max-width: 720px) { .hg-info:has(.sk-how) .hg-figc { align-self: stretch; max-width: none; gap: 8px; } .hg-figc:has(.sk-how) .hg-frk, .hg-figc:has(.sk-how) .dp-cemb, .hg-figc:has(.sk-how) > span:last-of-type { display: none; } .hg-figc:has(.sk-how) > .hg-fw { flex: none; } }   /* на телефоне в строке — имя, счёт, что делать и комбо; «души ×N» видны в шкале */
+.calm .sk-lamp b, .calm .sk-sun, .calm .sk-arc.sk-hint u { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sk-lamp b, .sk-sun, .sk-arc.sk-hint u { animation: none; } }
 
 /* --- искры «Изнанки» и глубже: висит рядом с рисунком, задень по пути --- */
 .dp-spark { position: absolute; left: 0; top: 0; width: calc(var(--hg-s, 80px) * .34); aspect-ratio: 1; margin: calc(var(--hg-s, 80px) * -.17) 0 0 calc(var(--hg-s, 80px) * -.17); pointer-events: none;
