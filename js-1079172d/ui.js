@@ -13,6 +13,7 @@ import * as ACCT from "./acct.js";
 import * as CLOCK from "./clock.js";
 import * as DP from "./deep.js";
 import * as RT from "./rite.js";
+import * as SOC from "./soc.js";
 import * as CHAT from "./chat.js";
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // проверки на своём компьютере шлют события из кода
 
@@ -192,6 +193,7 @@ export function mount(state, hooks) {
   FX.onNotice((text) => toast(text, 7000));
   SWAP.mount(S, { openModal, closeModal, toast, changed: () => { slowT = 0; api.settings(); } });
   $("btnWho").addEventListener("click", whoClick); ACCT.onChange(drawWho); drawWho();
+  SOC.mount();                                               // кнопки канала в шапке (Telegram, донат, Twitch): js/soc.js
   drawSound(); drawBuySeg(); buildSkills(); drawTabs();
   syncRpg(true);
 }
@@ -2018,6 +2020,7 @@ function drawSlow() {
   const gt = g === NEG ? "" : txt(g);                       // длинное число — без приписки «(держи)»: кнопка узкая, а про удержание говорит подсказка
   rb.querySelector(".lbl").textContent = !S.un.rebirth ? "Возрождение — с 50-й волны" : g === NEG ? "Возрождение: пока рано" : "Возрождение: +" + gt + " пепла" + (gt.length > 5 ? "" : " (держи)");
   rb.title = S.un.rebirth && g !== NEG ? "Держи кнопку, чтобы возродиться" : "";
+  SOC.tick();                                                // в шапке что-то поменялось — кнопки канала берут свободное место заново
 }
 
 function stepDraft() {                                       // карточки предметов: включаются, когда пауза выдержана

@@ -1460,3 +1460,24 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
 @keyframes hg-msink { to { box-shadow: inset 0 0 0 1px #ff5a4d, inset 0 3px 8px rgba(0,0,0,.55), 0 0 10px rgba(255,90,77,.7); } }
 .calm .hg-wrap.hg-hurry .hg-mtube { animation: none; }
 @media (prefers-reduced-motion: reduce) { .hg-wrap.hg-hurry .hg-mtube { animation: none; } }
+
+/* ---------- кнопки канала в шапке (23.11): Telegram, донат, Twitch ----------
+   Сами кнопки — общий файл всех сайтов https://aliveenjoyer.art/social.css (подключён до стилей игры, поэтому правила
+   ниже сильнее). Где стоят и какие подписи — js/soc.js: на ПК — справа, перед обменником, подписи по свободному месту
+   (длинные, короткие, значки или нет кнопок — класс ae-off); на телефоне — второй строкой шапки во всю ширину. */
+.top .right > .ae-soc { margin-right: 6px; }                 /* от игровых кнопок справа — чуть дальше, чем они друг от друга */
+.top .ae-soc.ae-off { display: none !important; }
+/* замер «как шапка выглядит без кнопок»: кнопки выходят из ряда невидимыми, но не прячутся — иначе их «загорание» начнётся заново */
+.top .ae-soc.ae-meas { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden !important; visibility: hidden !important; }
+.calm .ae-soc .ae-b { animation: none; }                     /* спокойный режим: без «загорания» неона */
+@media (max-width: 720px) {
+  .top { height: auto; grid-template-rows: 54px auto; }
+  /* ширина — по экрану, а не по сетке шапки: в поздней игре первая строка шапки бывает шире экрана, вторая за ней не тянется */
+  .top > .ae-soc { grid-column: 1 / -1; justify-self: start; width: min(100%, 100vw - 24px); padding-bottom: 8px; }
+  /* своя строка во всю ширину: подписи «ТГК / Донат / Twitch» помещаются и на самом узком телефоне (social.css на 372 и уже прячет их) */
+  .top > .ae-soc .ae-b { width: auto; height: 34px; padding: 0 9px; }
+  .top > .ae-soc .ae-b > span.ae-m { display: inline !important; }
+  .top > .ae-soc svg { width: 15px; height: 15px; }
+  /* свечение у края экрана поменьше: вторая строка стоит прямо над полосой волны */
+  .top > .ae-soc .ae-b { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 75%, transparent), 0 0 10px -3px color-mix(in srgb, var(--sc) 70%, transparent); }
+}
