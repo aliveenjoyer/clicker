@@ -43,7 +43,8 @@ export function mount(state, hooks) {
   $("modeSeg").addEventListener("click", (e) => { const m = e.target.dataset.mode; if (m) { C.setMode(S, m); slowT = 0; } });
   $("btnBoss").addEventListener("click", () => { C.goBoss(S); slowT = 0; });
   $("btnFig").addEventListener("click", () => { S.set.fig = S.set.fig === false; api.settings(); slowT = 0; });   // кнопка «Комбо»: рисунки на сетке вкл/выкл
-  $("btnFigFree").addEventListener("click", () => { S.set.figFree = !S.set.figFree; api.settings(); slowT = 0; });   // «Без зажатия»: отметки рисунка берутся наведением
+  $("btnFigFree").addEventListener("click", () => { S.set.figFree = !S.set.figFree; api.settings(); slowT = 0; });
+  $("btnPause").addEventListener("click", pauseClick);      // пауза комбо за осколки   // «Без зажатия»: отметки рисунка берутся наведением
   $("buySeg").addEventListener("click", (e) => { const m = e.target.dataset.m; if (m && !e.target.classList.contains("lockd")) { buyMode = m === "ms" || m === "max" ? m : Number(m); drawBuySeg(); slowT = 0; } });
   // Покупка героев. Отряд стоит сеткой плиток, плитка и есть кнопка. Мышью — сразу по нажатию и свайпом: зажал левую
   // кнопку в сетке и ведёшь в любую сторону — покупается каждая плитка, на которую зашёл курсор (вернулся на ту же — ещё
@@ -562,7 +563,8 @@ function spawnFig(from) {
   let opened = false;                                        // этот рисунок — разлом, и он открылся только что
   clearFig();
   hovLast = null;                                            // «без зажатия»: новый рисунок может лечь прямо под стоящую мышь — первое же движение его заметит
-  if (rite && rite.kind === "land" && !rite.fig) { drawFigLines(); drawFigChip(); drawFigBtn(); return; }   // идёт титул уровня (сетку могли растянуть): рисунок выйдет в свой черёд
+  if (rite && rite.kind === "land" && !rite.fig) { drawFigLines(); drawFigChip(); drawFigBtn(); return; }
+  if (S.fig.pause > 0) { drawFigLines(); drawFigChip(); drawFigBtn(); return; }   // пауза комбо: рисунка нет, плитки — кнопки покупки   // идёт титул уровня (сетку могли растянуть): рисунок выйдет в свой черёд
   if (figWanted() && rows.length === TILES && hgC) {
     const R = Math.max(hgR, Math.ceil(TILES / hgC)), top = figTier(S.fig.k), deep = S.fig.d;
     // Жар у потолка уровня — вместо рисунка выходит «Разлом» на уровень глубже (если разлом уже открыт, а рисунок пришлось
@@ -739,7 +741,7 @@ function drawMeter() {                                      // то, что ме
   [...$("hgMTicks").children].forEach((t, i) => t.classList.toggle("on", i + lo <= rankIdx));
   const mk = $("hgMMark");
   mk.textContent = Rk ? Rk.mark : ""; mk.dataset.n = Rk ? Rk.mark.length : 0;
-  $("hgMWord").textContent = S.fig.hold > 0 ? "комбо стоит" : Rk ? Rk.word + (S.fig.d >= 1 && S.fig.run > 0 ? " · разгон ×" + mulT(runMul()) : "") : "";
+  $("hgMWord").textContent = S.fig.pause > 0 ? "пауза" : S.fig.hold > 0 ? "комбо стоит" : Rk ? Rk.word + (S.fig.d >= 1 && S.fig.run > 0 ? " · разгон ×" + mulT(runMul()) : "") : "";
   $("hgMNum").textContent = group(k);
   $("hgMMul").textContent = k ? "×" + mulT(C.figMul(S)) : "";
   const L = DEEP[S.fig.d];
@@ -799,7 +801,9 @@ function stepMeter() {                                      // каждый ка
   if (ticksDone) drawFill();
   // кольцо: сколько осталось до быстрого остывания, если не брать отметки; пока открыт разлом — сколько осталось ему;
   // пока идёт передышка (разлом раскрывается, титул уровня) — сколько осталось её
-  const k = S.fig.k, gate = S.fig.gate > 0 && fig && fig.gate, hold = S.fig.hold > 0 && rite ? Math.max(0, Math.min(1, S.fig.hold / (rite.total || 1))) : -1;
+  const k = S.fig.k, gate = S.fig.gate > 0 && fig && fig.gate;
+  const hold = S.fig.pause > 0 ? Math.max(0, Math.min(1, S.fig.pause / CFG.figPauseT))                              // пауза комбо: сколько её осталось
+    : S.fig.hold > 0 ? Math.max(0, Math.min(1, S.fig.hold / (rite ? rite.total || 1 : CFG.figResume))) : -1;        // передышка: разлом, титул уровня или отсчёт после паузы
   const f = hold >= 0 ? hold : gate ? Math.max(0, Math.min(1, S.fig.gate / gateTotal)) : k > 0 ? Math.max(0, 1 - S.fig.idle / CFG.figIdleAt) : 1, v = Math.round(f * 240) + (hold >= 0 ? 2000 : gate ? 1000 : 0);
   if (v !== ringShown) {
     ringShown = v; $("hgMRing").style.strokeDashoffset = (131.95 * (1 - f)).toFixed(1);
@@ -1132,6 +1136,84 @@ function specDone() {                                        // особый р�
   }
   figFinish(done, n, acc, kind === "orbit" ? !sp.back : acc === 1, "");
 }
+// ---------- пауза комбо за осколки (24.11) ----------
+// Его слова: «сделай кнопку паузы на комбо за осколки… не больше 30 пауз в сутки». Правила — js/core.js (figPause,
+// figUnpause, pauseWhy; числа — CFG.figPause*). Здесь — кнопка «Пауза» в строке над сеткой (рядом с «Комбо»), карточка
+// паузы на сетке и отсчёт 3–2–1 после неё. Пока пауза, рисунка на сетке нет: плитки остаются кнопками покупки, карточка
+// касаний не ловит (кроме своей кнопки «Продолжить»). Всё сверяется с ядром в drawSlow — пауза кончается и без событий
+// (вкладку свернули, а события догона выбрасываются). Классы — с приставкой pz-.
+const pzTime = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };   // сколько паузы осталось, с округлением вверх
+let pzKey = "", pzCard = null, resumeSec = -1;
+function pzWhyText(why) {
+  if (why === "closed") return "Пауза комбо — за осколки Затмения. Они появятся после первого Затмения (босс 1000-й волны)";
+  if (why === "none") return "Сначала разгони комбо: ставить на паузу пока нечего";
+  if (why === "busy") return "Пока открыт разлом или идёт заставка уровня, паузу не поставить";
+  if (why === "limit") return "Пауз на сегодня больше нет: " + CFG.figPauseDay + " из " + CFG.figPauseDay + ". Завтра — снова " + CFG.figPauseDay;
+  if (why === "price") { const p = C.pausePrice(S); return "Нужно " + p + " " + plural(p, "осколок", "осколка", "осколков") + ", свободно " + group(Math.max(0, C.shardsFree(S))); }
+  return "";
+}
+function pauseClick() {
+  if (S.fig.pause > 0) { C.figUnpause(S, "hand"); slowT = 0; return; }
+  const why = C.pauseWhy(S);
+  if (why) { sfx.deny(); note("Пауза комбо", pzWhyText(why), 6000); return; }
+  C.figPause(S); slowT = 0;
+}
+function drawPause() {                                       // кнопка «Пауза» и карточка паузы на сетке; зовётся из drawSlow
+  const b = $("btnPause"); if (!b) return;
+  const on = S.fig.pause > 0, show = S.set.fig !== false, open = C.pauseOpen(S), why = on ? "" : C.pauseWhy(S), left = C.pauseLeft(S), price = C.pausePrice(S);
+  const key = [show, on, open, why, left, price, on ? Math.ceil(S.fig.pause) : 0].join("|");
+  if (key !== pzKey) {
+    pzKey = key;
+    b.hidden = !show;
+    b.classList.toggle("pz-on", on); b.classList.toggle("pz-lock", !open); b.classList.toggle("pz-no", !on && open && !!why);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.querySelector(".pz-t").textContent = on ? "Продолжить" : "Пауза";
+    b.querySelector(".pz-p").classList.toggle("pz-clock", on);
+    b.querySelector(".pz-p b").textContent = on ? pzTime(S.fig.pause) : String(price);
+    b.title = on ? "Комбо на паузе ещё " + pzTime(S.fig.pause) + ". Нажми — продолжить: три секунды, чтобы взять мышь, и комбо снова остывает"
+      : !open ? pzWhyText("closed")
+      : "Пауза комбо: оно стоит до " + Math.round(CFG.figPauseT / 60) + " минут — не остывает и не теряет глубину, даже если свернуть игру. Пока пауза, души без множителя комбо. " +
+        "Цена — " + price + " " + plural(price, "осколок", "осколка", "осколков") + " (на улице 1, в «Подземке» 2, в «Изнанке» 3, в «Пустоте» 5). Сегодня осталось " + left + " из " + CFG.figPauseDay +
+        (why && why !== "limit" ? ". Сейчас нельзя: " + pzWhyText(why) : why === "limit" ? ". " + pzWhyText(why) : "");
+  }
+  pauseCard(on && show);
+}
+function pauseCard(on) {                                     // карточка на сетке, пока пауза
+  const list = $("mercList");
+  if (!on) {
+    if (pzCard) { pzCard.remove(); pzCard = null; $("hgWrap").classList.remove("pz-wait"); }
+    return;
+  }
+  if (!pzCard || !pzCard.isConnected) {
+    if (pzCard) pzCard.remove();
+    pzCard = document.createElement("div");
+    pzCard.className = "pz-card" + (still() || S.set.calm ? " pz-calm" : "");
+    pzCard.innerHTML = '<i class="pz-mark" aria-hidden="true"></i><b class="pz-h">Пауза</b><span class="pz-k"></span><span class="pz-c"></span>' +
+      '<button class="pz-go" type="button">Продолжить</button><span class="pz-n">пока пауза — души без множителя комбо</span>';
+    const go = pzCard.querySelector(".pz-go"), resume = (e) => { e.preventDefault(); e.stopPropagation(); if (S.fig.pause > 0) { C.figUnpause(S, "hand"); slowT = 0; } };
+    go.addEventListener("pointerdown", (e) => e.stopPropagation());   // нажатие по кнопке не начинает свайп по сетке
+    go.addEventListener("pointerup", resume);                          // палец: сетка гасит касания, щелчок не придёт
+    go.addEventListener("click", resume);                              // мышь и клавиатура
+    list.appendChild(pzCard);
+    $("hgWrap").classList.add("pz-wait");
+  }
+  pzCard.querySelector(".pz-k").textContent = "комбо " + group(kShow()) + (S.fig.d ? " · глубина " + DP.roman(S.fig.d) + ", «" + DEEP[S.fig.d].name + "»" : "") + " — стоит";
+  const c = pzTime(S.fig.pause); if (pzCard.querySelector(".pz-c").textContent !== c) pzCard.querySelector(".pz-c").textContent = c;
+}
+function pauseSync() {                                       // пауза кончилась без события (вкладку свернули) или сетку собрали заново
+  const on = S.fig.pause > 0;
+  if (!on && pzCard) { pauseCard(false); if (!fig && figWanted()) spawnFig(); }
+  if (on && fig) spawnFig();                                 // рисунок, оставшийся с прошлой сетки, — прочь
+}
+function resumeStep() {                                      // отсчёт после паузы: 3, 2, 1 — крупно на сетке, со стуком
+  const r = S.fig.hold > 0 && !rite && !(S.fig.pause > 0) ? Math.ceil(S.fig.hold) : -1;
+  if (r === resumeSec) return;
+  resumeSec = r; figChipKey = "?";
+  if (r <= 0) return;
+  sfx.riftTick(r);
+  const list = $("mercList");
+  if (list.offsetParent !== null && !still()) { const [x, y] = farSpot(); fxAdd("pz-num", x, y, 900, "<b>" + r + "</b>"); }
+}
 // ---------- глубина комбо: разлом, провал, всплытие, искры ----------
 // Правила — js/core.js (figGate*, figSpark, figStep), вид страницы на уровне — js/deep.js и css/deep.css.
 function sparkTake() {                                       // искра поймана: комбо и души сразу
@@ -1195,7 +1277,7 @@ export function deepSet(d, k, quick) {
   d = Math.max(0, Math.min(DEEP.length - 1, Math.floor(d) || 0));
   const L = DEEP[d], f = S.fig;
   if (rite) { rite = null; RT.stop(); $("hgWrap").classList.remove("rt-wait"); }
-  f.d = d; f.gate = 0; f.hold = 0; f.run = 0; f.idle = 0; f.dmax = Math.max(f.dmax, d);
+  f.d = d; f.gate = 0; f.hold = 0; f.pause = 0; f.run = 0; f.idle = 0; f.dmax = Math.max(f.dmax, d);
   f.k = k !== undefined ? k : d ? L.at + (L.top - L.at) * 0.4 : 0; f.peak = Math.max(f.peak, f.k);
   S.stats.figDeep = Math.max(S.stats.figDeep || 0, d);
   rankIdx = -1; rankSync(); rankPeak = rankIdx; deepShown = figWanted() ? d : 0; DP.setKnown(S.stats.figDeep); DP.set(deepShown, "");
@@ -1392,11 +1474,20 @@ function drawFigChip() {                                    // справа в �
   drawMeter();
   const el = $("hgFigc"), k = kShow(), hot = S.fig.k > 0, gate = fig && fig.gate ? Math.max(0, Math.ceil(S.fig.gate)) : -1;
   const rest = S.fig.hold > 0 ? Math.ceil(S.fig.hold) : 0, land = !fig && !!rite && rite.kind === "land";   // передышка: разлом раскрывается или идёт титул уровня
-  const key = fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run + "|" + rest + "|" + (fig.veil ? 1 : 0) + "|" + (fig.sp ? fig.sp.tick : 0) : land ? "land|" + rest : "";
+  const pz = !fig && S.fig.pause > 0 && S.set.fig !== false;   // пауза комбо
+  const key = pz ? "pz|" + Math.ceil(S.fig.pause) + "|" + k + "|" + S.fig.d : fig ? fig.name + "|" + k + "|" + fig.hit.size + "|" + (hurryOn ? 1 : 0) + "|" + rankIdx + "|" + (hot ? 1 : 0) + "|" + gate + "|" + S.fig.d + "|" + S.fig.run + "|" + rest + "|" + (fig.veil ? 1 : 0) + "|" + (fig.sp ? fig.sp.tick : 0) : land ? "land|" + rest : "";
   if (key === figChipKey) return;
   figChipKey = key;
-  el.hidden = !fig && !land;
-  if (!fig && !land) { chipBar = null; return; }
+  el.hidden = !fig && !land && !pz;
+  if (!fig && !land && !pz) { chipBar = null; return; }
+  if (pz) {                                                  // пауза: комбо стоит, сколько осталось
+    if (el.dataset.gate) delete el.dataset.gate;
+    el.className = "hg-figc on pz-chip";
+    el.title = "Комбо на паузе: не остывает и не теряет глубину. Продолжить — кнопкой «Продолжить»";
+    el.innerHTML = '<span class="hg-fw"><em class="hg-fn">Пауза</em></span><span>комбо <b>' + group(k) + "</b> стоит</span><span><b>" + pzTime(S.fig.pause) + '</b></span><i class="hg-figt"></i>';
+    chipBar = el.querySelector(".hg-figt"); ringShown = -1;
+    return;
+  }
   if (land) {                                                // титул уровня: комбо стоит
     const L = DEEP[rite.to];
     el.className = "hg-figc on dp-gatec rt-held"; el.dataset.gate = String(rite.to);
@@ -1422,7 +1513,7 @@ function drawFigChip() {                                    // справа в �
     (S.fig.d ? ". Сейчас — глубина " + DP.roman(S.fig.d) + ", «" + DEEP[S.fig.d].name + "»: " + DEEP[S.fig.d].how : "");
   el.innerHTML = '<span class="hg-fw"><em class="hg-fn">«' + fig.name + "»</em> <b>" + (fig.kind ? specCount() : fig.hit.size + "/" + fig.cells.length) + "</b></span>" + (fig.kind ? '<span class="sk-how">' + KINDS[fig.kind].how + "</span>" : "") +
     (hot ? "<span>" + (S.fig.d ? '<img class="dp-cemb" alt="" draggable="false" src="' + DP.emblem(S.fig.d) + '">' : "") + '<em class="hg-frk">' + FIG_RANKS[Math.max(0, rankIdx)].mark + '</em> <span class="hg-fkw">комбо </span><b>' + group(k) + "</b></span>" +
-      (S.fig.d && S.fig.run > 0 ? '<span class="dp-crun">разгон ×' + mulT(runMul()) + "</span>" : "") + "<span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
+      (S.fig.d && S.fig.run > 0 ? '<span class="dp-crun">разгон ×' + mulT(runMul()) + "</span>" : "") + (rest && !rite ? '<span class="pz-rs">остынет через <b>' + rest + "</b></span>" : "") + "<span>души <b>×" + mulT(C.figMul(S)) + '</b></span><i class="hg-figt"></i>'
       : '<span class="tip">собери — пойдёт комбо</span>');
   chipBar = el.querySelector(".hg-figt"); ringShown = -1;
 }
@@ -1661,7 +1752,7 @@ function drawRoad() {
   }
   for (const x of ROAD_EXTRA) {
     const dn = x.key && x.key.indexOf("deep") === 0 ? Number(x.key.slice(4)) : 0;   // уровень глубины комбо
-    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : x.key === "line" ? (S.stats.hired || 0) >= HEROES.length : x.key === "kinds" ? !!(S.stats.figTrain && S.stats.figLamp && S.stats.figOrbit) : false;
+    const done = x.key === "ecl" || x.key === "grd" || x.key === "au" ? C.eclOpen(S) : x.key === "chaos" ? C.chaosOpen(S) : dn ? (S.stats.figDeep || 0) >= dn : x.key === "finds" ? (S.stats.figFinds || 0) >= C.FINDS.length : x.key === "line" ? (S.stats.hired || 0) >= HEROES.length : x.key === "kinds" ? !!(S.stats.figTrain && S.stats.figLamp && S.stats.figOrbit) : x.key === "pause" ? (S.stats.figPauses || 0) > 0 : false;
     const extra = x.key === "finds" ? '<div class="dp-finds">' + C.FINDS.map((f, i) => (S.finds[f] ? '<span class="dp-has">' + f + " ×" + group(S.finds[f]) : "<span>??? · " + DEEP[1 + Math.floor(i / 3)].name) + "</span>").join("") + "</div>" : "";
     h += '<div class="rd' + (x.soon ? " soon" : done ? " done" : "") + '"><i>' + (done ? "✓" : "") + "</i><div>" + (dn ? '<img class="dp-remb" alt="" src="' + DP.emblem(dn) + '">' : "") + "<b>" + x.title + "</b><span>" + x.cond + "</span><p>" + x.text + "</p>" + extra + "</div></div>";
   }
@@ -2020,6 +2111,7 @@ function drawSlow() {
   const gt = g === NEG ? "" : txt(g);                       // длинное число — без приписки «(держи)»: кнопка узкая, а про удержание говорит подсказка
   rb.querySelector(".lbl").textContent = !S.un.rebirth ? "Возрождение — с 50-й волны" : g === NEG ? "Возрождение: пока рано" : "Возрождение: +" + gt + " пепла" + (gt.length > 5 ? "" : " (держи)");
   rb.title = S.un.rebirth && g !== NEG ? "Держи кнопку, чтобы возродиться" : "";
+  pauseSync(); drawPause();                                  // пауза комбо: кнопка, карточка на сетке
   SOC.tick();                                                // в шапке что-то поменялось — кнопки канала берут свободное место заново
 }
 
@@ -2044,6 +2136,7 @@ export function frame(dt) {
   deepSync();
   riteStep(dt);
   specStep(dt);
+  resumeStep();
   stepMeter();
   stepHold(dt);
   stepDraft();
@@ -2075,6 +2168,16 @@ export function onEvent(e) {
   }
   else if (e.t === "fig_gatefail") { if (e.why === "time") gateLost("time"); }   // разлом закрылся по времени (сбой с номеров интерфейс закрывает сам)
   else if (e.t === "fig_rise") deepRise(e);                  // комбо остыло ниже порога уровня глубины
+  else if (e.t === "fig_pause") {                             // пауза комбо: рисунок уходит, на сетке — карточка паузы
+    sfx.pause(); spawnFig(); pzKey = ""; drawPause(); meterKey = "?"; drawMeter(); slowT = 0;
+    note("Пауза", "Комбо стоит до " + Math.round(CFG.figPauseT / 60) + " минут — можно отойти или свернуть игру. Отдано " + e.price + " " + plural(e.price, "осколок", "осколка", "осколков") + ", пауз на сегодня осталось " + e.left + " из " + CFG.figPauseDay, 9000);
+  }
+  else if (e.t === "fig_unpause") {                           // пауза кончилась: карточка уходит, выходит рисунок, отсчёт 3–2–1
+    sfx.unpause(); pauseCard(false); pzKey = ""; drawPause();
+    if (!fig && figWanted()) spawnFig({ spot: touchSpot, dir: null });
+    meterKey = "?"; drawMeter(); slowT = 0;
+    note(e.why === "time" ? "Пауза кончилась" : "Продолжаем", "Три секунды — и комбо снова остывает", e.why === "time" ? 6000 : 3500);
+  }
   else if (e.t === "fig") {                                  // рисунок на сетке собран
     figChipKey = "?";
     if (e.find && e.fresh) { note("Находка глубины", "«" + e.find + "» — такой рисунок выпадает только здесь, в «" + DEEP[S.fig.d].name + "». Находок: " + (S.stats.figFinds || 0) + " из " + C.FINDS.length + ", список — во вкладке «Путь»", 9000); sfx.find(); roadKey = ""; }

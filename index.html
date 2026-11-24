@@ -19,10 +19,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Montserrat:ital,wght@0,700;0,800;0,900;1,800;1,900&display=swap" rel="stylesheet">
 <!-- кнопки канала (Telegram, донат, Twitch) — общий файл всех сайтов aliveenjoyer, стоит до стилей игры: их правила для шапки идут после (js/soc.js) -->
 <link rel="stylesheet" href="https://aliveenjoyer.art/social.css">
-<link rel="stylesheet" href="css/tokens.css?v=6d69444c">
-<link rel="stylesheet" href="css/ui.css?v=6d69444c">
-<link rel="stylesheet" href="css/game.css?v=6d69444c">
-<link rel="stylesheet" href="css/deep.css?v=6d69444c">
+<link rel="stylesheet" href="css/tokens.css?v=73b3bf7b">
+<link rel="stylesheet" href="css/ui.css?v=73b3bf7b">
+<link rel="stylesheet" href="css/game.css?v=73b3bf7b">
+<link rel="stylesheet" href="css/deep.css?v=73b3bf7b">
 </head>
 <body>
 
@@ -185,6 +185,8 @@
         <span class="eyebrow">Покупка</span>
         <button class="hg-figbtn on" id="btnFig" type="button" aria-pressed="true">Комбо</button>
         <button class="hg-figbtn hg-freebtn" id="btnFigFree" type="button" aria-pressed="false" hidden>Без зажатия</button>
+        <!-- пауза комбо за осколки: js/ui.js, «пауза комбо»; правила — js/core.js (figPause) -->
+        <button class="hg-figbtn pz-btn" id="btnPause" type="button" aria-pressed="false" hidden><i class="pz-ico" aria-hidden="true"></i><span class="pz-t">Пауза</span><span class="pz-p"><img data-art="cur-shard" alt=""><b>1</b></span></button>
         <div class="seg" id="buySeg"></div>
       </div>
       <!-- Отряд — сеткой: все герои видны сразу, без прокрутки; плитка и есть кнопка покупки (js/ui.js, «Покупка героев») -->
@@ -238,7 +240,7 @@
 <div class="modal" id="modal" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="js-1079172d/main.js"></script>
+<script type="module" src="js-4fdb361a/main.js"></script>
 <script src="https://aliveenjoyer.art/stat.js" data-page="clicker" defer></script>
 </body>
 </html>

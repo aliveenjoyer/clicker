@@ -30,7 +30,7 @@ export function newState() {
     auto: { on: false, fav: [] },                           // автовыбор предметов: включён ли и любимые предметы по порядку важности
     gift: 0,                                                // подарок за вход через Twitch уже получен
     gen: 0,                                                 // сколько раз прогресс стирали: по нему стирание доходит до всех устройств аккаунта
-    fig: { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0, hold: 0 },   // рисунки на сетке отряда: жар комбо (дробный), секунд без отметки, высший жар этого комбо; d — глубина (0 — улица), gate — секунд до закрытия разлома, run — «разгон», dmax — глубже всего в этом комбо, hold — секунд передышки (жар и часы разлома стоят)
+    fig: { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0, hold: 0, pause: 0 },   // pause — секунд паузы комбо (за осколки); рисунки на сетке отряда: жар комбо (дробный), секунд без отметки, высший жар этого комбо; d — глубина (0 — улица), gate — секунд до закрытия разлома, run — «разгон», dmax — глубже всего в этом комбо, hold — секунд передышки (жар и часы разлома стоят)
     finds: {},                                              // находки глубины: имя особого рисунка → сколько раз собран
     tire: { r: 0, n: 0, on: false },                        // усталость руки: средний темп попыток ударить (в секунду), попытки с прошлого шага, устала ли
     au: { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: false },   // автозапуск умений: секунд осталось, цена часа, сколько вернётся, сколько уже вернулось, волна покупки, продлевать ли
@@ -45,6 +45,7 @@ export function newState() {
     // второй слой. Цикл — от Затмения до Затмения: ashAll и реликвии живут в цикле, осколки и покровители — навсегда
     ecl: 0, shards: 0, pat: {}, cycBest: 1, cycRb: 0, ashLife: NEG, eclAt: 0,   // eclAt — когда было прошлое Затмение, мс
     chaos: 0,                                               // третий слой: шаги «Скупщика теней», 0…16
+    pz: { day: 0, n: 0, paid: 0 },                          // пауза комбо: день (dayNo) и сколько пауз в нём взято; paid — осколков отдано за паузы за всё время
     // удержание: сундуки (air/day — ждут открытия, airT — секунд просмотра до следующего, dry — сундуков без нового скина),
     // задания дня (list — [{id, base}], done, all — сундук дня уже выдан, streak — серия, full — последний полный день),
     // скины труперов (own — копий, on — в строю), скины героев из RPG (приходят с сервера)
@@ -120,8 +121,12 @@ export function load(text) {
   S.au = ul > 0 && up >= 1 && ut > up && ut <= 2 * up && ub < ut ? { left: ul, pay: up, total: ut, back: ub, w: ui(ou.w, 1e9), renew: !!ou.renew }
     : { left: 0, pay: 0, total: 0, back: 0, w: 0, renew: !!ou.renew };
   S.stats.auHours = ui(S.stats.auHours, 1e9); S.stats.auGain = ui(S.stats.auGain, 1e12);
+  // пауза комбо: день и число пауз в нём — не больше суточного потолка; отдано за паузы — не больше, чем получено осколков
+  const opz = o.pz && typeof o.pz === "object" ? o.pz : {};
+  S.pz = { day: ui(opz.day, 1e7), n: ui(opz.n, CFG.figPauseDay), paid: ui(opz.paid, S.shards) };
+  S.stats.figPauses = ui(S.stats.figPauses, 1e9);
   if (shardsFree(S) < 0) for (const p of PATRONS) S.pat[p.id] = 0;
-  S.fig = { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0, hold: 0 };   // комбо рисунков и его глубина перезагрузку не переживают
+  S.fig = { k: 0, idle: 0, peak: 0, d: 0, gate: 0, run: 0, dmax: 0, hold: 0, pause: 0 };   // комбо рисунков и его глубина перезагрузку не переживают
   // что запомнено о глубине: рекорд уровня, спуски, время на глубине, искры и находки — только то, что игра может дать
   S.stats.figDeep = Math.max(0, Math.min(DEEP.length - 1, Math.floor(Number(S.stats.figDeep) || 0)));
   for (const k of ["figDives", "figSparks", "figGates", "figTrain", "figLamp", "figOrbit"]) S.stats[k] = Math.max(0, Math.min(1e9, Math.floor(Number(S.stats[k]) || 0)));   // последние три — особые рисунки глубины (js/ui.js)
@@ -312,7 +317,7 @@ export function clickLg(S) {                                // lg урона о�
 }
 export const critChance = (S) => Math.min(0.75, active(S, "mark") ? 0.5 + (S.d.crit - CFG.critChance) : S.d.crit);
 export const critMult = (S) => (active(S, "mark") ? 5 : CFG.critMult);
-const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + loudLg(S) + (S.fig.k > 0 ? L10(figMul(S)) : 0);   // эфир: души ×2; стрим со звуком: ещё ×2; комбо рисунков
+const soulsLg = (S) => S.d.souls + buffLg(S, "souls") + (S.live ? L2 : 0) + loudLg(S) + (S.fig.k > 0 && !(S.fig.pause > 0) ? L10(figMul(S)) : 0);   // эфир: души ×2; стрим со звуком: ещё ×2; комбо рисунков (пока пауза — без него)
 // Рисунки на сетке отряда (сами рисунки и попадания по плиткам — js/ui.js): собран рисунок — комбо растёт, души идут с
 // прибавкой, пока комбо живо. Комбо остывает только в игре; без игрока (offline) оно кончается.
 // Комбо рисунков — это «жар» (S.fig.k, дробное число). Собранный рисунок его подогревает, а сам он всё время остывает —
@@ -338,7 +343,7 @@ export const figGateAt = (d) => (d < DEEP.length - 1 ? figLv(d).at + CFG.figCap 
 export const figCeil = (d) => figLv(d).at + (CFG.figCap + CFG.figOver) * figScale(d);         // выше жар на уровне не копится
 const figMulCap = (d) => (d < DEEP.length - 1 ? figLv(d).top - 1 : CFG.figTop);               // потолок множителя на уровне: 99, 249, 499, 999
 export const figMul = (S) => 1 + CFG.figStep * Math.max(0, Math.min(Math.floor(S.fig.k), figMulCap(S.fig.d)));
-export const figDrain = (S) => (S.fig.k > 0 && !(S.fig.gate > 0) && !(S.fig.hold > 0)         // жара в секунду уходит сейчас; пока открыт разлом или идёт передышка — стоит
+export const figDrain = (S) => (S.fig.k > 0 && !(S.fig.gate > 0) && !(S.fig.hold > 0) && !(S.fig.pause > 0)   // жара в секунду уходит сейчас; пока открыт разлом, идёт передышка или пауза — стоит
   ? figScale(S.fig.d) * (CFG.figDrain0 + CFG.figDrainK * figLocal(S)) * (1 + CFG.figIdleUp * Math.max(0, S.fig.idle - CFG.figIdleAt)) : 0);
 export const figGain = (cells, acc, clean) => CFG.figGain * Math.pow(Math.max(1, cells), CFG.figPow) * Math.max(CFG.figAccMin, Math.min(1, acc === undefined ? 1 : acc)) * (clean ? CFG.figClean : 1);
 // Во сколько раз рисунок греет на этой глубине против улицы: масштаб уровня, его трудность, «разгон» (с «Подземки»:
@@ -346,7 +351,7 @@ export const figGain = (cells, acc, clean) => CFG.figGain * Math.pow(Math.max(1,
 export const figRunMul = (S, clean) => (S.fig.d >= 1 && clean ? 1 + CFG.figRun * Math.min(CFG.figRunMax, S.fig.run) : 1);
 export const figKnown = (S) => (S.stats.figDeep || 0) > S.fig.d;
 export const figBoost = (S, clean) => figScale(S.fig.d) * figLv(S.fig.d).hard * figRunMul(S, clean) * (figKnown(S) ? 1 + CFG.figKnown : 1);
-export function figReset(S) { const f = S.fig; f.k = 0; f.idle = 0; f.peak = 0; f.d = 0; f.gate = 0; f.run = 0; f.dmax = 0; f.hold = 0; }
+export function figReset(S) { const f = S.fig; f.k = 0; f.idle = 0; f.peak = 0; f.d = 0; f.gate = 0; f.run = 0; f.dmax = 0; f.hold = 0; f.pause = 0; }
 export function figMark(S) { S.fig.idle = 0; }               // взята отметка рисунка: игрок в деле
 export function figDone(S, cells, name, acc, clean, find) {  // рисунок собран; acc — точность 0…1, clean — отметки взяты по номерам, find — имя «находки глубины»
   const g = figGain(cells, acc, clean) * figBoost(S, clean);
@@ -409,8 +414,47 @@ export function figSpark(S) {                                // «Изнанка
   ev(S, { t: "fig_spark", k: S.fig.k, gain: g, loot });
   return g;
 }
-function figStep(S, dt) {                                    // ход времени: передышка, разлом, остывание, всплытие, конец комбо
+// Пауза комбо (24.11, его слова: «сделай кнопку паузы на комбо за осколки… не больше 30 пауз в сутки»). Пока она идёт
+// (S.fig.pause, секунды), комбо стоит целиком: жар, глубина, часы — и души идут без его множителя, чтобы пауза не стала
+// доходом без игрока. Длится CFG.figPauseT (5 минут), кончается раньше по кнопке; потом CFG.figResume секунд передышки
+// (S.fig.hold) — взять мышь. Пауза переживает и свёрнутую вкладку, если вернулся до её конца (offline ниже). Цена — осколки
+// по глубине комбо (CFG.figPausePrice); отданное копится в S.pz.paid и вычитается из свободных осколков, а S.shards —
+// по-прежнему «получено за всё время». Пауз — не больше CFG.figPauseDay за день по часам игрока (dayNo, как задания дня).
+// Поставить нельзя: без осколков (до первого Затмения), без комбо, пока открыт разлом или идёт передышка.
+export const pauseOpen = (S) => eclOpen(S) || S.shards > 0;
+export const pausePrice = (S) => CFG.figPausePrice[Math.max(0, Math.min(CFG.figPausePrice.length - 1, S.fig.d || 0))];
+export function pauseLeft(S, now) {                          // сколько пауз осталось на сегодня; часы перевели назад — день прежний
+  const d = dayNo(now);
+  return CFG.figPauseDay - (S.pz.day >= d ? S.pz.n : 0);
+}
+export function pauseWhy(S, now) {                           // почему паузу сейчас не поставить ("" — можно)
+  if (S.fig.pause > 0) return "on";
+  if (!pauseOpen(S)) return "closed";
+  if (!(S.fig.k > 0)) return "none";
+  if (S.fig.gate > 0 || S.fig.hold > 0) return "busy";
+  if (pauseLeft(S, now) <= 0) return "limit";
+  if (pausePrice(S) > shardsFree(S)) return "price";
+  return "";
+}
+export function figPause(S, now) {
+  if (pauseWhy(S, now)) return false;
+  const d = dayNo(now), p = pausePrice(S);
+  if (S.pz.day < d) { S.pz.day = d; S.pz.n = 0; }
+  S.pz.n += 1; S.pz.paid += p;
+  S.fig.pause = CFG.figPauseT; S.fig.idle = 0;
+  S.stats.figPauses = (S.stats.figPauses || 0) + 1;
+  ev(S, { t: "fig_pause", price: p, left: pauseLeft(S, now), sec: S.fig.pause });
+  return true;
+}
+export function figUnpause(S, why) {                         // пауза кончилась: why — "hand" (игрок продолжил сам) или "time"
+  if (!(S.fig.pause > 0)) return false;
+  S.fig.pause = 0; S.fig.hold = CFG.figResume; S.fig.idle = 0;
+  ev(S, { t: "fig_unpause", why: why || "hand" });
+  return true;
+}
+function figStep(S, dt) {                                    // ход времени: пауза, передышка, разлом, остывание, всплытие, конец комбо
   const f = S.fig;
+  if (f.pause > 0) { f.pause -= dt; if (!(f.pause > 1e-9)) { f.pause = 1e-9; figUnpause(S, "time"); } return; }   // пауза: комбо стоит целиком
   if (f.hold > 0) { f.hold -= dt; if (!(f.hold > 1e-9)) { f.hold = 0; f.idle = 0; } return; }   // передышка: стоят и жар, и часы разлома
   if (f.gate > 0) { f.gate -= dt; if (f.gate <= 0) { f.gate = 1e-9; figGateFail(S, "time"); } }
   if (!(f.k > 0)) return;
@@ -651,7 +695,8 @@ export function offline(S, seconds) {
   const before = { souls: S.souls, z: S.z, life: S.life };
   if (S.act.siege > 0) siegeEnd(S);                         // натиск оборвался: что успели снять — снято
   for (const id in S.act) S.act[id] = 0;                    // умения и бафы за время отсутствия истекли
-  figReset(S);                                              // и комбо рисунков вместе с глубиной
+  if (S.fig.pause > seconds) S.fig.pause -= seconds;         // комбо на паузе, и пауза ещё не кончилась — комбо ждёт игрока
+  else figReset(S);                                         // иначе — и комбо рисунков вместе с глубиной
   S.buff = {}; S.combo = 0; S.wispOn = 0; S.statueOn = 0; S.urnOn = 0; if (S.altar > 0) altarEnd(S);
   if (S.d.dps === NEG || t < 5) return null;
   const step = 2;
@@ -1085,7 +1130,7 @@ export function shardsGain(S) {                              // сколько �
 export function shardsFree(S) {                              // осколки, которые ещё не потрачены
   let spent = 0;
   for (const p of PATRONS) { const L = S.pat[p.id] || 0; spent += p.cost === "pow" ? Math.pow(2, L) - 1 : L * (L + 1) / 2; }
-  return S.shards - spent - auHeld(S);
+  return S.shards - spent - auHeld(S) - (S.pz ? S.pz.paid : 0);   // и отданное за паузы комбо
 }
 
 // ---------- Автозапуск умений: час за осколки, и осколки возвращаются с прибавкой ----------

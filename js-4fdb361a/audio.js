@@ -207,6 +207,9 @@ export const sfx = {
     tone(f, 0.3, "sine", 0.13); tone(f * 2, 0.22, "sine", 0.06, 1, 0.01); tone(f * 3, 0.1, "sine", 0.03);
   },
   lampOut() { tone(196, 0.18, "sine", 0.08, 0.6); },          // фонарь погас
+  // ---- пауза комбо (js/ui.js) ----
+  pause() { [12, 7, 0].forEach((x, i) => tone(semi(523.25, x), 0.24, "sine", 0.11, 0.98, i * 0.08)); noise(0.35, 0.05, 7000, 1.6, 0.05); },   // поставил: звон вниз, «замёрзло»
+  unpause() { [0, 7, 12].forEach((x, i) => tone(semi(523.25, x), 0.18, "triangle", 0.11, 1.02, i * 0.07)); },   // продолжил: звон вверх
   orbit(p, need) {                                           // шаг по орбите: тон растёт с кругами
     const f = deepF(330 * Math.pow(2, Math.min(1, p / Math.max(1, need)) * 1.5));
     tone(f, 0.1, "sine", 0.1, 1.06); tone(f * 1.5, 0.07, "sine", 0.04);

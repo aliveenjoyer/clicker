@@ -1481,3 +1481,55 @@ body.twon { --side-w: clamp(448px, max(37vw, calc(100vw - clamp(56vh, 100vh - 38
   /* свечение у края экрана поменьше: вторая строка стоит прямо над полосой волны */
   .top > .ae-soc .ae-b { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 75%, transparent), 0 0 10px -3px color-mix(in srgb, var(--sc) 70%, transparent); }
 }
+
+/* ---------- пауза комбо за осколки (24.11; js/ui.js, «пауза комбо») ----------
+   Кнопка — в строке над сеткой, сразу за «Комбо» / «Без зажатия»: значок паузы, слово и цена в осколках (цвет осколков,
+   как в шапке). Пока пауза — «Продолжить» и сколько осталось. Карточка паузы — посередине сетки, касаний не ловит, кроме
+   своей кнопки; рамка сетки на паузе — холодная, без мигания. Жёлтого и зелёного на сетке нет. */
+.side .head .hg-figbtn:has(~ .pz-btn:not([hidden])) { margin-right: 0; }
+.side .head .hg-figbtn.pz-btn { margin-left: 6px; display: inline-flex; align-items: center; gap: 6px; padding: 0 5px 0 10px; color: #dfe9ff; background: rgba(140,200,255,.12); box-shadow: inset 0 0 0 1px rgba(150,205,255,.45); }
+.side .head .hg-figbtn.pz-btn::before { display: none; }
+.pz-ico { display: block; flex: none; box-sizing: border-box; width: 9px; height: 11px; border: solid currentColor; border-width: 0 3px; }
+.pz-btn.pz-on .pz-ico { width: 0; height: 0; border-width: 5.5px 0 5.5px 9px; border-color: transparent transparent transparent currentColor; }   /* ▶ */
+.pz-p { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 7px 0 4px; border-radius: 999px; font-weight: 900; color: #d9ccff; background: rgba(151,117,250,.22); box-shadow: inset 0 0 0 1px rgba(151,117,250,.55); font-variant-numeric: tabular-nums; }
+.pz-p img { width: 14px; height: 14px; }
+.pz-p.pz-clock { padding-left: 7px; color: #fff; background: rgba(140,200,255,.25); box-shadow: inset 0 0 0 1px rgba(170,215,255,.7); }
+.pz-p.pz-clock img { display: none; }
+.side .head .hg-figbtn.pz-btn.pz-on { color: #fff; background: rgba(120,195,255,.24); box-shadow: inset 0 0 0 1px rgba(170,215,255,.85), 0 0 12px rgba(120,195,255,.35); }
+.side .head .hg-figbtn.pz-btn.pz-no { opacity: .6; }
+.side .head .hg-figbtn.pz-btn.pz-lock { opacity: .45; }
+.pz-btn.pz-lock .pz-p img { filter: grayscale(1); }
+.side .head .hg-figbtn.pz-btn:hover:not(.pz-lock) { filter: brightness(1.15); }
+/* Строка над сеткой с кнопкой паузы должна помещаться в одну строку на любой ширине (проверка — tools/pause_test.mjs).
+   Уже 1700 — у паузы значок и цена (или часы), без слова; «Продолжить» — крупно в карточке на сетке. Уже 1500 — без подписи
+   «Покупка» (её и на телефоне нет). Уже 1366 и на узком телефоне — без точек-огоньков у «Комбо» и «Без зажатия» (включено
+   ли — видно по цвету кнопки) и с плотнее «×1 ×10 до вехи макс». Пока кнопки паузы нет, строка прежняя. */
+@media (max-width: 1700px) { .pz-btn .pz-t { display: none; } }
+@media (max-width: 1800px) { .pz-btn.pz-on .pz-t { display: none; } }   /* в паузе — ▶ и часы; «Продолжить» шире «Паузы» */
+@media (max-width: 1500px) { .side .head:has(.pz-btn:not([hidden])) .eyebrow { display: none; } }
+@media (max-width: 1366px) {
+  .side .head:has(.pz-btn:not([hidden])) .hg-figbtn::before { display: none; }
+  .side .head:has(.pz-btn:not([hidden])) .seg span { padding: 6px 8px; }
+}
+.hg-figc.pz-chip { color: #fff; background: linear-gradient(180deg, rgba(120,195,255,.32), rgba(40,80,140,.3)); box-shadow: inset 0 0 0 1px rgba(170,215,255,.8); }
+.hg-figc.pz-chip b { color: #fff; }
+.hg-figc.pz-chip .hg-figt { background: #bfe3ff; }
+.hg-figc .pz-rs { padding: 2px 6px; border-radius: 5px; font-weight: 900; color: #fff; background: rgba(60,120,190,.75); }
+.hg-wrap.pz-wait .list.hgrid::after { opacity: 1; box-shadow: inset 0 0 0 2px rgba(170,215,255,.85), inset 0 0 44px rgba(140,200,255,.3); animation: none; }
+.pz-card { position: absolute; left: 50%; top: 50%; z-index: 23; box-sizing: border-box; width: min(86%, 300px); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 18px 14px; border-radius: 20px; text-align: center; pointer-events: none;
+  transform: translate(-50%, -50%); background: radial-gradient(ellipse at 50% 0%, rgba(140,200,255,.3), rgba(6,10,26,.93) 70%); box-shadow: inset 0 0 0 1px rgba(170,215,255,.55), 0 18px 40px rgba(0,0,0,.55); animation: pz-in 320ms cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes pz-in { from { transform: translate(-50%, -50%) scale(.85); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
+.pz-mark { display: block; width: 26px; height: 30px; box-sizing: border-box; border: solid #e6f4ff; border-width: 0 9px; filter: drop-shadow(0 0 10px rgba(140,200,255,.9)); }
+.pz-h { font: italic 900 32px/1 var(--display); text-transform: uppercase; color: #fff; text-shadow: 0 0 18px rgba(140,200,255,.8); }
+.pz-k { font: 700 13px/1.3 var(--ui); color: #d8ecff; text-wrap: balance; }
+.pz-c { font: 900 30px/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; }
+.pz-go { pointer-events: auto; margin-top: 4px; height: 36px; padding: 0 20px; border: 0; border-radius: 999px; cursor: pointer; font: 800 14px/1 var(--ui); color: #04121f; background: linear-gradient(180deg, #fff, #bfe3ff); box-shadow: 0 3px 0 #2a5a80; }
+.pz-go:hover { filter: brightness(1.06); }
+.pz-go:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.pz-n { font: 600 11px/1.3 var(--ui); color: #9fb8d6; }
+.pz-num { position: absolute; z-index: 24; pointer-events: none; transform: translate(-50%, -50%); animation: pz-num 900ms ease-out forwards; }
+.pz-num b { display: block; font: italic 900 76px/1 var(--display); color: #fff; -webkit-text-stroke: 3px #04121f; paint-order: stroke fill; text-shadow: 0 0 26px rgba(140,200,255,.95); }
+@keyframes pz-num { 0% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 80% { opacity: 1; } 100% { transform: translate(-50%, -62%) scale(.9); opacity: 0; } }
+.pz-card.pz-calm, .calm .pz-card { animation: none; }
+@media (prefers-reduced-motion: reduce) { .pz-card, .pz-num { animation: none; } }
+@media (max-width: 720px) { .pz-card { padding: 14px 14px 12px; gap: 4px; } .pz-h { font-size: 26px; } .pz-c { font-size: 24px; } }
